@@ -17,11 +17,11 @@ If Phase 0.1 fails, we learn cheaply. If it succeeds, we have a solid foundation
 
 ### Storage Backend (LOCKED)
 
-| Decision | Choice |
-|----------|--------|
-| Encryption | Age (passphrase recipients) |
-| Payload | SQLite (in-memory via `sqlite3_deserialize`) |
-| Temp Files | None (fallback to secure temp if needed) |
+| Decision   | Choice                                       |
+|------------|----------------------------------------------|
+| Encryption | Age (passphrase recipients)                  |
+| Payload    | SQLite (in-memory via `sqlite3_deserialize`) |
+| Temp Files | None (fallback to secure temp if needed)     |
 
 See RFC-001 §5-7 for rationale.
 

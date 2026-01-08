@@ -1,0 +1,22 @@
+[package]
+name = "ledger-cli"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[[bin]]
+name = "ledger"
+path = "src/main.rs"
+
+[dependencies]
+# Internal dependencies
+ledger-core = { path = "../ledger-core" }
+
+# CLI dependencies from workspace
+clap = { workspace = true }
+anyhow = { workspace = true }
+
+# For future interactive prompts (M2+)
+# dialoguer = "0.11"
