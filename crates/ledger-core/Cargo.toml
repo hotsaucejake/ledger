@@ -15,9 +15,10 @@ thiserror = { workspace = true }
 anyhow = { workspace = true }
 chrono = { workspace = true }
 
-# Database (for M1+, not used in M0)
-# rusqlite = { workspace = true }
+# Database (M1+)
+rusqlite = { workspace = true }
 
-# Cryptography (for M1+, not used in M0)
-# age = { workspace = true }
-# argon2 = { workspace = true }
+# Cryptography (M1+)
+age = { workspace = true }
+argon2 = { workspace = true }
+zeroize = "1.7"

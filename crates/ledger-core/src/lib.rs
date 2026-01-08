@@ -14,14 +14,19 @@
 //! - **tags**: Tag normalization and filtering
 //! - **export**: Export formats (JSON, JSONL)
 //!
-//! ## Phase 0.1 (Milestone 0)
+//! ## Milestones
 //!
-//! This milestone provides the project skeleton with no real logic.
-//! The CLI will compile and show help, but core functionality is not yet implemented.
+//! - **M0**: Project skeleton ✓
+//! - **M1**: Encrypted storage (in progress)
+//! - **M2**: Journal entries
+//! - **M3**: Full-text search
+//! - **M4**: Export & backup
 
 pub mod error;
+pub mod storage;
 
 pub use error::{LedgerError, Result};
+pub use storage::StorageEngine;
 
 /// Core version information
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
