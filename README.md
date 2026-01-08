@@ -113,6 +113,29 @@ ledger/
 - [RFC-006](docs/RFC/RFC-006.md) — Compositions
 - [Format Spec](docs/design/format-spec.md) — File format specification
 
+## For Developers
+
+### New to the Project?
+
+**Start here:**
+
+1. **[CONTRIBUTING.md](CONTRIBUTING.md)** — Quick start guide for contributors
+2. **[docs/DEVELOPMENT.md](docs/DEVELOPMENT.md)** — Complete development guide **(REQUIRED READING)**
+3. **[docs/planning.md](docs/planning.md)** — Project vision and principles
+
+### Development Standards
+
+- **Testing is mandatory** — Every feature has tests, no exceptions
+- **Security by default** — Encryption always, no plaintext modes
+- **Rust best practices** — See [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md)
+- **Code quality** — Format, lint, test before every commit
+
+```bash
+cargo fmt --all                                          # Format
+cargo clippy --all-targets --all-features -- -D warnings # Lint
+cargo test                                               # Test
+```
+
 ## License
 
 Licensed under either of:
