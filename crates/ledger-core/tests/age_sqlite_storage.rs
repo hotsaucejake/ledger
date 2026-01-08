@@ -1,8 +1,12 @@
 use std::fs;
 use std::path::PathBuf;
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::ptr::NonNull;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
+use ledger_core::storage::encryption::decrypt;
 use ledger_core::storage::{AgeSqliteStorage, NewEntryType, StorageEngine};
+use rusqlite::serialize::OwnedData;
+use rusqlite::{Connection, DatabaseName};
 use uuid::Uuid;
 
 struct TempFile {
@@ -25,6 +29,33 @@ impl Drop for TempFile {
     fn drop(&mut self) {
         let _ = fs::remove_file(&self.path);
     }
+}
+
+fn open_sqlite_from_file(path: &PathBuf, passphrase: &str) -> Connection {
+    let encrypted = fs::read(path).expect("read should succeed");
+    let plaintext = decrypt(&encrypted, passphrase).expect("decrypt should succeed");
+
+    let size: i32 = plaintext
+        .len()
+        .try_into()
+        .expect("payload length should fit in sqlite3_malloc");
+    let raw = unsafe { rusqlite::ffi::sqlite3_malloc(size) as *mut u8 };
+    if raw.is_null() {
+        panic!("sqlite3_malloc returned null");
+    }
+
+    let owned = unsafe {
+        std::ptr::copy_nonoverlapping(plaintext.as_ptr(), raw, plaintext.len());
+        let ptr = NonNull::new(raw).expect("nonnull");
+        OwnedData::from_raw_nonnull(ptr, plaintext.len())
+    };
+
+    let mut conn = Connection::open_in_memory().expect("open_in_memory should succeed");
+    conn.execute_batch("PRAGMA foreign_keys = ON;")
+        .expect("pragma should succeed");
+    conn.deserialize(DatabaseName::Main, owned, false)
+        .expect("deserialize should succeed");
+    conn
 }
 
 #[test]
@@ -198,6 +229,79 @@ fn test_entry_type_versioning() {
     let types = storage.list_entry_types().expect("list should succeed");
     assert_eq!(types.len(), 1);
     assert_eq!(types[0].version, 2);
+
+    storage.close().expect("close should succeed");
+}
+
+#[test]
+fn test_entry_type_active_flag_unique() {
+    let temp = TempFile::new("ledger_entry_type_active");
+    let passphrase = "test-passphrase-secure-123";
+
+    AgeSqliteStorage::create(&temp.path, passphrase).expect("create should succeed");
+    let mut storage = AgeSqliteStorage::open(&temp.path, passphrase).expect("open should succeed");
+
+    let device_id = Uuid::new_v4();
+    let schema_v1 = serde_json::json!({"fields": [{"name": "body", "type": "string"}]});
+    let schema_v2 = serde_json::json!({"fields": [{"name": "body", "type": "string"}]});
+
+    storage
+        .create_entry_type(&NewEntryType::new("journal", schema_v1, device_id))
+        .expect("create v1 should succeed");
+    storage
+        .create_entry_type(&NewEntryType::new("journal", schema_v2, device_id))
+        .expect("create v2 should succeed");
+
+    storage.close().expect("close should succeed");
+
+    let conn = open_sqlite_from_file(&temp.path, passphrase);
+    let entry_type_id: String = conn
+        .query_row(
+            "SELECT id FROM entry_types WHERE name = 'journal'",
+            [],
+            |row| row.get(0),
+        )
+        .expect("entry type should exist");
+
+    let active_count: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM entry_type_versions WHERE entry_type_id = ? AND active = 1",
+            [entry_type_id],
+            |row| row.get(0),
+        )
+        .expect("count should succeed");
+
+    assert_eq!(active_count, 1);
+}
+
+#[test]
+fn test_last_modified_updates_on_entry_type_create() {
+    let temp = TempFile::new("ledger_last_modified");
+    let passphrase = "test-passphrase-secure-123";
+
+    AgeSqliteStorage::create(&temp.path, passphrase).expect("create should succeed");
+    let mut storage = AgeSqliteStorage::open(&temp.path, passphrase).expect("open should succeed");
+
+    let before = storage
+        .metadata()
+        .expect("metadata should succeed")
+        .last_modified;
+
+    std::thread::sleep(Duration::from_millis(2));
+
+    let device_id = Uuid::new_v4();
+    let schema = serde_json::json!({"fields": [{"name": "body", "type": "string"}]});
+    storage
+        .create_entry_type(&NewEntryType::new("journal", schema, device_id))
+        .expect("create should succeed");
+
+    let after = storage
+        .metadata()
+        .expect("metadata should succeed")
+        .last_modified;
+
+    assert!(after >= before);
+    assert!(after > before);
 
     storage.close().expect("close should succeed");
 }

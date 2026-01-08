@@ -83,6 +83,8 @@ impl StorageEngine for AgeSqliteStorage {
 
         let device_id = Uuid::new_v4();
         let conn = Connection::open_in_memory().map_err(Self::sqlite_error)?;
+        conn.execute_batch("PRAGMA foreign_keys = ON;")
+            .map_err(Self::sqlite_error)?;
 
         // Initialize schema
         conn.execute_batch(
@@ -174,6 +176,8 @@ impl StorageEngine for AgeSqliteStorage {
         let encrypted = fs::read(path)?;
         let plaintext = decrypt(&encrypted, passphrase)?;
         let mut conn = Connection::open_in_memory().map_err(Self::sqlite_error)?;
+        conn.execute_batch("PRAGMA foreign_keys = ON;")
+            .map_err(Self::sqlite_error)?;
         let owned_data = Self::owned_data_from_bytes(&plaintext)?;
         conn.deserialize(DatabaseName::Main, owned_data, false)
             .map_err(Self::sqlite_error)?;
@@ -367,6 +371,13 @@ impl StorageEngine for AgeSqliteStorage {
             (base_id, 1)
         };
 
+        // Deactivate previous versions for this entry type.
+        tx.execute(
+            "UPDATE entry_type_versions SET active = 0 WHERE entry_type_id = ? AND active = 1",
+            [base_id.to_string()],
+        )
+        .map_err(Self::sqlite_error)?;
+
         // Create version record
         let version_id = Uuid::new_v4();
         let created_at = Utc::now().to_rfc3339();
@@ -383,8 +394,15 @@ impl StorageEngine for AgeSqliteStorage {
                 base_id.to_string(),
                 version,
                 schema_json_str,
-                created_at,
+                created_at.clone(),
             ),
+        )
+        .map_err(Self::sqlite_error)?;
+
+        // Update last_modified
+        tx.execute(
+            "UPDATE meta SET value = ? WHERE key = 'last_modified'",
+            [created_at],
         )
         .map_err(Self::sqlite_error)?;
 
