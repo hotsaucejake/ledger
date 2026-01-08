@@ -8,8 +8,9 @@
 //! for simplicity and correctness. The security properties are similar.
 
 use std::io::{Read, Write};
+use std::iter;
 
-use secrecy::Secret;
+use age::secrecy::SecretString;
 
 use crate::error::{LedgerError, Result};
 
@@ -38,7 +39,8 @@ use crate::error::{LedgerError, Result};
 /// assert_ne!(encrypted.as_slice(), plaintext);
 /// ```
 pub fn encrypt(data: &[u8], passphrase: &str) -> Result<Vec<u8>> {
-    let encryptor = age::Encryptor::with_user_passphrase(Secret::new(passphrase.to_string()));
+    let encryptor =
+        age::Encryptor::with_user_passphrase(SecretString::from(passphrase.to_string()));
 
     let mut encrypted = Vec::new();
     let mut writer = encryptor
@@ -90,25 +92,17 @@ pub fn decrypt(encrypted_data: &[u8], passphrase: &str) -> Result<Vec<u8>> {
 
     let mut decrypted = Vec::new();
 
-    // Age decryptor handles passphrase-based decryption internally
-    let mut reader = match decryptor {
-        age::Decryptor::Passphrase(d) => d
-            .decrypt(&Secret::new(passphrase.to_string()), None)
-            .map_err(|e| {
-                // Wrong passphrase typically shows as specific error
-                let err_str = e.to_string();
-                if err_str.contains("incorrect") || err_str.contains("failed") {
-                    LedgerError::Crypto("Incorrect passphrase or corrupted data".to_string())
-                } else {
-                    LedgerError::Crypto(format!("Decryption failed: {}", e))
-                }
-            })?,
-        age::Decryptor::Recipients(_) => {
-            return Err(LedgerError::Crypto(
-                "Unexpected decryptor type (expected passphrase)".to_string(),
-            ))
-        }
-    };
+    let identity = age::scrypt::Identity::new(SecretString::from(passphrase.to_string()));
+    let mut reader = decryptor
+        .decrypt(iter::once(&identity as &dyn age::Identity))
+        .map_err(|e| match e {
+            age::DecryptError::NoMatchingKeys
+            | age::DecryptError::DecryptionFailed
+            | age::DecryptError::KeyDecryptionFailed => {
+                LedgerError::Crypto("Incorrect passphrase or corrupted data".to_string())
+            }
+            _ => LedgerError::Crypto(format!("Decryption failed: {}", e)),
+        })?;
 
     reader
         .read_to_end(&mut decrypted)
