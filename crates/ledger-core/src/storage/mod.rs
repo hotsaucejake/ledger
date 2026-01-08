@@ -21,6 +21,7 @@
 //!
 //! See RFC-001 for the complete storage model.
 
+pub mod encryption;
 pub mod traits;
 pub mod types;
 
