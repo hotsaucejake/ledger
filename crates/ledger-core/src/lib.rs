@@ -22,6 +22,7 @@
 //! - **M3**: Full-text search
 //! - **M4**: Export & backup
 
+pub mod crypto;
 pub mod error;
 pub mod storage;
 
