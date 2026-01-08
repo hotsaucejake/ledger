@@ -7,8 +7,8 @@
 use std::path::Path;
 use uuid::Uuid;
 
-use crate::error::Result;
 use super::types::{Entry, EntryFilter, EntryType, LedgerMetadata, NewEntry, NewEntryType};
+use crate::error::Result;
 
 /// Storage engine interface for encrypted ledger storage.
 ///
