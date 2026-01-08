@@ -4,7 +4,9 @@ use std::ptr::NonNull;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use ledger_core::storage::encryption::decrypt;
-use ledger_core::storage::{AgeSqliteStorage, NewEntryType, StorageEngine};
+use ledger_core::storage::{
+    AgeSqliteStorage, EntryFilter, NewEntry, NewEntryType, StorageEngine,
+};
 use rusqlite::serialize::OwnedData;
 use rusqlite::{Connection, DatabaseName};
 use uuid::Uuid;
@@ -56,6 +58,18 @@ fn open_sqlite_from_file(path: &PathBuf, passphrase: &str) -> Connection {
     conn.deserialize(DatabaseName::Main, owned, false)
         .expect("deserialize should succeed");
     conn
+}
+
+fn create_basic_entry_type(storage: &mut AgeSqliteStorage) -> Uuid {
+    let device_id = Uuid::new_v4();
+    let schema = serde_json::json!({
+        "fields": [
+            {"name": "body", "type": "string"}
+        ]
+    });
+    storage
+        .create_entry_type(&NewEntryType::new("journal", schema, device_id))
+        .expect("create entry type should succeed")
 }
 
 #[test]
@@ -207,14 +221,24 @@ fn test_entry_type_versioning() {
     });
 
     // Create version 1
-    let v1_id = storage.create_entry_type(&NewEntryType::new("journal", schema_v1.clone(), device_id))
+    let base_id = storage
+        .create_entry_type(&NewEntryType::new(
+            "journal",
+            schema_v1.clone(),
+            device_id,
+        ))
         .expect("create v1 should succeed");
 
     // Create version 2 (same name)
-    let v2_id = storage.create_entry_type(&NewEntryType::new("journal", schema_v2.clone(), device_id))
+    let base_id_second = storage
+        .create_entry_type(&NewEntryType::new(
+            "journal",
+            schema_v2.clone(),
+            device_id,
+        ))
         .expect("create v2 should succeed");
 
-    assert_ne!(v1_id, v2_id);
+    assert_eq!(base_id, base_id_second);
 
     // get_entry_type should return latest version
     let latest = storage.get_entry_type("journal")
@@ -222,7 +246,7 @@ fn test_entry_type_versioning() {
         .expect("journal should exist");
 
     assert_eq!(latest.version, 2);
-    assert_eq!(latest.id, v2_id);
+    assert_eq!(latest.id, base_id);
     assert_eq!(latest.schema_json, schema_v2);
 
     // list should only show latest version
@@ -231,6 +255,122 @@ fn test_entry_type_versioning() {
     assert_eq!(types[0].version, 2);
 
     storage.close().expect("close should succeed");
+}
+
+#[test]
+fn test_insert_and_get_entry_round_trip() {
+    let temp = TempFile::new("ledger_entry_round_trip");
+    let passphrase = "test-passphrase-secure-123";
+
+    AgeSqliteStorage::create(&temp.path, passphrase).expect("create should succeed");
+    let mut storage = AgeSqliteStorage::open(&temp.path, passphrase).expect("open should succeed");
+
+    let entry_type_id = create_basic_entry_type(&mut storage);
+    let device_id = Uuid::new_v4();
+    let data = serde_json::json!({"body": "Hello World"});
+    let new_entry = NewEntry::new(entry_type_id, 1, data.clone(), device_id)
+        .with_tags(vec!["Tag-One".to_string(), "tag-one".to_string(), "Second".to_string()]);
+
+    let entry_id = storage.insert_entry(&new_entry).expect("insert should succeed");
+    let entry = storage
+        .get_entry(&entry_id)
+        .expect("get should succeed")
+        .expect("entry should exist");
+
+    assert_eq!(entry.entry_type_id, entry_type_id);
+    assert_eq!(entry.schema_version, 1);
+    assert_eq!(entry.data, data);
+    assert_eq!(entry.tags, vec!["tag-one".to_string(), "second".to_string()]);
+}
+
+#[test]
+fn test_list_entries_with_filters() {
+    let temp = TempFile::new("ledger_entry_list");
+    let passphrase = "test-passphrase-secure-123";
+
+    AgeSqliteStorage::create(&temp.path, passphrase).expect("create should succeed");
+    let mut storage = AgeSqliteStorage::open(&temp.path, passphrase).expect("open should succeed");
+
+    let entry_type_id = create_basic_entry_type(&mut storage);
+    let device_id = Uuid::new_v4();
+
+    let first = NewEntry::new(
+        entry_type_id,
+        1,
+        serde_json::json!({"body": "first entry"}),
+        device_id,
+    )
+    .with_tags(vec!["alpha".to_string()]);
+    let second = NewEntry::new(
+        entry_type_id,
+        1,
+        serde_json::json!({"body": "second entry"}),
+        device_id,
+    )
+    .with_tags(vec!["beta".to_string()]);
+
+    let first_id = storage.insert_entry(&first).expect("insert first should succeed");
+    std::thread::sleep(Duration::from_millis(2));
+    let second_id = storage.insert_entry(&second).expect("insert second should succeed");
+
+    let all = storage
+        .list_entries(&EntryFilter::new())
+        .expect("list should succeed");
+    assert_eq!(all.len(), 2);
+    assert_eq!(all[0].id, second_id);
+    assert_eq!(all[1].id, first_id);
+
+    let filtered = storage
+        .list_entries(&EntryFilter::new().tag("Alpha"))
+        .expect("list should succeed");
+    assert_eq!(filtered.len(), 1);
+    assert_eq!(filtered[0].id, first_id);
+}
+
+#[test]
+fn test_search_entries_basic() {
+    let temp = TempFile::new("ledger_entry_search");
+    let passphrase = "test-passphrase-secure-123";
+
+    AgeSqliteStorage::create(&temp.path, passphrase).expect("create should succeed");
+    let mut storage = AgeSqliteStorage::open(&temp.path, passphrase).expect("open should succeed");
+
+    let entry_type_id = create_basic_entry_type(&mut storage);
+    let device_id = Uuid::new_v4();
+    let entry = NewEntry::new(
+        entry_type_id,
+        1,
+        serde_json::json!({"body": "searchable content"}),
+        device_id,
+    );
+    let entry_id = storage.insert_entry(&entry).expect("insert should succeed");
+
+    let results = storage
+        .search_entries("searchable")
+        .expect("search should succeed");
+    assert!(!results.is_empty());
+    assert!(results.iter().any(|item| item.id == entry_id));
+}
+
+#[test]
+fn test_check_integrity_ok() {
+    let temp = TempFile::new("ledger_integrity_ok");
+    let passphrase = "test-passphrase-secure-123";
+
+    AgeSqliteStorage::create(&temp.path, passphrase).expect("create should succeed");
+    let mut storage = AgeSqliteStorage::open(&temp.path, passphrase).expect("open should succeed");
+
+    let entry_type_id = create_basic_entry_type(&mut storage);
+    let device_id = Uuid::new_v4();
+    let entry = NewEntry::new(
+        entry_type_id,
+        1,
+        serde_json::json!({"body": "integrity check"}),
+        device_id,
+    );
+    storage.insert_entry(&entry).expect("insert should succeed");
+
+    storage.check_integrity().expect("integrity should succeed");
 }
 
 #[test]

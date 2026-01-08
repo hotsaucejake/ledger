@@ -33,8 +33,101 @@ pub struct AgeSqliteStorage {
 }
 
 impl AgeSqliteStorage {
+    const MAX_TAG_BYTES: usize = 128;
+    const MAX_TAGS_PER_ENTRY: usize = 100;
+    const MAX_DATA_BYTES: usize = 1024 * 1024;
+
     fn sqlite_error(err: rusqlite::Error) -> LedgerError {
         LedgerError::Storage(format!("SQLite error: {}", err))
+    }
+
+    fn normalize_tags(tags: &[String]) -> Result<Vec<String>> {
+        if tags.len() > Self::MAX_TAGS_PER_ENTRY {
+            return Err(LedgerError::Validation(format!(
+                "Too many tags (max {})",
+                Self::MAX_TAGS_PER_ENTRY
+            )));
+        }
+
+        let mut normalized = Vec::new();
+        for tag in tags {
+            let trimmed = tag.trim().to_ascii_lowercase();
+            if trimmed.is_empty() {
+                return Err(LedgerError::Validation("Empty tag is not allowed".to_string()));
+            }
+            if trimmed.as_bytes().len() > Self::MAX_TAG_BYTES {
+                return Err(LedgerError::Validation(format!(
+                    "Tag too long (max {} bytes)",
+                    Self::MAX_TAG_BYTES
+                )));
+            }
+            if !trimmed
+                .chars()
+                .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_' || c == ':')
+            {
+                return Err(LedgerError::Validation(
+                    "Tag contains invalid characters".to_string(),
+                ));
+            }
+            if !normalized.contains(&trimmed) {
+                normalized.push(trimmed);
+            }
+        }
+
+        Ok(normalized)
+    }
+
+    fn entry_from_row(
+        id_str: String,
+        entry_type_id_str: String,
+        schema_version: i32,
+        data_json_str: String,
+        tags_json_str: Option<String>,
+        created_at_str: String,
+        device_id_str: String,
+        supersedes_str: Option<String>,
+    ) -> Result<Entry> {
+        let id = Uuid::parse_str(&id_str)
+            .map_err(|e| LedgerError::Storage(format!("Invalid UUID: {}", e)))?;
+        let entry_type_id = Uuid::parse_str(&entry_type_id_str)
+            .map_err(|e| LedgerError::Storage(format!("Invalid UUID: {}", e)))?;
+        let device_id = Uuid::parse_str(&device_id_str)
+            .map_err(|e| LedgerError::Storage(format!("Invalid device_id: {}", e)))?;
+        let created_at = DateTime::parse_from_rfc3339(&created_at_str)
+            .map_err(|e| LedgerError::Storage(format!("Invalid timestamp: {}", e)))?
+            .with_timezone(&Utc);
+        let data: serde_json::Value = serde_json::from_str(&data_json_str)
+            .map_err(|e| LedgerError::Storage(format!("Invalid JSON: {}", e)))?;
+        let tags: Vec<String> = match tags_json_str {
+            Some(value) => serde_json::from_str(&value)
+                .map_err(|e| LedgerError::Storage(format!("Invalid tags JSON: {}", e)))?,
+            None => Vec::new(),
+        };
+        let supersedes = match supersedes_str {
+            Some(value) => Some(
+                Uuid::parse_str(&value)
+                    .map_err(|e| LedgerError::Storage(format!("Invalid UUID: {}", e)))?,
+            ),
+            None => None,
+        };
+
+        Ok(Entry {
+            id,
+            entry_type_id,
+            schema_version,
+            data,
+            tags,
+            created_at,
+            device_id,
+            supersedes,
+        })
+    }
+
+    fn fts_content_for_entry(data: &serde_json::Value) -> String {
+        data.get("body")
+            .and_then(|value| value.as_str())
+            .map(|value| value.to_string())
+            .unwrap_or_else(|| data.to_string())
     }
 
     fn empty_payload(conn: &Connection) -> Result<Vec<u8>> {
@@ -244,28 +337,317 @@ impl StorageEngine for AgeSqliteStorage {
         })
     }
 
-    fn insert_entry(&mut self, _entry: &NewEntry) -> Result<Uuid> {
-        Err(LedgerError::Storage(
-            "insert_entry not implemented for AgeSqliteStorage".to_string(),
-        ))
+    fn insert_entry(&mut self, entry: &NewEntry) -> Result<Uuid> {
+        let mut conn = self
+            .conn
+            .lock()
+            .map_err(|_| LedgerError::Storage("SQLite connection poisoned".to_string()))?;
+
+        let tx = conn.transaction().map_err(Self::sqlite_error)?;
+
+        let exists: Option<String> = tx
+            .query_row(
+                "SELECT id FROM entry_types WHERE id = ?",
+                [entry.entry_type_id.to_string()],
+                |row| row.get(0),
+            )
+            .optional()
+            .map_err(Self::sqlite_error)?;
+        if exists.is_none() {
+            return Err(LedgerError::Validation(
+                "Entry type does not exist".to_string(),
+            ));
+        }
+
+        let version_exists: Option<i32> = tx
+            .query_row(
+                "SELECT version FROM entry_type_versions WHERE entry_type_id = ? AND version = ?",
+                (entry.entry_type_id.to_string(), entry.schema_version),
+                |row| row.get(0),
+            )
+            .optional()
+            .map_err(Self::sqlite_error)?;
+        if version_exists.is_none() {
+            return Err(LedgerError::Validation(
+                "Entry schema version does not exist".to_string(),
+            ));
+        }
+
+        let normalized_tags = Self::normalize_tags(&entry.tags)?;
+        let tags_json = if normalized_tags.is_empty() {
+            None
+        } else {
+            Some(
+                serde_json::to_string(&normalized_tags).map_err(|e| {
+                    LedgerError::Storage(format!("Failed to serialize tags: {}", e))
+                })?,
+            )
+        };
+
+        let data_json = serde_json::to_string(&entry.data)
+            .map_err(|e| LedgerError::Storage(format!("Failed to serialize entry data: {}", e)))?;
+        if data_json.as_bytes().len() > Self::MAX_DATA_BYTES {
+            return Err(LedgerError::Validation(format!(
+                "Entry data too large (max {} bytes)",
+                Self::MAX_DATA_BYTES
+            )));
+        }
+
+        let id = Uuid::new_v4();
+        let created_at = Utc::now().to_rfc3339();
+
+        tx.execute(
+            r#"
+            INSERT INTO entries (
+                id,
+                entry_type_id,
+                schema_version,
+                data_json,
+                tags_json,
+                created_at,
+                device_id,
+                supersedes
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            "#,
+            (
+                id.to_string(),
+                entry.entry_type_id.to_string(),
+                entry.schema_version,
+                data_json,
+                tags_json,
+                created_at.clone(),
+                entry.device_id.to_string(),
+                entry.supersedes.map(|id| id.to_string()),
+            ),
+        )
+        .map_err(Self::sqlite_error)?;
+
+        let fts_content = Self::fts_content_for_entry(&entry.data);
+        tx.execute(
+            "INSERT INTO entries_fts (entry_id, content) VALUES (?, ?)",
+            (id.to_string(), fts_content),
+        )
+        .map_err(Self::sqlite_error)?;
+
+        tx.execute(
+            "UPDATE meta SET value = ? WHERE key = 'last_modified'",
+            [created_at],
+        )
+        .map_err(Self::sqlite_error)?;
+
+        tx.commit().map_err(Self::sqlite_error)?;
+
+        Ok(id)
     }
 
-    fn get_entry(&self, _id: &Uuid) -> Result<Option<Entry>> {
-        Err(LedgerError::Storage(
-            "get_entry not implemented for AgeSqliteStorage".to_string(),
-        ))
+    fn get_entry(&self, id: &Uuid) -> Result<Option<Entry>> {
+        let conn = self
+            .conn
+            .lock()
+            .map_err(|_| LedgerError::Storage("SQLite connection poisoned".to_string()))?;
+
+        let result = conn.query_row(
+            r#"
+            SELECT id, entry_type_id, schema_version, data_json, tags_json, created_at, device_id, supersedes
+            FROM entries
+            WHERE id = ?
+            "#,
+            [id.to_string()],
+            |row| {
+                Ok((
+                    row.get::<_, String>(0)?,
+                    row.get::<_, String>(1)?,
+                    row.get::<_, i32>(2)?,
+                    row.get::<_, String>(3)?,
+                    row.get::<_, Option<String>>(4)?,
+                    row.get::<_, String>(5)?,
+                    row.get::<_, String>(6)?,
+                    row.get::<_, Option<String>>(7)?,
+                ))
+            },
+        );
+
+        match result {
+            Ok((
+                id_str,
+                entry_type_id_str,
+                schema_version,
+                data_json_str,
+                tags_json_str,
+                created_at_str,
+                device_id_str,
+                supersedes_str,
+            )) => Ok(Some(Self::entry_from_row(
+                id_str,
+                entry_type_id_str,
+                schema_version,
+                data_json_str,
+                tags_json_str,
+                created_at_str,
+                device_id_str,
+                supersedes_str,
+            )?)),
+            Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
+            Err(e) => Err(Self::sqlite_error(e)),
+        }
     }
 
-    fn list_entries(&self, _filter: &EntryFilter) -> Result<Vec<Entry>> {
-        Err(LedgerError::Storage(
-            "list_entries not implemented for AgeSqliteStorage".to_string(),
-        ))
+    fn list_entries(&self, filter: &EntryFilter) -> Result<Vec<Entry>> {
+        let conn = self
+            .conn
+            .lock()
+            .map_err(|_| LedgerError::Storage("SQLite connection poisoned".to_string()))?;
+
+        let mut conditions: Vec<String> = Vec::new();
+        let mut params: Vec<Box<dyn rusqlite::ToSql>> = Vec::new();
+
+        if let Some(entry_type_id) = filter.entry_type_id {
+            conditions.push("entry_type_id = ?".to_string());
+            params.push(Box::new(entry_type_id.to_string()));
+        }
+
+        if let Some(ref tag) = filter.tag {
+            let normalized = Self::normalize_tags(&[tag.clone()])?;
+            let normalized_tag = normalized
+                .get(0)
+                .ok_or_else(|| LedgerError::Validation("Invalid tag filter".to_string()))?
+                .clone();
+            conditions.push(
+                "tags_json IS NOT NULL AND EXISTS (SELECT 1 FROM json_each(tags_json) WHERE value = ?)"
+                    .to_string(),
+            );
+            params.push(Box::new(normalized_tag));
+        }
+
+        if let Some(since) = filter.since {
+            conditions.push("created_at >= ?".to_string());
+            params.push(Box::new(since.to_rfc3339()));
+        }
+
+        if let Some(until) = filter.until {
+            conditions.push("created_at <= ?".to_string());
+            params.push(Box::new(until.to_rfc3339()));
+        }
+
+        let mut query = String::from(
+            "SELECT id, entry_type_id, schema_version, data_json, tags_json, created_at, device_id, supersedes FROM entries",
+        );
+        if !conditions.is_empty() {
+            query.push_str(" WHERE ");
+            query.push_str(&conditions.join(" AND "));
+        }
+        query.push_str(" ORDER BY created_at DESC");
+
+        if let Some(limit) = filter.limit {
+            query.push_str(" LIMIT ?");
+            params.push(Box::new(limit as i64));
+        }
+
+        let mut stmt = conn.prepare(&query).map_err(Self::sqlite_error)?;
+        let rows = stmt
+            .query_map(rusqlite::params_from_iter(params.iter()), |row| {
+                Ok((
+                    row.get::<_, String>(0)?,
+                    row.get::<_, String>(1)?,
+                    row.get::<_, i32>(2)?,
+                    row.get::<_, String>(3)?,
+                    row.get::<_, Option<String>>(4)?,
+                    row.get::<_, String>(5)?,
+                    row.get::<_, String>(6)?,
+                    row.get::<_, Option<String>>(7)?,
+                ))
+            })
+            .map_err(Self::sqlite_error)?;
+
+        let mut entries = Vec::new();
+        for row in rows {
+            let (
+                id_str,
+                entry_type_id_str,
+                schema_version,
+                data_json_str,
+                tags_json_str,
+                created_at_str,
+                device_id_str,
+                supersedes_str,
+            ) = row.map_err(Self::sqlite_error)?;
+
+            entries.push(Self::entry_from_row(
+                id_str,
+                entry_type_id_str,
+                schema_version,
+                data_json_str,
+                tags_json_str,
+                created_at_str,
+                device_id_str,
+                supersedes_str,
+            )?);
+        }
+
+        Ok(entries)
     }
 
-    fn search_entries(&self, _query: &str) -> Result<Vec<Entry>> {
-        Err(LedgerError::Storage(
-            "search_entries not implemented for AgeSqliteStorage".to_string(),
-        ))
+    fn search_entries(&self, query: &str) -> Result<Vec<Entry>> {
+        let conn = self
+            .conn
+            .lock()
+            .map_err(|_| LedgerError::Storage("SQLite connection poisoned".to_string()))?;
+
+        let mut stmt = conn
+            .prepare(
+                r#"
+                SELECT e.id, e.entry_type_id, e.schema_version, e.data_json, e.tags_json,
+                       e.created_at, e.device_id, e.supersedes
+                FROM entries_fts f
+                JOIN entries e ON e.id = f.entry_id
+                WHERE entries_fts MATCH ?
+                ORDER BY bm25(entries_fts), e.created_at DESC
+                "#,
+            )
+            .map_err(Self::sqlite_error)?;
+
+        let rows = stmt
+            .query_map([query], |row| {
+                Ok((
+                    row.get::<_, String>(0)?,
+                    row.get::<_, String>(1)?,
+                    row.get::<_, i32>(2)?,
+                    row.get::<_, String>(3)?,
+                    row.get::<_, Option<String>>(4)?,
+                    row.get::<_, String>(5)?,
+                    row.get::<_, String>(6)?,
+                    row.get::<_, Option<String>>(7)?,
+                ))
+            })
+            .map_err(Self::sqlite_error)?;
+
+        let mut entries = Vec::new();
+        for row in rows {
+            let (
+                id_str,
+                entry_type_id_str,
+                schema_version,
+                data_json_str,
+                tags_json_str,
+                created_at_str,
+                device_id_str,
+                supersedes_str,
+            ) = row.map_err(Self::sqlite_error)?;
+
+            entries.push(Self::entry_from_row(
+                id_str,
+                entry_type_id_str,
+                schema_version,
+                data_json_str,
+                tags_json_str,
+                created_at_str,
+                device_id_str,
+                supersedes_str,
+            )?);
+        }
+
+        Ok(entries)
     }
 
     fn get_entry_type(&self, name: &str) -> Result<Option<EntryType>> {
@@ -276,7 +658,7 @@ impl StorageEngine for AgeSqliteStorage {
 
         let result = conn.query_row(
             r#"
-            SELECT etv.id, et.name, etv.version, etv.created_at, et.device_id, etv.schema_json
+            SELECT et.id, et.name, etv.version, etv.created_at, et.device_id, etv.schema_json
             FROM entry_type_versions etv
             JOIN entry_types et ON et.id = etv.entry_type_id
             WHERE et.name = ? AND etv.active = 1
@@ -408,7 +790,7 @@ impl StorageEngine for AgeSqliteStorage {
 
         tx.commit().map_err(Self::sqlite_error)?;
 
-        Ok(version_id)
+        Ok(base_id)
     }
 
     fn list_entry_types(&self) -> Result<Vec<EntryType>> {
@@ -420,7 +802,7 @@ impl StorageEngine for AgeSqliteStorage {
         let mut stmt = conn
             .prepare(
                 r#"
-                SELECT etv.id, et.name, etv.version, etv.created_at, et.device_id, etv.schema_json
+                SELECT et.id, et.name, etv.version, etv.created_at, et.device_id, etv.schema_json
                 FROM entry_type_versions etv
                 JOIN entry_types et ON et.id = etv.entry_type_id
                 WHERE etv.active = 1 AND etv.version = (
@@ -475,8 +857,73 @@ impl StorageEngine for AgeSqliteStorage {
     }
 
     fn check_integrity(&self) -> Result<()> {
-        Err(LedgerError::Storage(
-            "check_integrity not implemented for AgeSqliteStorage".to_string(),
-        ))
+        let conn = self
+            .conn
+            .lock()
+            .map_err(|_| LedgerError::Storage("SQLite connection poisoned".to_string()))?;
+
+        let mut stmt = conn
+            .prepare("PRAGMA foreign_key_check")
+            .map_err(Self::sqlite_error)?;
+        let mut rows = stmt.query([]).map_err(Self::sqlite_error)?;
+        if rows.next().map_err(Self::sqlite_error)?.is_some() {
+            return Err(LedgerError::Storage(
+                "Foreign key integrity check failed".to_string(),
+            ));
+        }
+
+        let missing_fts: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM entries e LEFT JOIN entries_fts f ON e.id = f.entry_id WHERE f.entry_id IS NULL",
+                [],
+                |row| row.get(0),
+            )
+            .map_err(Self::sqlite_error)?;
+        if missing_fts > 0 {
+            return Err(LedgerError::Storage(
+                "FTS index missing entries".to_string(),
+            ));
+        }
+
+        let orphaned_fts: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM entries_fts f LEFT JOIN entries e ON f.entry_id = e.id WHERE e.id IS NULL",
+                [],
+                |row| row.get(0),
+            )
+            .map_err(Self::sqlite_error)?;
+        if orphaned_fts > 0 {
+            return Err(LedgerError::Storage(
+                "FTS index has orphaned rows".to_string(),
+            ));
+        }
+
+        let invalid_active: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM (SELECT 1 FROM entry_type_versions GROUP BY entry_type_id HAVING SUM(active) != 1)",
+                [],
+                |row| row.get(0),
+            )
+            .map_err(Self::sqlite_error)?;
+        if invalid_active > 0 {
+            return Err(LedgerError::Storage(
+                "Entry type versions have invalid active state".to_string(),
+            ));
+        }
+
+        let metadata_count: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM meta WHERE key IN ('format_version', 'device_id', 'created_at', 'last_modified')",
+                [],
+                |row| row.get(0),
+            )
+            .map_err(Self::sqlite_error)?;
+        if metadata_count < 4 {
+            return Err(LedgerError::Storage(
+                "Metadata table missing required keys".to_string(),
+            ));
+        }
+
+        Ok(())
     }
 }
