@@ -22,9 +22,11 @@
 //! See RFC-001 for the complete storage model.
 
 pub mod encryption;
+pub mod age_sqlite;
 pub mod traits;
 pub mod types;
 
 // Re-export public types
 pub use traits::StorageEngine;
 pub use types::{Entry, EntryFilter, EntryType, LedgerMetadata, NewEntry, NewEntryType};
+pub use age_sqlite::AgeSqliteStorage;
