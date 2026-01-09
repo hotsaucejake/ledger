@@ -187,7 +187,7 @@ fn main() -> anyhow::Result<()> {
             let device_id = AgeSqliteStorage::create(std::path::Path::new(&target), &passphrase)?;
             let mut storage = AgeSqliteStorage::open(std::path::Path::new(&target), &passphrase)?;
             ensure_journal_entry_type(&mut storage, device_id)?;
-            storage.close()?;
+            storage.close(&passphrase)?;
 
             if !cli.quiet {
                 println!("Initialized new ledger at {}", target);
@@ -228,7 +228,7 @@ fn main() -> anyhow::Result<()> {
             }
 
             let entry_id = storage.insert_entry(&new_entry)?;
-            storage.close()?;
+            storage.close(&passphrase)?;
 
             if !cli.quiet {
                 println!("Added entry {}", entry_id);

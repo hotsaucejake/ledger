@@ -16,8 +16,6 @@ use rusqlite::serialize::OwnedData;
 use rusqlite::{Connection, DatabaseName, OptionalExtension};
 use uuid::Uuid;
 
-use age::secrecy::{ExposeSecret, SecretString};
-
 use crate::crypto::validate_passphrase;
 use crate::error::{LedgerError, Result};
 use crate::storage::encryption::{decrypt, encrypt};
@@ -32,8 +30,6 @@ pub struct AgeSqliteStorage {
     conn: Mutex<Connection>,
     #[allow(dead_code)]
     device_id: Uuid,
-    // Retained to re-encrypt on close; will be replaced with a derived key later.
-    passphrase: SecretString,
 }
 
 impl AgeSqliteStorage {
@@ -467,11 +463,11 @@ impl StorageEngine for AgeSqliteStorage {
             path: path.to_path_buf(),
             conn: Mutex::new(conn),
             device_id,
-            passphrase: SecretString::from(passphrase.to_string()),
         })
     }
 
-    fn close(self) -> Result<()> {
+    fn close(self, passphrase: &str) -> Result<()> {
+        validate_passphrase(passphrase)?;
         let conn = self
             .conn
             .into_inner()
@@ -479,7 +475,7 @@ impl StorageEngine for AgeSqliteStorage {
         let data = conn
             .serialize(DatabaseName::Main)
             .map_err(Self::sqlite_error)?;
-        let encrypted = encrypt(data.as_ref(), self.passphrase.expose_secret())?;
+        let encrypted = encrypt(data.as_ref(), passphrase)?;
         Self::write_atomic(&self.path, &encrypted)?;
         Ok(())
     }

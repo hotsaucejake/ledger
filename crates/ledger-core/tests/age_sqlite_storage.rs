@@ -109,7 +109,7 @@ fn test_create_open_close_round_trip() {
     assert!(temp.path.exists());
 
     let storage = AgeSqliteStorage::open(&temp.path, passphrase).expect("open should succeed");
-    storage.close().expect("close should succeed");
+    storage.close(passphrase).expect("close should succeed");
 
     let on_disk = fs::read(&temp.path).expect("read should succeed");
     assert!(!on_disk.is_empty());
@@ -152,7 +152,7 @@ fn test_metadata_persistence() {
     assert_eq!(metadata.device_id, device_id);
     assert!(metadata.created_at <= metadata.last_modified);
 
-    storage.close().expect("close should succeed");
+    storage.close(passphrase).expect("close should succeed");
 }
 
 #[test]
@@ -188,7 +188,7 @@ fn test_create_and_get_entry_type() {
     assert_eq!(entry_type.id, type_id);
     assert_eq!(entry_type.schema_json, schema);
 
-    storage.close().expect("close should succeed");
+    storage.close(passphrase).expect("close should succeed");
 }
 
 #[test]
@@ -204,7 +204,7 @@ fn test_get_nonexistent_entry_type() {
         .expect("get_entry_type should not error");
     assert!(result.is_none());
 
-    storage.close().expect("close should succeed");
+    storage.close(passphrase).expect("close should succeed");
 }
 
 #[test]
@@ -235,7 +235,7 @@ fn test_list_entry_types() {
     assert!(names.contains(&"journal"));
     assert!(names.contains(&"weight"));
 
-    storage.close().expect("close should succeed");
+    storage.close(passphrase).expect("close should succeed");
 }
 
 #[test]
@@ -282,7 +282,7 @@ fn test_entry_type_versioning() {
     assert_eq!(types.len(), 1);
     assert_eq!(types[0].version, 2);
 
-    storage.close().expect("close should succeed");
+    storage.close(passphrase).expect("close should succeed");
 }
 
 #[test]
@@ -629,7 +629,7 @@ fn test_check_integrity_fails_on_orphaned_fts() {
         device_id,
     );
     let entry_id = storage.insert_entry(&entry).expect("insert should succeed");
-    storage.close().expect("close should succeed");
+    storage.close(passphrase).expect("close should succeed");
 
     let conn = open_sqlite_from_file(&temp.path, passphrase);
     conn.execute(
@@ -666,7 +666,7 @@ fn test_atomic_write_failure_leaves_no_temp_files() {
     perms.set_mode(0o500);
     fs::set_permissions(&dir, perms).expect("set permissions");
 
-    let result = storage.close();
+    let result = storage.close(passphrase);
     assert!(result.is_err());
 
     let mut perms = fs::metadata(&dir).expect("metadata").permissions();
@@ -699,7 +699,7 @@ fn test_entry_type_active_flag_unique() {
         .create_entry_type(&NewEntryType::new("journal", schema_v2, device_id))
         .expect("create v2 should succeed");
 
-    storage.close().expect("close should succeed");
+    storage.close(passphrase).expect("close should succeed");
 
     let conn = open_sqlite_from_file(&temp.path, passphrase);
     let entry_type_id: String = conn
@@ -751,5 +751,5 @@ fn test_last_modified_updates_on_entry_type_create() {
     assert!(after >= before);
     assert!(after > before);
 
-    storage.close().expect("close should succeed");
+    storage.close(passphrase).expect("close should succeed");
 }

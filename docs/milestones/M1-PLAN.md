@@ -19,7 +19,7 @@ Implement Age-encrypted SQLite storage with in-memory operation, enabling:
 - [x] Store and retrieve test data
 - [x] Verify encryption at rest (no plaintext)
 - [x] Tests pass on Linux
-- [ ] Tests pass on macOS (CI)
+- [x] Tests pass on macOS (CI)
 
 ## Implementation Steps
 
@@ -60,10 +60,10 @@ fn test_wrong_passphrase_fails() { /* ... */ }
 ```
 
 **Security Checklist:**
-- [ ] Use `zeroize` crate for sensitive data
-- [ ] Argon2id parameters match RFC-001
-- [ ] Age library used correctly
-- [ ] No passphrase stored in memory longer than needed
+- [x] Use `zeroize` crate for sensitive data
+- [x] Argon2id parameters match RFC-001
+- [x] Age library used correctly
+- [x] No passphrase stored in memory longer than needed
 
 ### 3. Age-SQLite Backend (TDD)
 
@@ -120,13 +120,13 @@ fn test_init_rejects_weak_passphrase() { /* ... */ }
 - [x] Full init → close → open → verify workflow
 - [x] Wrong passphrase rejection
 - [x] Corrupted file detection
-- [ ] Temp file cleanup verification
+- [x] Temp file cleanup verification
 
 ### 6. Documentation
 
 - [x] Update README.md with M1 completion status
-- [ ] Add crypto usage examples to docs/DEVELOPMENT.md
-- [ ] Document passphrase requirements
+- [x] Add crypto usage examples to docs/DEVELOPMENT.md
+- [x] Document passphrase requirements
 
 ## Dependencies to Add
 
@@ -163,7 +163,7 @@ From RFC-001 threat model:
 - [x] Verify file is encrypted (cannot read with `cat`)
 - [x] Verify wrong passphrase fails gracefully
 - [x] Verify no temp files remain after crash
-- [ ] Verify memory cleanup (manual inspection)
+- [x] Verify memory cleanup (manual inspection)
 
 ## Performance Targets
 
@@ -190,7 +190,7 @@ M1 is complete when:
 - [x] `ledger init ~/test.ledger` works
 - [x] File is encrypted (verify manually)
 - [x] Can reopen and verify structure
-- [ ] CI passes on Linux + macOS
+- [x] CI passes on Linux + macOS
 - [x] No plaintext leaks verified
 
 ## Notes

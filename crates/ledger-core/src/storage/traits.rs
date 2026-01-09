@@ -68,7 +68,7 @@ pub trait StorageEngine: Send + Sync {
     /// Returns `LedgerError::Storage` if:
     /// - Cannot write to disk
     /// - Encryption fails
-    fn close(self) -> Result<()>;
+    fn close(self, passphrase: &str) -> Result<()>;
 
     /// Get ledger metadata.
     fn metadata(&self) -> Result<LedgerMetadata>;
