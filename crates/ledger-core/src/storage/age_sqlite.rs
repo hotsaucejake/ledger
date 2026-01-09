@@ -20,7 +20,9 @@ use crate::crypto::validate_passphrase;
 use crate::error::{LedgerError, Result};
 use crate::storage::encryption::{decrypt, encrypt};
 use crate::storage::traits::StorageEngine;
-use crate::storage::types::{Entry, EntryFilter, EntryType, LedgerMetadata, NewEntry, NewEntryType};
+use crate::storage::types::{
+    Entry, EntryFilter, EntryType, LedgerMetadata, NewEntry, NewEntryType,
+};
 
 /// Age-encrypted SQLite storage engine (Phase 0.1).
 pub struct AgeSqliteStorage {
@@ -53,9 +55,11 @@ impl AgeSqliteStorage {
         for tag in tags {
             let trimmed = tag.trim().to_ascii_lowercase();
             if trimmed.is_empty() {
-                return Err(LedgerError::Validation("Empty tag is not allowed".to_string()));
+                return Err(LedgerError::Validation(
+                    "Empty tag is not allowed".to_string(),
+                ));
             }
-            if trimmed.as_bytes().len() > Self::MAX_TAG_BYTES {
+            if trimmed.len() > Self::MAX_TAG_BYTES {
                 return Err(LedgerError::Validation(format!(
                     "Tag too long (max {} bytes)",
                     Self::MAX_TAG_BYTES
@@ -77,6 +81,7 @@ impl AgeSqliteStorage {
         Ok(normalized)
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn entry_from_row(
         id_str: String,
         entry_type_id_str: String,
@@ -139,9 +144,7 @@ impl AgeSqliteStorage {
 
     fn owned_data_from_bytes(bytes: &[u8]) -> Result<OwnedData> {
         if bytes.is_empty() {
-            return Err(LedgerError::Storage(
-                "SQLite payload is empty".to_string(),
-            ));
+            return Err(LedgerError::Storage("SQLite payload is empty".to_string()));
         }
 
         let size: i32 = bytes
@@ -150,9 +153,7 @@ impl AgeSqliteStorage {
             .map_err(|_| LedgerError::Storage("SQLite payload too large".to_string()))?;
         let raw = unsafe { rusqlite::ffi::sqlite3_malloc(size) as *mut u8 };
         if raw.is_null() {
-            return Err(LedgerError::Storage(
-                "SQLite allocation failed".to_string(),
-            ));
+            return Err(LedgerError::Storage("SQLite allocation failed".to_string()));
         }
 
         // Allocate with sqlite3_malloc so SQLite can own the buffer on deserialize.
@@ -169,7 +170,9 @@ impl AgeSqliteStorage {
 impl StorageEngine for AgeSqliteStorage {
     fn create(path: &Path, passphrase: &str) -> Result<Uuid> {
         if path.exists() {
-            return Err(LedgerError::Storage("Ledger file already exists".to_string()));
+            return Err(LedgerError::Storage(
+                "Ledger file already exists".to_string(),
+            ));
         }
 
         validate_passphrase(passphrase)?;
@@ -277,9 +280,11 @@ impl StorageEngine for AgeSqliteStorage {
 
         // Read device_id from metadata
         let device_id_str: String = conn
-            .query_row("SELECT value FROM meta WHERE key = 'device_id'", [], |row| {
-                row.get(0)
-            })
+            .query_row(
+                "SELECT value FROM meta WHERE key = 'device_id'",
+                [],
+                |row| row.get(0),
+            )
             .map_err(Self::sqlite_error)?;
         let device_id = Uuid::parse_str(&device_id_str)
             .map_err(|e| LedgerError::Storage(format!("Invalid device_id in metadata: {}", e)))?;
@@ -312,18 +317,30 @@ impl StorageEngine for AgeSqliteStorage {
             .map_err(|_| LedgerError::Storage("SQLite connection poisoned".to_string()))?;
 
         let format_version: String = conn
-            .query_row("SELECT value FROM meta WHERE key = 'format_version'", [], |row| row.get(0))
+            .query_row(
+                "SELECT value FROM meta WHERE key = 'format_version'",
+                [],
+                |row| row.get(0),
+            )
             .map_err(Self::sqlite_error)?;
 
         let created_at_str: String = conn
-            .query_row("SELECT value FROM meta WHERE key = 'created_at'", [], |row| row.get(0))
+            .query_row(
+                "SELECT value FROM meta WHERE key = 'created_at'",
+                [],
+                |row| row.get(0),
+            )
             .map_err(Self::sqlite_error)?;
         let created_at = DateTime::parse_from_rfc3339(&created_at_str)
             .map_err(|e| LedgerError::Storage(format!("Invalid created_at timestamp: {}", e)))?
             .with_timezone(&Utc);
 
         let last_modified_str: String = conn
-            .query_row("SELECT value FROM meta WHERE key = 'last_modified'", [], |row| row.get(0))
+            .query_row(
+                "SELECT value FROM meta WHERE key = 'last_modified'",
+                [],
+                |row| row.get(0),
+            )
             .map_err(Self::sqlite_error)?;
         let last_modified = DateTime::parse_from_rfc3339(&last_modified_str)
             .map_err(|e| LedgerError::Storage(format!("Invalid last_modified timestamp: {}", e)))?
@@ -374,19 +391,18 @@ impl StorageEngine for AgeSqliteStorage {
         }
 
         let normalized_tags = Self::normalize_tags(&entry.tags)?;
-        let tags_json = if normalized_tags.is_empty() {
-            None
-        } else {
-            Some(
-                serde_json::to_string(&normalized_tags).map_err(|e| {
+        let tags_json =
+            if normalized_tags.is_empty() {
+                None
+            } else {
+                Some(serde_json::to_string(&normalized_tags).map_err(|e| {
                     LedgerError::Storage(format!("Failed to serialize tags: {}", e))
-                })?,
-            )
-        };
+                })?)
+            };
 
         let data_json = serde_json::to_string(&entry.data)
             .map_err(|e| LedgerError::Storage(format!("Failed to serialize entry data: {}", e)))?;
-        if data_json.as_bytes().len() > Self::MAX_DATA_BYTES {
+        if data_json.len() > Self::MAX_DATA_BYTES {
             return Err(LedgerError::Validation(format!(
                 "Entry data too large (max {} bytes)",
                 Self::MAX_DATA_BYTES
@@ -508,9 +524,9 @@ impl StorageEngine for AgeSqliteStorage {
         }
 
         if let Some(ref tag) = filter.tag {
-            let normalized = Self::normalize_tags(&[tag.clone()])?;
+            let normalized = Self::normalize_tags(std::slice::from_ref(tag))?;
             let normalized_tag = normalized
-                .get(0)
+                .first()
                 .ok_or_else(|| LedgerError::Validation("Invalid tag filter".to_string()))?
                 .clone();
             conditions.push(
@@ -674,7 +690,14 @@ impl StorageEngine for AgeSqliteStorage {
                 let device_id_str: String = row.get(4)?;
                 let schema_json_str: String = row.get(5)?;
 
-                Ok((id_str, name, version, created_at_str, device_id_str, schema_json_str))
+                Ok((
+                    id_str,
+                    name,
+                    version,
+                    created_at_str,
+                    device_id_str,
+                    schema_json_str,
+                ))
             },
         );
 
@@ -710,9 +733,7 @@ impl StorageEngine for AgeSqliteStorage {
             .lock()
             .map_err(|_| LedgerError::Storage("SQLite connection poisoned".to_string()))?;
 
-        let tx = conn
-            .transaction()
-            .map_err(Self::sqlite_error)?;
+        let tx = conn.transaction().map_err(Self::sqlite_error)?;
 
         // Check if entry type with this name already exists
         let base_type_id: Option<String> = tx
@@ -824,7 +845,14 @@ impl StorageEngine for AgeSqliteStorage {
                 let device_id_str: String = row.get(4)?;
                 let schema_json_str: String = row.get(5)?;
 
-                Ok((id_str, name, version, created_at_str, device_id_str, schema_json_str))
+                Ok((
+                    id_str,
+                    name,
+                    version,
+                    created_at_str,
+                    device_id_str,
+                    schema_json_str,
+                ))
             })
             .map_err(Self::sqlite_error)?;
 

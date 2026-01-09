@@ -4,9 +4,7 @@ use std::ptr::NonNull;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use ledger_core::storage::encryption::decrypt;
-use ledger_core::storage::{
-    AgeSqliteStorage, EntryFilter, NewEntry, NewEntryType, StorageEngine,
-};
+use ledger_core::storage::{AgeSqliteStorage, EntryFilter, NewEntry, NewEntryType, StorageEngine};
 use rusqlite::serialize::OwnedData;
 use rusqlite::{Connection, DatabaseName};
 use uuid::Uuid;
@@ -77,13 +75,12 @@ fn test_create_open_close_round_trip() {
     let temp = TempFile::new("ledger_storage_round_trip");
     let passphrase = "test-passphrase-secure-123";
 
-    let device_id = AgeSqliteStorage::create(&temp.path, passphrase)
-        .expect("create should succeed");
+    let device_id =
+        AgeSqliteStorage::create(&temp.path, passphrase).expect("create should succeed");
     assert!(!device_id.is_nil());
     assert!(temp.path.exists());
 
-    let storage = AgeSqliteStorage::open(&temp.path, passphrase)
-        .expect("open should succeed");
+    let storage = AgeSqliteStorage::open(&temp.path, passphrase).expect("open should succeed");
     storage.close().expect("close should succeed");
 
     let on_disk = fs::read(&temp.path).expect("read should succeed");
@@ -116,11 +113,10 @@ fn test_metadata_persistence() {
     let temp = TempFile::new("ledger_storage_metadata");
     let passphrase = "test-passphrase-secure-123";
 
-    let device_id = AgeSqliteStorage::create(&temp.path, passphrase)
-        .expect("create should succeed");
+    let device_id =
+        AgeSqliteStorage::create(&temp.path, passphrase).expect("create should succeed");
 
-    let storage = AgeSqliteStorage::open(&temp.path, passphrase)
-        .expect("open should succeed");
+    let storage = AgeSqliteStorage::open(&temp.path, passphrase).expect("open should succeed");
 
     let metadata = storage.metadata().expect("metadata should succeed");
     assert_eq!(metadata.format_version, "0.1");
@@ -146,11 +142,15 @@ fn test_create_and_get_entry_type() {
     });
 
     let new_type = NewEntryType::new("journal", schema.clone(), device_id);
-    let type_id = storage.create_entry_type(&new_type).expect("create_entry_type should succeed");
+    let type_id = storage
+        .create_entry_type(&new_type)
+        .expect("create_entry_type should succeed");
 
     assert!(!type_id.is_nil());
 
-    let retrieved = storage.get_entry_type("journal").expect("get_entry_type should succeed");
+    let retrieved = storage
+        .get_entry_type("journal")
+        .expect("get_entry_type should succeed");
     assert!(retrieved.is_some());
 
     let entry_type = retrieved.unwrap();
@@ -170,7 +170,9 @@ fn test_get_nonexistent_entry_type() {
     AgeSqliteStorage::create(&temp.path, passphrase).expect("create should succeed");
     let storage = AgeSqliteStorage::open(&temp.path, passphrase).expect("open should succeed");
 
-    let result = storage.get_entry_type("nonexistent").expect("get_entry_type should not error");
+    let result = storage
+        .get_entry_type("nonexistent")
+        .expect("get_entry_type should not error");
     assert!(result.is_none());
 
     storage.close().expect("close should succeed");
@@ -188,12 +190,16 @@ fn test_list_entry_types() {
     let schema1 = serde_json::json!({"fields": [{"name": "body", "type": "string"}]});
     let schema2 = serde_json::json!({"fields": [{"name": "amount", "type": "number"}]});
 
-    storage.create_entry_type(&NewEntryType::new("journal", schema1, device_id))
+    storage
+        .create_entry_type(&NewEntryType::new("journal", schema1, device_id))
         .expect("create journal type should succeed");
-    storage.create_entry_type(&NewEntryType::new("weight", schema2, device_id))
+    storage
+        .create_entry_type(&NewEntryType::new("weight", schema2, device_id))
         .expect("create weight type should succeed");
 
-    let types = storage.list_entry_types().expect("list_entry_types should succeed");
+    let types = storage
+        .list_entry_types()
+        .expect("list_entry_types should succeed");
     assert_eq!(types.len(), 2);
 
     let names: Vec<_> = types.iter().map(|t| t.name.as_str()).collect();
@@ -222,26 +228,19 @@ fn test_entry_type_versioning() {
 
     // Create version 1
     let base_id = storage
-        .create_entry_type(&NewEntryType::new(
-            "journal",
-            schema_v1.clone(),
-            device_id,
-        ))
+        .create_entry_type(&NewEntryType::new("journal", schema_v1.clone(), device_id))
         .expect("create v1 should succeed");
 
     // Create version 2 (same name)
     let base_id_second = storage
-        .create_entry_type(&NewEntryType::new(
-            "journal",
-            schema_v2.clone(),
-            device_id,
-        ))
+        .create_entry_type(&NewEntryType::new("journal", schema_v2.clone(), device_id))
         .expect("create v2 should succeed");
 
     assert_eq!(base_id, base_id_second);
 
     // get_entry_type should return latest version
-    let latest = storage.get_entry_type("journal")
+    let latest = storage
+        .get_entry_type("journal")
         .expect("get should succeed")
         .expect("journal should exist");
 
@@ -268,10 +267,15 @@ fn test_insert_and_get_entry_round_trip() {
     let entry_type_id = create_basic_entry_type(&mut storage);
     let device_id = Uuid::new_v4();
     let data = serde_json::json!({"body": "Hello World"});
-    let new_entry = NewEntry::new(entry_type_id, 1, data.clone(), device_id)
-        .with_tags(vec!["Tag-One".to_string(), "tag-one".to_string(), "Second".to_string()]);
+    let new_entry = NewEntry::new(entry_type_id, 1, data.clone(), device_id).with_tags(vec![
+        "Tag-One".to_string(),
+        "tag-one".to_string(),
+        "Second".to_string(),
+    ]);
 
-    let entry_id = storage.insert_entry(&new_entry).expect("insert should succeed");
+    let entry_id = storage
+        .insert_entry(&new_entry)
+        .expect("insert should succeed");
     let entry = storage
         .get_entry(&entry_id)
         .expect("get should succeed")
@@ -280,7 +284,10 @@ fn test_insert_and_get_entry_round_trip() {
     assert_eq!(entry.entry_type_id, entry_type_id);
     assert_eq!(entry.schema_version, 1);
     assert_eq!(entry.data, data);
-    assert_eq!(entry.tags, vec!["tag-one".to_string(), "second".to_string()]);
+    assert_eq!(
+        entry.tags,
+        vec!["tag-one".to_string(), "second".to_string()]
+    );
 }
 
 #[test]
@@ -309,9 +316,13 @@ fn test_list_entries_with_filters() {
     )
     .with_tags(vec!["beta".to_string()]);
 
-    let first_id = storage.insert_entry(&first).expect("insert first should succeed");
+    let first_id = storage
+        .insert_entry(&first)
+        .expect("insert first should succeed");
     std::thread::sleep(Duration::from_millis(2));
-    let second_id = storage.insert_entry(&second).expect("insert second should succeed");
+    let second_id = storage
+        .insert_entry(&second)
+        .expect("insert second should succeed");
 
     let all = storage
         .list_entries(&EntryFilter::new())
