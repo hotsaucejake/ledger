@@ -312,15 +312,44 @@ fn main() -> anyhow::Result<()> {
             format,
             since,
         }) => {
-            println!("Command: export");
+            let target = cli.ledger.ok_or_else(|| {
+                anyhow::anyhow!("No ledger path provided. Use --ledger or pass a path.")
+            })?;
+            let passphrase = prompt_passphrase()?;
+            let storage = AgeSqliteStorage::open(std::path::Path::new(&target), &passphrase)?;
+
+            let mut filter = EntryFilter::new();
             if let Some(t) = entry_type {
-                println!("  Type: {}", t);
+                ensure_journal_type_name(&t)?;
+                let entry_type_record = storage
+                    .get_entry_type(&t)?
+                    .ok_or_else(|| anyhow::anyhow!("Entry type \"{}\" not found", t))?;
+                filter = filter.entry_type(entry_type_record.id);
             }
-            println!("  Format: {}", format);
             if let Some(s) = since {
-                println!("  Since: {}", s);
+                let parsed = parse_datetime(&s)?;
+                filter = filter.since(parsed);
             }
-            println!("\n[Milestone 0] Not yet implemented.");
+
+            let entries = storage.list_entries(&filter)?;
+            let name_map = entry_type_name_map(&storage)?;
+            match format.as_str() {
+                "json" => {
+                    let output = serde_json::to_string_pretty(&entries_json(entries, &name_map))?;
+                    println!("{}", output);
+                }
+                "jsonl" => {
+                    for value in entries_json(entries, &name_map) {
+                        println!("{}", serde_json::to_string(&value)?);
+                    }
+                }
+                other => {
+                    return Err(anyhow::anyhow!(
+                        "Unsupported export format: {} (use json or jsonl)",
+                        other
+                    ));
+                }
+            }
         }
         Some(Commands::Check) => {
             let target = cli.ledger.ok_or_else(|| {
@@ -332,9 +361,21 @@ fn main() -> anyhow::Result<()> {
             println!("Integrity check passed.");
         }
         Some(Commands::Backup { destination }) => {
-            println!("Command: backup");
-            println!("  Destination: {}", destination);
-            println!("\n[Milestone 0] Not yet implemented.");
+            let source = cli.ledger.ok_or_else(|| {
+                anyhow::anyhow!("No ledger path provided. Use --ledger or pass a path.")
+            })?;
+            let count = std::fs::copy(&source, &destination).map_err(|e| {
+                anyhow::anyhow!(
+                    "Failed to copy ledger from {} to {}: {}",
+                    source,
+                    destination,
+                    e
+                )
+            })?;
+            if count == 0 {
+                return Err(anyhow::anyhow!("Backup failed: zero bytes written"));
+            }
+            println!("Backed up ledger to {}", destination);
         }
         None => {
             println!("Ledger v{}", VERSION);
