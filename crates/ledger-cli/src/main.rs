@@ -207,12 +207,6 @@ fn main() -> anyhow::Result<()> {
             limit,
             json,
         }) => {
-            if last.is_some() {
-                let window = parse_duration(last.as_deref().unwrap())?;
-                let since = Utc::now() - window;
-                filter = filter.since(since);
-            }
-
             let target = cli.ledger.ok_or_else(|| {
                 anyhow::anyhow!("No ledger path provided. Use --ledger or pass a path.")
             })?;
@@ -229,6 +223,11 @@ fn main() -> anyhow::Result<()> {
             }
             if let Some(t) = tag {
                 filter = filter.tag(t);
+            }
+            if let Some(ref l) = last {
+                let window = parse_duration(l)?;
+                let since_time = Utc::now() - window;
+                filter = filter.since(since_time);
             }
             if let Some(s) = since {
                 let parsed = chrono::DateTime::parse_from_rfc3339(&s)
@@ -266,12 +265,6 @@ fn main() -> anyhow::Result<()> {
             r#type,
             last,
         }) => {
-            if last.is_some() {
-                let window = parse_duration(last.as_deref().unwrap())?;
-                let since = Utc::now() - window;
-                entries.retain(|entry| entry.created_at >= since);
-            }
-
             let target = cli.ledger.ok_or_else(|| {
                 anyhow::anyhow!("No ledger path provided. Use --ledger or pass a path.")
             })?;
@@ -285,6 +278,11 @@ fn main() -> anyhow::Result<()> {
                     .get_entry_type(&t)?
                     .ok_or_else(|| anyhow::anyhow!("Entry type \"{}\" not found", t))?;
                 entries.retain(|entry| entry.entry_type_id == entry_type_record.id);
+            }
+            if let Some(ref l) = last {
+                let window = parse_duration(l)?;
+                let since = Utc::now() - window;
+                entries.retain(|entry| entry.created_at >= since);
             }
 
             for entry in entries {
