@@ -219,6 +219,6 @@ fn test_cli_check_failure() {
         .output()
         .expect("run check");
     assert!(!check.status.success());
-    let output = String::from_utf8_lossy(&check.stdout);
+    let output = String::from_utf8_lossy(&check.stderr);
     assert!(output.contains("Integrity check: FAILED"));
 }

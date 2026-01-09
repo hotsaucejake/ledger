@@ -3,7 +3,8 @@
 //! This is the command-line interface for Ledger. It provides a user-friendly
 //! interface to the core library functionality.
 
-use clap::{Parser, Subcommand};
+use clap::{CommandFactory, Parser, Subcommand};
+use clap_complete::{generate, Shell};
 use std::collections::HashMap;
 use std::io::{self, IsTerminal, Read};
 use std::process::Command;
@@ -94,6 +95,10 @@ enum Commands {
         /// Output as JSON
         #[arg(long)]
         json: bool,
+
+        /// Output format (table, plain)
+        #[arg(long, value_name = "FORMAT")]
+        format: Option<String>,
     },
 
     /// Search entries using full-text search
@@ -117,6 +122,10 @@ enum Commands {
         /// Limit number of results
         #[arg(long)]
         limit: Option<usize>,
+
+        /// Output format (table, plain)
+        #[arg(long, value_name = "FORMAT")]
+        format: Option<String>,
     },
 
     /// Show a specific entry by ID
@@ -153,6 +162,13 @@ enum Commands {
         /// Destination path
         #[arg(value_name = "DEST")]
         destination: String,
+    },
+
+    /// Generate shell completions
+    Completions {
+        /// Shell to generate completions for
+        #[arg(value_name = "SHELL")]
+        shell: Shell,
     },
 }
 
@@ -226,6 +242,7 @@ fn main() -> anyhow::Result<()> {
             until,
             limit,
             json,
+            format,
         }) => {
             let target = cli.ledger.ok_or_else(|| {
                 anyhow::anyhow!("No ledger path provided. Use --ledger or pass a path.")
@@ -264,22 +281,41 @@ fn main() -> anyhow::Result<()> {
             }
 
             let entries = storage.list_entries(&filter)?;
+            let format = parse_output_format(format.as_deref())?;
             if json {
+                if format.is_some() {
+                    return Err(anyhow::anyhow!("--format cannot be used with --json"));
+                }
                 let name_map = entry_type_name_map(&storage)?;
                 let output = serde_json::to_string_pretty(&entries_json(&entries, &name_map))?;
                 println!("{}", output);
             } else {
-                if !cli.quiet {
-                    println!("ID | CREATED_AT | SUMMARY");
-                }
-                for entry in entries {
-                    let summary = entry
-                        .data
-                        .get("body")
-                        .and_then(|v| v.as_str())
-                        .map(|value| value.to_string())
-                        .unwrap_or_else(|| entry.data.to_string());
-                    println!("{} | {} | {}", entry.id, entry.created_at, summary);
+                match format.unwrap_or(OutputFormat::Table) {
+                    OutputFormat::Table => {
+                        if !cli.quiet {
+                            println!("ID | CREATED_AT | SUMMARY");
+                        }
+                        for entry in entries {
+                            let summary = entry
+                                .data
+                                .get("body")
+                                .and_then(|v| v.as_str())
+                                .map(|value| value.to_string())
+                                .unwrap_or_else(|| entry.data.to_string());
+                            println!("{} | {} | {}", entry.id, entry.created_at, summary);
+                        }
+                    }
+                    OutputFormat::Plain => {
+                        for entry in entries {
+                            let summary = entry
+                                .data
+                                .get("body")
+                                .and_then(|v| v.as_str())
+                                .map(|value| value.to_string())
+                                .unwrap_or_else(|| entry.data.to_string());
+                            println!("{} {} {}", entry.id, entry.created_at, summary);
+                        }
+                    }
                 }
             }
         }
@@ -289,6 +325,7 @@ fn main() -> anyhow::Result<()> {
             last,
             json,
             limit,
+            format,
         }) => {
             let target = cli.ledger.ok_or_else(|| {
                 anyhow::anyhow!("No ledger path provided. Use --ledger or pass a path.")
@@ -313,22 +350,41 @@ fn main() -> anyhow::Result<()> {
                 entries.truncate(lim);
             }
 
+            let format = parse_output_format(format.as_deref())?;
             if json {
+                if format.is_some() {
+                    return Err(anyhow::anyhow!("--format cannot be used with --json"));
+                }
                 let name_map = entry_type_name_map(&storage)?;
                 let output = serde_json::to_string_pretty(&entries_json(&entries, &name_map))?;
                 println!("{}", output);
             } else {
-                if !cli.quiet {
-                    println!("ID | CREATED_AT | SUMMARY");
-                }
-                for entry in entries {
-                    let summary = entry
-                        .data
-                        .get("body")
-                        .and_then(|v| v.as_str())
-                        .map(|value| value.to_string())
-                        .unwrap_or_else(|| entry.data.to_string());
-                    println!("{} | {} | {}", entry.id, entry.created_at, summary);
+                match format.unwrap_or(OutputFormat::Table) {
+                    OutputFormat::Table => {
+                        if !cli.quiet {
+                            println!("ID | CREATED_AT | SUMMARY");
+                        }
+                        for entry in entries {
+                            let summary = entry
+                                .data
+                                .get("body")
+                                .and_then(|v| v.as_str())
+                                .map(|value| value.to_string())
+                                .unwrap_or_else(|| entry.data.to_string());
+                            println!("{} | {} | {}", entry.id, entry.created_at, summary);
+                        }
+                    }
+                    OutputFormat::Plain => {
+                        for entry in entries {
+                            let summary = entry
+                                .data
+                                .get("body")
+                                .and_then(|v| v.as_str())
+                                .map(|value| value.to_string())
+                                .unwrap_or_else(|| entry.data.to_string());
+                            println!("{} {} {}", entry.id, entry.created_at, summary);
+                        }
+                    }
                 }
             }
         }
@@ -413,10 +469,8 @@ fn main() -> anyhow::Result<()> {
                     }
                 }
                 Err(err) => {
-                    if !cli.quiet {
-                        println!("Integrity check: FAILED");
-                        println!("- error: {}", err);
-                    }
+                    eprintln!("Integrity check: FAILED");
+                    eprintln!("- error: {}", err);
                     return Err(anyhow::anyhow!("Integrity check failed"));
                 }
             }
@@ -439,6 +493,10 @@ fn main() -> anyhow::Result<()> {
             if !cli.quiet {
                 println!("Backed up ledger to {}", destination);
             }
+        }
+        Some(Commands::Completions { shell }) => {
+            let mut cmd = Cli::command();
+            generate(shell, &mut cmd, "ledger", &mut std::io::stdout());
         }
         None => {
             println!("Ledger v{}", VERSION);
@@ -517,6 +575,24 @@ fn parse_duration(value: &str) -> anyhow::Result<Duration> {
         _ => Err(anyhow::anyhow!(
             "Invalid duration unit: {} (use d/h/m/s)",
             unit
+        )),
+    }
+}
+
+#[derive(Clone, Copy)]
+enum OutputFormat {
+    Table,
+    Plain,
+}
+
+fn parse_output_format(value: Option<&str>) -> anyhow::Result<Option<OutputFormat>> {
+    match value {
+        None => Ok(None),
+        Some("table") => Ok(Some(OutputFormat::Table)),
+        Some("plain") => Ok(Some(OutputFormat::Plain)),
+        Some(other) => Err(anyhow::anyhow!(
+            "Unsupported format: {} (use table or plain)",
+            other
         )),
     }
 }
