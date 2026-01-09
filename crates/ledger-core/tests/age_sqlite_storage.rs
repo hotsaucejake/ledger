@@ -1,5 +1,5 @@
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::ptr::NonNull;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
@@ -58,7 +58,7 @@ fn open_sqlite_from_file(path: &PathBuf, passphrase: &str) -> Connection {
     conn
 }
 
-fn assert_no_temp_files(path: &PathBuf) {
+fn assert_no_temp_files(path: &Path) {
     let parent = path.parent().expect("parent directory");
     let filename = path
         .file_name()
