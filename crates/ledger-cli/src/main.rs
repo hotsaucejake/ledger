@@ -4,6 +4,7 @@
 //! interface to the core library functionality.
 
 use clap::{Parser, Subcommand};
+use std::collections::HashMap;
 use std::io::{self, IsTerminal, Read};
 use std::process::Command;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -149,11 +150,7 @@ fn main() -> anyhow::Result<()> {
                 anyhow::anyhow!("No ledger path provided. Use --ledger or pass a path.")
             })?;
 
-            let passphrase = Password::new()
-                .with_prompt("Enter passphrase")
-                .with_confirmation("Confirm passphrase", "Passphrases do not match")
-                .interact()
-                .map_err(|e| anyhow::anyhow!("Failed to read passphrase: {}", e))?;
+            let passphrase = prompt_init_passphrase()?;
 
             let device_id = AgeSqliteStorage::create(std::path::Path::new(&target), &passphrase)?;
             let mut storage = AgeSqliteStorage::open(std::path::Path::new(&target), &passphrase)?;
@@ -247,7 +244,8 @@ fn main() -> anyhow::Result<()> {
 
             let entries = storage.list_entries(&filter)?;
             if json {
-                let output = serde_json::to_string_pretty(&entries)?;
+                let name_map = entry_type_name_map(&storage)?;
+                let output = serde_json::to_string_pretty(&entries_json(entries, &name_map))?;
                 println!("{}", output);
             } else {
                 for entry in entries {
@@ -307,8 +305,7 @@ fn main() -> anyhow::Result<()> {
             let entry = storage
                 .get_entry(&parsed)?
                 .ok_or_else(|| anyhow::anyhow!("Entry not found"))?;
-            let output = serde_json::to_string_pretty(&entry)?;
-            println!("{}", output);
+            print_entry(&storage, &entry)?;
         }
         Some(Commands::Export {
             entry_type,
@@ -350,8 +347,26 @@ fn main() -> anyhow::Result<()> {
 }
 
 fn prompt_passphrase() -> anyhow::Result<String> {
+    if let Ok(value) = std::env::var("LEDGER_PASSPHRASE") {
+        if !value.trim().is_empty() {
+            return Ok(value);
+        }
+    }
     Password::new()
         .with_prompt("Passphrase")
+        .interact()
+        .map_err(|e| anyhow::anyhow!("Failed to read passphrase: {}", e))
+}
+
+fn prompt_init_passphrase() -> anyhow::Result<String> {
+    if let Ok(value) = std::env::var("LEDGER_PASSPHRASE") {
+        if !value.trim().is_empty() {
+            return Ok(value);
+        }
+    }
+    Password::new()
+        .with_prompt("Enter passphrase")
+        .with_confirmation("Confirm passphrase", "Passphrases do not match")
         .interact()
         .map_err(|e| anyhow::anyhow!("Failed to read passphrase: {}", e))
 }
@@ -461,4 +476,66 @@ fn read_body_from_editor() -> anyhow::Result<String> {
     }
 
     Ok(trimmed)
+}
+
+fn entry_type_name_map(storage: &AgeSqliteStorage) -> anyhow::Result<HashMap<Uuid, String>> {
+    let types = storage.list_entry_types()?;
+    let mut map = HashMap::new();
+    for entry_type in types {
+        map.insert(entry_type.id, entry_type.name);
+    }
+    Ok(map)
+}
+
+fn entries_json(
+    entries: Vec<ledger_core::storage::Entry>,
+    name_map: &HashMap<Uuid, String>,
+) -> Vec<serde_json::Value> {
+    entries
+        .into_iter()
+        .map(|entry| {
+            let entry_type_name = name_map
+                .get(&entry.entry_type_id)
+                .cloned()
+                .unwrap_or_else(|| "unknown".to_string());
+            serde_json::json!({
+                "id": entry.id,
+                "entry_type_id": entry.entry_type_id,
+                "entry_type_name": entry_type_name,
+                "schema_version": entry.schema_version,
+                "created_at": entry.created_at,
+                "device_id": entry.device_id,
+                "tags": entry.tags,
+                "data": entry.data,
+                "supersedes": entry.supersedes,
+            })
+        })
+        .collect()
+}
+
+fn print_entry(
+    storage: &AgeSqliteStorage,
+    entry: &ledger_core::storage::Entry,
+) -> anyhow::Result<()> {
+    let name_map = entry_type_name_map(storage)?;
+    let entry_type_name = name_map
+        .get(&entry.entry_type_id)
+        .cloned()
+        .unwrap_or_else(|| "unknown".to_string());
+    let body = entry
+        .data
+        .get("body")
+        .and_then(|v| v.as_str())
+        .map(|value| value.to_string())
+        .unwrap_or_else(|| entry.data.to_string());
+
+    println!("ID: {}", entry.id);
+    println!("Type: {} (v{})", entry_type_name, entry.schema_version);
+    println!("Created: {}", entry.created_at);
+    println!("Device: {}", entry.device_id);
+    if !entry.tags.is_empty() {
+        println!("Tags: {}", entry.tags.join(", "));
+    }
+    println!("\n{}", body);
+    Ok(())
 }
