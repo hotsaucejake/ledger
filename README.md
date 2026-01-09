@@ -34,12 +34,23 @@ The encrypted storage and CLI flows are now functional for Phase 0.1 journaling:
 ```bash
 ledger init                  # Initialize encrypted ledger
 ledger add <type>            # Add entry
+ledger add journal --body "" # Add inline entry
 ledger list [type]           # List entries
+ledger list --json           # List entries as JSON
+ledger list --last 7d        # List recent entries
 ledger search <query>        # Full-text search
+ledger search --type journal # Filter by entry type
 ledger show <id>             # Show entry by ID
 ledger export                # Export data
 ledger check                 # Integrity check
 ledger backup <dest>         # Backup ledger
+```
+
+Environment variables:
+
+```bash
+LEDGER_PATH=/path/to/ledger.ledger
+LEDGER_PASSPHRASE="your passphrase"
 ```
 
 ## Building

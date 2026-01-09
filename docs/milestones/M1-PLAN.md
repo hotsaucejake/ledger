@@ -18,7 +18,7 @@ Implement Age-encrypted SQLite storage with in-memory operation, enabling:
 - [x] Can open existing ledger
 - [x] Store and retrieve test data
 - [x] Verify encryption at rest (no plaintext)
-- [ ] Tests pass on Linux
+- [x] Tests pass on Linux
 - [ ] Tests pass on macOS (CI)
 
 ## Implementation Steps
@@ -73,7 +73,7 @@ fn test_wrong_passphrase_fails() { /* ... */ }
 - [x] Schema creation (meta, entry_types, entries, FTS)
 - [x] In-memory SQLite with `deserialize`
 - [x] Encrypt-on-close, decrypt-on-open
-- [ ] Atomic writes with backup
+- [x] Atomic writes with backup
 
 **Tests First:**
 ```rust
@@ -162,7 +162,7 @@ From RFC-001 threat model:
 **Testing:**
 - [x] Verify file is encrypted (cannot read with `cat`)
 - [x] Verify wrong passphrase fails gracefully
-- [ ] Verify no temp files remain after crash
+- [x] Verify no temp files remain after crash
 - [ ] Verify memory cleanup (manual inspection)
 
 ## Performance Targets
@@ -185,20 +185,20 @@ Phase 0.1 targets personal use:
 ## Definition of Done
 
 M1 is complete when:
-- [ ] All tests pass (`cargo test`)
+- [x] All tests pass (`cargo test`)
 - [ ] No clippy warnings
 - [x] `ledger init ~/test.ledger` works
 - [x] File is encrypted (verify manually)
 - [x] Can reopen and verify structure
 - [ ] CI passes on Linux + macOS
-- [ ] No plaintext leaks verified
+- [x] No plaintext leaks verified
 
 ## Notes
 
 - Follow TDD strictly: write tests first
 - Each commit should compile and pass tests
 - Reference RFC-001 for all crypto decisions
-- Use `.claude/CHECKLIST.md` for every module
+- Use `.claude/CHECKLIST.md` for every module (if applicable)
 - Update this plan as we learn
 
 ## Resources

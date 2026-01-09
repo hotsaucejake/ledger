@@ -64,6 +64,7 @@ Per format-spec.md §7:
 **Not implemented:**
 - `supersedes` (revision support deferred)
 - `deleted_at` (soft delete deferred)
+- Multi-entry type CLI (Phase 0.2)
 
 ### CLI Commands
 
@@ -77,7 +78,9 @@ Per format-spec.md §7:
 | `ledger list --limit N` | List N entries |
 | `ledger list --last 7d` | List recent entries |
 | `ledger list --tag foo` | Filter by tag |
+| `ledger list --json` | Output as JSON |
 | `ledger search "term"` | Full-text search |
+| `ledger search --type journal` | Filter by entry type |
 | `ledger show <id>` | Show single entry |
 | `ledger export --json` | Export all entries as JSON |
 | `ledger export --jsonl` | Export as JSONL |
