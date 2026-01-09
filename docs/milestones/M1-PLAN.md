@@ -186,7 +186,7 @@ Phase 0.1 targets personal use:
 
 M1 is complete when:
 - [x] All tests pass (`cargo test`)
-- [ ] No clippy warnings
+- [x] No clippy warnings
 - [x] `ledger init ~/test.ledger` works
 - [x] File is encrypted (verify manually)
 - [x] Can reopen and verify structure

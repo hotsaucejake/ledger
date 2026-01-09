@@ -31,6 +31,17 @@ impl Drop for TempFile {
     }
 }
 
+fn temp_dir(prefix: &str) -> PathBuf {
+    let nanos = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .expect("system time should be available")
+        .as_nanos();
+    let dirname = format!("{}_{}_{}", prefix, std::process::id(), nanos);
+    let path = std::env::temp_dir().join(dirname);
+    fs::create_dir_all(&path).expect("create temp dir");
+    path
+}
+
 fn open_sqlite_from_file(path: &PathBuf, passphrase: &str) -> Connection {
     let encrypted = fs::read(path).expect("read should succeed");
     let plaintext = decrypt(&encrypted, passphrase).expect("decrypt should succeed");
@@ -637,6 +648,34 @@ fn test_check_integrity_fails_on_orphaned_fts() {
     let storage = AgeSqliteStorage::open(&temp.path, passphrase).expect("open should succeed");
     let result = storage.check_integrity();
     assert!(result.is_err());
+}
+
+#[cfg(unix)]
+#[test]
+fn test_atomic_write_failure_leaves_no_temp_files() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let dir = temp_dir("ledger_atomic_failure");
+    let ledger_path = dir.join("test.ledger");
+    let passphrase = "test-passphrase-secure-123";
+
+    AgeSqliteStorage::create(&ledger_path, passphrase).expect("create should succeed");
+    let storage = AgeSqliteStorage::open(&ledger_path, passphrase).expect("open should succeed");
+
+    let mut perms = fs::metadata(&dir).expect("metadata").permissions();
+    perms.set_mode(0o500);
+    fs::set_permissions(&dir, perms).expect("set permissions");
+
+    let result = storage.close();
+    assert!(result.is_err());
+
+    let mut perms = fs::metadata(&dir).expect("metadata").permissions();
+    perms.set_mode(0o700);
+    fs::set_permissions(&dir, perms).expect("restore permissions");
+
+    assert_no_temp_files(&ledger_path);
+    let _ = fs::remove_file(&ledger_path);
+    let _ = fs::remove_dir_all(&dir);
 }
 
 #[test]
