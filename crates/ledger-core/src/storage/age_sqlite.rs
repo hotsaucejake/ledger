@@ -9,7 +9,7 @@ use std::path::{Path, PathBuf};
 use std::ptr::NonNull;
 use std::sync::Mutex;
 
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, NaiveDate, Utc};
 use rusqlite::serialize::OwnedData;
 use rusqlite::{Connection, DatabaseName, OptionalExtension};
 use uuid::Uuid;
@@ -133,6 +133,126 @@ impl AgeSqliteStorage {
             .and_then(|value| value.as_str())
             .map(|value| value.to_string())
             .unwrap_or_else(|| data.to_string())
+    }
+
+    fn validate_entry_data(schema_json: &serde_json::Value, data: &serde_json::Value) -> Result<()> {
+        let fields = schema_json
+            .get("fields")
+            .and_then(|value| value.as_array())
+            .ok_or_else(|| LedgerError::Validation("Schema fields missing or invalid".to_string()))?;
+
+        let data_obj = data.as_object().ok_or_else(|| {
+            LedgerError::Validation("Entry data must be a JSON object".to_string())
+        })?;
+
+        for field in fields {
+            let name = field
+                .get("name")
+                .and_then(|value| value.as_str())
+                .ok_or_else(|| LedgerError::Validation("Schema field name missing".to_string()))?;
+            let field_type = field
+                .get("type")
+                .and_then(|value| value.as_str())
+                .ok_or_else(|| LedgerError::Validation("Schema field type missing".to_string()))?;
+            let required = field
+                .get("required")
+                .and_then(|value| value.as_bool())
+                .unwrap_or(false);
+            let nullable = field
+                .get("nullable")
+                .and_then(|value| value.as_bool())
+                .unwrap_or(false);
+
+            let value = data_obj.get(name);
+            if value.is_none() {
+                if required {
+                    return Err(LedgerError::Validation(format!(
+                        "Missing required field: {}",
+                        name
+                    )));
+                }
+                continue;
+            }
+
+            let value = value.unwrap();
+            if value.is_null() {
+                if !nullable {
+                    return Err(LedgerError::Validation(format!(
+                        "Field {} cannot be null",
+                        name
+                    )));
+                }
+                continue;
+            }
+
+            match field_type {
+                "string" | "text" => {
+                    if !value.is_string() {
+                        return Err(LedgerError::Validation(format!(
+                            "Field {} must be a string",
+                            name
+                        )));
+                    }
+                }
+                "number" => {
+                    if !value.is_number() {
+                        return Err(LedgerError::Validation(format!(
+                            "Field {} must be a number",
+                            name
+                        )));
+                    }
+                }
+                "integer" => {
+                    if value.as_i64().is_none() {
+                        return Err(LedgerError::Validation(format!(
+                            "Field {} must be an integer",
+                            name
+                        )));
+                    }
+                }
+                "boolean" => {
+                    if !value.is_boolean() {
+                        return Err(LedgerError::Validation(format!(
+                            "Field {} must be a boolean",
+                            name
+                        )));
+                    }
+                }
+                "date" => {
+                    let raw = value.as_str().ok_or_else(|| {
+                        LedgerError::Validation(format!("Field {} must be a date string", name))
+                    })?;
+                    if NaiveDate::parse_from_str(raw, "%Y-%m-%d").is_err() {
+                        return Err(LedgerError::Validation(format!(
+                            "Field {} must be YYYY-MM-DD",
+                            name
+                        )));
+                    }
+                }
+                "datetime" => {
+                    let raw = value.as_str().ok_or_else(|| {
+                        LedgerError::Validation(format!(
+                            "Field {} must be an ISO-8601 string",
+                            name
+                        ))
+                    })?;
+                    if DateTime::parse_from_rfc3339(raw).is_err() {
+                        return Err(LedgerError::Validation(format!(
+                            "Field {} must be ISO-8601",
+                            name
+                        )));
+                    }
+                }
+                other => {
+                    return Err(LedgerError::Validation(format!(
+                        "Unsupported field type: {}",
+                        other
+                    )))
+                }
+            }
+        }
+
+        Ok(())
     }
 
     fn empty_payload(conn: &Connection) -> Result<Vec<u8>> {
@@ -376,19 +496,24 @@ impl StorageEngine for AgeSqliteStorage {
             ));
         }
 
-        let version_exists: Option<i32> = tx
+        let schema_json: Option<String> = tx
             .query_row(
-                "SELECT version FROM entry_type_versions WHERE entry_type_id = ? AND version = ?",
+                "SELECT schema_json FROM entry_type_versions WHERE entry_type_id = ? AND version = ?",
                 (entry.entry_type_id.to_string(), entry.schema_version),
                 |row| row.get(0),
             )
             .optional()
             .map_err(Self::sqlite_error)?;
-        if version_exists.is_none() {
+        let schema_json = if let Some(value) = schema_json {
+            value
+        } else {
             return Err(LedgerError::Validation(
                 "Entry schema version does not exist".to_string(),
             ));
-        }
+        };
+        let schema_value: serde_json::Value = serde_json::from_str(&schema_json)
+            .map_err(|e| LedgerError::Storage(format!("Invalid schema JSON: {}", e)))?;
+        Self::validate_entry_data(&schema_value, &entry.data)?;
 
         let normalized_tags = Self::normalize_tags(&entry.tags)?;
         let tags_json =

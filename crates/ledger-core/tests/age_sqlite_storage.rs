@@ -62,7 +62,7 @@ fn create_basic_entry_type(storage: &mut AgeSqliteStorage) -> Uuid {
     let device_id = Uuid::new_v4();
     let schema = serde_json::json!({
         "fields": [
-            {"name": "body", "type": "string"}
+            {"name": "body", "type": "string", "required": true}
         ]
     });
     storage
@@ -291,6 +291,43 @@ fn test_insert_and_get_entry_round_trip() {
 }
 
 #[test]
+fn test_insert_entry_missing_required_field_fails() {
+    let temp = TempFile::new("ledger_entry_missing_required");
+    let passphrase = "test-passphrase-secure-123";
+
+    AgeSqliteStorage::create(&temp.path, passphrase).expect("create should succeed");
+    let mut storage = AgeSqliteStorage::open(&temp.path, passphrase).expect("open should succeed");
+
+    let entry_type_id = create_basic_entry_type(&mut storage);
+    let device_id = Uuid::new_v4();
+    let new_entry = NewEntry::new(entry_type_id, 1, serde_json::json!({}), device_id);
+
+    let result = storage.insert_entry(&new_entry);
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_insert_entry_type_mismatch_fails() {
+    let temp = TempFile::new("ledger_entry_type_mismatch");
+    let passphrase = "test-passphrase-secure-123";
+
+    AgeSqliteStorage::create(&temp.path, passphrase).expect("create should succeed");
+    let mut storage = AgeSqliteStorage::open(&temp.path, passphrase).expect("open should succeed");
+
+    let entry_type_id = create_basic_entry_type(&mut storage);
+    let device_id = Uuid::new_v4();
+    let new_entry = NewEntry::new(
+        entry_type_id,
+        1,
+        serde_json::json!({"body": 42}),
+        device_id,
+    );
+
+    let result = storage.insert_entry(&new_entry);
+    assert!(result.is_err());
+}
+
+#[test]
 fn test_list_entries_with_filters() {
     let temp = TempFile::new("ledger_entry_list");
     let passphrase = "test-passphrase-secure-123";
@@ -336,6 +373,96 @@ fn test_list_entries_with_filters() {
         .expect("list should succeed");
     assert_eq!(filtered.len(), 1);
     assert_eq!(filtered[0].id, first_id);
+}
+
+#[test]
+fn test_insert_entry_invalid_tag_characters() {
+    let temp = TempFile::new("ledger_entry_invalid_tag");
+    let passphrase = "test-passphrase-secure-123";
+
+    AgeSqliteStorage::create(&temp.path, passphrase).expect("create should succeed");
+    let mut storage = AgeSqliteStorage::open(&temp.path, passphrase).expect("open should succeed");
+
+    let entry_type_id = create_basic_entry_type(&mut storage);
+    let device_id = Uuid::new_v4();
+    let new_entry = NewEntry::new(
+        entry_type_id,
+        1,
+        serde_json::json!({"body": "ok"}),
+        device_id,
+    )
+    .with_tags(vec!["bad tag!".to_string()]);
+
+    let result = storage.insert_entry(&new_entry);
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_insert_entry_empty_tag_fails() {
+    let temp = TempFile::new("ledger_entry_empty_tag");
+    let passphrase = "test-passphrase-secure-123";
+
+    AgeSqliteStorage::create(&temp.path, passphrase).expect("create should succeed");
+    let mut storage = AgeSqliteStorage::open(&temp.path, passphrase).expect("open should succeed");
+
+    let entry_type_id = create_basic_entry_type(&mut storage);
+    let device_id = Uuid::new_v4();
+    let new_entry = NewEntry::new(
+        entry_type_id,
+        1,
+        serde_json::json!({"body": "ok"}),
+        device_id,
+    )
+    .with_tags(vec!["   ".to_string()]);
+
+    let result = storage.insert_entry(&new_entry);
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_insert_entry_tag_too_long_fails() {
+    let temp = TempFile::new("ledger_entry_long_tag");
+    let passphrase = "test-passphrase-secure-123";
+
+    AgeSqliteStorage::create(&temp.path, passphrase).expect("create should succeed");
+    let mut storage = AgeSqliteStorage::open(&temp.path, passphrase).expect("open should succeed");
+
+    let entry_type_id = create_basic_entry_type(&mut storage);
+    let device_id = Uuid::new_v4();
+    let long_tag = "a".repeat(129);
+    let new_entry = NewEntry::new(
+        entry_type_id,
+        1,
+        serde_json::json!({"body": "ok"}),
+        device_id,
+    )
+    .with_tags(vec![long_tag]);
+
+    let result = storage.insert_entry(&new_entry);
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_insert_entry_too_many_tags_fails() {
+    let temp = TempFile::new("ledger_entry_too_many_tags");
+    let passphrase = "test-passphrase-secure-123";
+
+    AgeSqliteStorage::create(&temp.path, passphrase).expect("create should succeed");
+    let mut storage = AgeSqliteStorage::open(&temp.path, passphrase).expect("open should succeed");
+
+    let entry_type_id = create_basic_entry_type(&mut storage);
+    let device_id = Uuid::new_v4();
+    let tags = (0..101).map(|i| format!("tag{}", i)).collect::<Vec<_>>();
+    let new_entry = NewEntry::new(
+        entry_type_id,
+        1,
+        serde_json::json!({"body": "ok"}),
+        device_id,
+    )
+    .with_tags(tags);
+
+    let result = storage.insert_entry(&new_entry);
+    assert!(result.is_err());
 }
 
 #[test]
@@ -393,8 +520,8 @@ fn test_entry_type_active_flag_unique() {
     let mut storage = AgeSqliteStorage::open(&temp.path, passphrase).expect("open should succeed");
 
     let device_id = Uuid::new_v4();
-    let schema_v1 = serde_json::json!({"fields": [{"name": "body", "type": "string"}]});
-    let schema_v2 = serde_json::json!({"fields": [{"name": "body", "type": "string"}]});
+    let schema_v1 = serde_json::json!({"fields": [{"name": "body", "type": "string", "required": true}]});
+    let schema_v2 = serde_json::json!({"fields": [{"name": "body", "type": "string", "required": true}]});
 
     storage
         .create_entry_type(&NewEntryType::new("journal", schema_v1, device_id))
@@ -441,7 +568,7 @@ fn test_last_modified_updates_on_entry_type_create() {
     std::thread::sleep(Duration::from_millis(2));
 
     let device_id = Uuid::new_v4();
-    let schema = serde_json::json!({"fields": [{"name": "body", "type": "string"}]});
+    let schema = serde_json::json!({"fields": [{"name": "body", "type": "string", "required": true}]});
     storage
         .create_entry_type(&NewEntryType::new("journal", schema, device_id))
         .expect("create should succeed");
