@@ -15,9 +15,9 @@ Implement Age-encrypted SQLite storage with in-memory operation, enabling:
 ## Exit Criteria
 
 - [x] Can create new encrypted ledger
-- [ ] Can open existing ledger
-- [ ] Store and retrieve test data
-- [ ] Verify encryption at rest (no plaintext)
+- [x] Can open existing ledger
+- [x] Store and retrieve test data
+- [x] Verify encryption at rest (no plaintext)
 - [ ] Tests pass on Linux
 - [ ] Tests pass on macOS (CI)
 
@@ -27,10 +27,10 @@ Implement Age-encrypted SQLite storage with in-memory operation, enabling:
 
 **Files**: `crates/ledger-core/src/storage/`
 
-- [ ] Define `StorageEngine` trait
-- [ ] Define core types (`NewEntry`, `Entry`, `EntryFilter`)
-- [ ] Write unit tests for trait contract
-- [ ] Add integration test stubs
+- [x] Define `StorageEngine` trait
+- [x] Define core types (`NewEntry`, `Entry`, `EntryFilter`)
+- [x] Write unit tests for trait contract
+- [x] Add integration test stubs
 
 **Tests First:**
 ```rust
@@ -42,10 +42,10 @@ fn test_storage_trait_contract() { /* ... */ }
 
 **Files**: `crates/ledger-core/src/crypto/`
 
-- [ ] Key derivation with Argon2id
-- [ ] Age encryption/decryption wrappers
-- [ ] Passphrase validation
-- [ ] Key zeroization on drop
+- [x] Key derivation with Argon2id
+- [x] Age encryption/decryption wrappers
+- [x] Passphrase validation
+- [x] Key zeroization on drop
 
 **Tests First:**
 ```rust
@@ -69,10 +69,10 @@ fn test_wrong_passphrase_fails() { /* ... */ }
 
 **Files**: `crates/ledger-core/src/storage/age_sqlite.rs`
 
-- [ ] Implement `StorageEngine` for `AgeSqliteStorage`
-- [ ] Schema creation (meta, entry_types, entries, FTS)
-- [ ] In-memory SQLite with `deserialize`
-- [ ] Encrypt-on-close, decrypt-on-open
+- [x] Implement `StorageEngine` for `AgeSqliteStorage`
+- [x] Schema creation (meta, entry_types, entries, FTS)
+- [x] In-memory SQLite with `deserialize`
+- [x] Encrypt-on-close, decrypt-on-open
 - [ ] Atomic writes with backup
 
 **Tests First:**
@@ -99,8 +99,8 @@ fn test_file_is_encrypted() { /* ... */ }
 
 **Files**: `crates/ledger-cli/src/commands/`
 
-- [ ] `init.rs` - Create new ledger
-- [ ] Passphrase prompting (dialoguer)
+- [x] `init.rs` - Create new ledger
+- [x] Passphrase prompting (dialoguer)
 - [ ] Error message translation
 - [ ] Progress indicators
 
@@ -117,14 +117,14 @@ fn test_init_rejects_weak_passphrase() { /* ... */ }
 
 **Files**: `tests/integration/`
 
-- [ ] Full init → close → open → verify workflow
-- [ ] Wrong passphrase rejection
-- [ ] Corrupted file detection
+- [x] Full init → close → open → verify workflow
+- [x] Wrong passphrase rejection
+- [x] Corrupted file detection
 - [ ] Temp file cleanup verification
 
 ### 6. Documentation
 
-- [ ] Update README.md with M1 completion status
+- [x] Update README.md with M1 completion status
 - [ ] Add crypto usage examples to docs/DEVELOPMENT.md
 - [ ] Document passphrase requirements
 
@@ -160,8 +160,8 @@ From RFC-001 threat model:
 - Key zeroization
 
 **Testing:**
-- [ ] Verify file is encrypted (cannot read with `cat`)
-- [ ] Verify wrong passphrase fails gracefully
+- [x] Verify file is encrypted (cannot read with `cat`)
+- [x] Verify wrong passphrase fails gracefully
 - [ ] Verify no temp files remain after crash
 - [ ] Verify memory cleanup (manual inspection)
 
@@ -187,9 +187,9 @@ Phase 0.1 targets personal use:
 M1 is complete when:
 - [ ] All tests pass (`cargo test`)
 - [ ] No clippy warnings
-- [ ] `ledger init ~/test.ledger` works
-- [ ] File is encrypted (verify manually)
-- [ ] Can reopen and verify structure
+- [x] `ledger init ~/test.ledger` works
+- [x] File is encrypted (verify manually)
+- [x] Can reopen and verify structure
 - [ ] CI passes on Linux + macOS
 - [ ] No plaintext leaks verified
 

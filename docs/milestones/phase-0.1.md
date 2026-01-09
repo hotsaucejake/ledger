@@ -71,15 +71,17 @@ Per format-spec.md §7:
 |---------|-------------|
 | `ledger init` | Create new encrypted ledger |
 | `ledger add` | Add journal entry (opens $EDITOR) |
-| `ledger add --message "..."` | Add inline entry |
+| `ledger add --body "..."` | Add inline entry |
 | `ledger add --tags foo,bar` | Add with tags |
 | `ledger list` | List recent entries |
 | `ledger list --limit N` | List N entries |
+| `ledger list --last 7d` | List recent entries |
 | `ledger list --tag foo` | Filter by tag |
 | `ledger search "term"` | Full-text search |
 | `ledger show <id>` | Show single entry |
 | `ledger export --json` | Export all entries as JSON |
 | `ledger export --jsonl` | Export as JSONL |
+| `ledger backup <dest>` | Backup ledger file |
 
 ### Full-Text Search
 
@@ -94,6 +96,10 @@ Per format-spec.md §7:
 - Age encryption with scrypt KDF
 - In-memory SQLite (no plaintext temp files)
 - Atomic writes with backup
+
+**Passphrase requirements:**
+- Minimum length: 12 characters
+- Must not be empty or whitespace-only
 
 ---
 

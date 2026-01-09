@@ -5,7 +5,7 @@
 [![CI](https://github.com/hotsaucejake/ledger/actions/workflows/ci.yml/badge.svg)](https://github.com/hotsaucejake/ledger/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-MIT%2FApache--2.0-blue.svg)](LICENSE)
 
-> **Status**: Milestone 0 (Project Skeleton) — Core functionality not yet implemented
+> **Status**: Milestone 1 (Encrypted Storage) — Core functionality in progress
 
 ## Overview
 
@@ -19,17 +19,17 @@ Ledger combines strong encryption at rest, structured queryable data, user-defin
 - **Structure without rigidity**: Free-form writing, structured metrics, or hybrid
 - **Future-proof**: Versioned schemas, explicit migrations, documented format
 
-## Current Status: Milestone 0 ✓
+## Current Status: Milestone 1 (In Progress)
 
-The project skeleton is complete:
+The encrypted storage and CLI flows are now functional for Phase 0.1 journaling:
 
-- [x] Rust workspace structure (`ledger-core` + `ledger-cli`)
-- [x] CLI command taxonomy implemented (Phase 0.1 commands)
-- [x] `ledger --help` works
-- [x] CI pipeline (build, test, clippy, fmt)
-- [x] Cross-platform tested (Linux, macOS)
+- [x] Age-encrypted SQLite storage (in-memory)
+- [x] Schema initialization + metadata
+- [x] Entry CRUD + FTS search
+- [x] CLI init/add/list/search/show/check/export/backup
+- [x] CLI integration tests
 
-### Available Commands (not yet functional)
+### Available Commands (functional for journal)
 
 ```bash
 ledger init                  # Initialize encrypted ledger
@@ -58,6 +58,11 @@ cargo clippy --all-targets --all-features -- -D warnings
 # Install locally
 cargo install --path crates/ledger-cli
 ```
+
+## Passphrase Requirements
+
+- Minimum length: **12 characters**
+- Must not be empty or whitespace-only
 
 ## Development Roadmap
 

@@ -19,12 +19,11 @@ A secure, encrypted, CLI-first personal journal and logbook combining:
 
 ### Current Status
 
-Check `README.md` for milestone status. As of Milestone 0 completion:
-- Project skeleton complete
-- CLI command structure defined
-- Core library scaffolded
-- CI pipeline operational
-- No encryption or storage logic yet
+Check `README.md` for milestone status. As of Milestone 1 (in progress):
+- Encrypted storage + schema initialization implemented
+- Entry CRUD + FTS search working in `ledger-core`
+- CLI init/add/list/search/show/check/export/backup working for `journal`
+- CLI integration tests in place
 
 ### Core Design Documents (REQUIRED READING)
 
@@ -650,6 +649,35 @@ echo "✅ All checks passed!"
 - Store keys in plaintext
 - Use deprecated algorithms
 - Trust user input
+
+### Passphrase Requirements
+
+- Minimum length: **12 characters**
+- Must not be empty or whitespace-only
+- Enforced in `ledger-core::crypto::validate_passphrase`
+
+### Crypto Usage Examples
+
+```rust
+use ledger_core::crypto::{derive_key, validate_passphrase};
+
+let passphrase = "example-passphrase-123";
+validate_passphrase(passphrase)?;
+
+let salt = b"unique-salt-1234567890";
+let key = derive_key(passphrase, salt)?;
+```
+
+```rust
+use ledger_core::storage::{AgeSqliteStorage, StorageEngine};
+
+let path = std::path::Path::new("example.ledger");
+let passphrase = "example-passphrase-123";
+
+let device_id = AgeSqliteStorage::create(path, passphrase)?;
+let storage = AgeSqliteStorage::open(path, passphrase)?;
+storage.close()?;
+```
 
 ### Input Validation
 
