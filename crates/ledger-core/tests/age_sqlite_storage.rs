@@ -58,6 +58,23 @@ fn open_sqlite_from_file(path: &PathBuf, passphrase: &str) -> Connection {
     conn
 }
 
+fn assert_no_temp_files(path: &PathBuf) {
+    let parent = path.parent().expect("parent directory");
+    let filename = path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .expect("valid filename");
+    let entries = fs::read_dir(parent).expect("read dir");
+    for entry in entries {
+        let entry = entry.expect("dir entry");
+        let name = entry.file_name();
+        let name = name.to_string_lossy();
+        if name.starts_with(&format!("{}.", filename)) && name.ends_with(".tmp") {
+            panic!("Found unexpected temp file: {}", name);
+        }
+    }
+}
+
 fn create_basic_entry_type(storage: &mut AgeSqliteStorage) -> Uuid {
     let device_id = Uuid::new_v4();
     let schema = serde_json::json!({
@@ -85,6 +102,7 @@ fn test_create_open_close_round_trip() {
 
     let on_disk = fs::read(&temp.path).expect("read should succeed");
     assert!(!on_disk.is_empty());
+    assert_no_temp_files(&temp.path);
 }
 
 #[test]

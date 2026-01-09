@@ -5,9 +5,11 @@
 //! will be added in subsequent steps.
 
 use std::fs;
+use std::fs::OpenOptions;
 use std::path::{Path, PathBuf};
 use std::ptr::NonNull;
 use std::sync::Mutex;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use chrono::{DateTime, NaiveDate, Utc};
 use rusqlite::serialize::OwnedData;
@@ -299,6 +301,44 @@ impl AgeSqliteStorage {
             Ok(OwnedData::from_raw_nonnull(ptr, bytes.len()))
         }
     }
+
+    fn write_atomic(path: &Path, data: &[u8]) -> Result<()> {
+        let parent = path
+            .parent()
+            .ok_or_else(|| LedgerError::Storage("Invalid ledger path".to_string()))?;
+
+        let nanos = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map_err(|e| LedgerError::Storage(format!("System time error: {}", e)))?
+            .as_nanos();
+        let filename = path
+            .file_name()
+            .and_then(|name| name.to_str())
+            .ok_or_else(|| LedgerError::Storage("Invalid ledger filename".to_string()))?;
+        let temp_path = parent.join(format!("{}.{}.tmp", filename, nanos));
+
+        let mut file = OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&temp_path)
+            .map_err(|e| LedgerError::Storage(format!("Temp file create failed: {}", e)))?;
+        use std::io::Write;
+        file.write_all(data)
+            .map_err(|e| LedgerError::Storage(format!("Temp file write failed: {}", e)))?;
+        file.sync_all()
+            .map_err(|e| LedgerError::Storage(format!("Temp file sync failed: {}", e)))?;
+
+        if let Err(err) = fs::rename(&temp_path, path) {
+            // Best-effort replace on platforms where rename fails if target exists.
+            let _ = fs::remove_file(path);
+            fs::rename(&temp_path, path).map_err(|e| {
+                let _ = fs::remove_file(&temp_path);
+                LedgerError::Storage(format!("Atomic rename failed ({}): {}", err, e))
+            })?;
+        }
+
+        Ok(())
+    }
 }
 
 impl StorageEngine for AgeSqliteStorage {
@@ -391,7 +431,7 @@ impl StorageEngine for AgeSqliteStorage {
         // Serialize and encrypt
         let plaintext = Self::empty_payload(&conn)?;
         let encrypted = encrypt(&plaintext, passphrase)?;
-        fs::write(path, encrypted)?;
+        Self::write_atomic(path, &encrypted)?;
 
         Ok(device_id)
     }
@@ -440,7 +480,7 @@ impl StorageEngine for AgeSqliteStorage {
             .serialize(DatabaseName::Main)
             .map_err(Self::sqlite_error)?;
         let encrypted = encrypt(data.as_ref(), self.passphrase.expose_secret())?;
-        fs::write(self.path, encrypted)?;
+        Self::write_atomic(&self.path, &encrypted)?;
         Ok(())
     }
 
