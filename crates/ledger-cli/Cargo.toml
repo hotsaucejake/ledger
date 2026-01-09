@@ -18,7 +18,10 @@ ledger-core = { path = "../ledger-core" }
 clap = { workspace = true }
 anyhow = { workspace = true }
 chrono = { workspace = true }
+dialoguer = "0.11"
 serde_json = { workspace = true }
 uuid = { workspace = true }
 
+[dev-dependencies]
+rusqlite = { workspace = true }
 dialoguer = "0.11"

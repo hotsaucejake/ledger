@@ -584,6 +584,44 @@ fn test_check_integrity_ok() {
 }
 
 #[test]
+fn test_check_integrity_fails_on_orphaned_fts() {
+    let temp = TempFile::new("ledger_integrity_fail_fts");
+    let passphrase = "test-passphrase-secure-123";
+
+    AgeSqliteStorage::create(&temp.path, passphrase).expect("create should succeed");
+    let mut storage = AgeSqliteStorage::open(&temp.path, passphrase).expect("open should succeed");
+
+    let entry_type_id = create_basic_entry_type(&mut storage);
+    let device_id = Uuid::new_v4();
+    let entry = NewEntry::new(
+        entry_type_id,
+        1,
+        serde_json::json!({"body": "integrity test"}),
+        device_id,
+    );
+    let entry_id = storage.insert_entry(&entry).expect("insert should succeed");
+    storage.close().expect("close should succeed");
+
+    let conn = open_sqlite_from_file(&temp.path, passphrase);
+    conn.execute(
+        "DELETE FROM entries_fts WHERE entry_id = ?",
+        [entry_id.to_string()],
+    )
+    .expect("delete fts should succeed");
+
+    let data = conn
+        .serialize(DatabaseName::Main)
+        .expect("serialize should succeed");
+    let encrypted = ledger_core::storage::encryption::encrypt(data.as_ref(), passphrase)
+        .expect("encrypt should succeed");
+    fs::write(&temp.path, encrypted).expect("write should succeed");
+
+    let storage = AgeSqliteStorage::open(&temp.path, passphrase).expect("open should succeed");
+    let result = storage.check_integrity();
+    assert!(result.is_err());
+}
+
+#[test]
 fn test_entry_type_active_flag_unique() {
     let temp = TempFile::new("ledger_entry_type_active");
     let passphrase = "test-passphrase-secure-123";

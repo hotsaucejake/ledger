@@ -359,8 +359,20 @@ fn main() -> anyhow::Result<()> {
             })?;
             let passphrase = prompt_passphrase()?;
             let storage = AgeSqliteStorage::open(std::path::Path::new(&target), &passphrase)?;
-            storage.check_integrity()?;
-            println!("Integrity check passed.");
+            match storage.check_integrity() {
+                Ok(()) => {
+                    println!("Integrity check: OK");
+                    println!("- foreign keys: OK");
+                    println!("- entries FTS: OK");
+                    println!("- entry type versions: OK");
+                    println!("- metadata keys: OK");
+                }
+                Err(err) => {
+                    println!("Integrity check: FAILED");
+                    println!("- error: {}", err);
+                    return Err(anyhow::anyhow!("Integrity check failed"));
+                }
+            }
         }
         Some(Commands::Backup { destination }) => {
             let source = cli.ledger.ok_or_else(|| {

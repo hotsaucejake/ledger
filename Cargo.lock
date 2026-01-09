@@ -865,6 +865,7 @@ dependencies = [
  "clap",
  "dialoguer",
  "ledger-core",
+ "rusqlite",
  "serde_json",
  "uuid",
 ]
