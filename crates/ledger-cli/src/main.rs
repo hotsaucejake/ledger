@@ -264,7 +264,7 @@ fn main() -> anyhow::Result<()> {
                         .and_then(|v| v.as_str())
                         .map(|value| value.to_string())
                         .unwrap_or_else(|| entry.data.to_string());
-                    println!("{} {} {}", entry.id, entry.created_at, summary);
+                    println!("{} | {} | {}", entry.id, entry.created_at, summary);
                 }
             }
         }
@@ -306,7 +306,7 @@ fn main() -> anyhow::Result<()> {
                         .and_then(|v| v.as_str())
                         .map(|value| value.to_string())
                         .unwrap_or_else(|| entry.data.to_string());
-                    println!("{} {} {}", entry.id, entry.created_at, summary);
+                    println!("{} | {} | {}", entry.id, entry.created_at, summary);
                 }
             }
         }

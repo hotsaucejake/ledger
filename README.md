@@ -40,7 +40,9 @@ ledger list --json           # List entries as JSON
 ledger list --last 7d        # List recent entries
 ledger search <query>        # Full-text search
 ledger search --type journal # Filter by entry type
+ledger search --json         # Search as JSON
 ledger show <id>             # Show entry by ID
+ledger show <id> --json      # Show entry as JSON
 ledger export                # Export data
 ledger check                 # Integrity check
 ledger backup <dest>         # Backup ledger

@@ -110,6 +110,69 @@ fn test_cli_init_add_list_show() {
 }
 
 #[test]
+fn test_cli_search_and_show_json() {
+    let ledger_path = temp_ledger_path("ledger_cli_json");
+    let passphrase = "test-passphrase-secure-123";
+
+    let init = Command::new(bin())
+        .arg("init")
+        .arg(&ledger_path)
+        .env("LEDGER_PASSPHRASE", passphrase)
+        .output()
+        .expect("run init");
+    assert!(init.status.success());
+
+    let add = Command::new(bin())
+        .arg("add")
+        .arg("journal")
+        .arg("--body")
+        .arg("JSON output")
+        .arg("--ledger")
+        .arg(&ledger_path)
+        .env("LEDGER_PASSPHRASE", passphrase)
+        .output()
+        .expect("run add");
+    assert!(add.status.success());
+
+    let search = Command::new(bin())
+        .arg("search")
+        .arg("JSON")
+        .arg("--json")
+        .arg("--ledger")
+        .arg(&ledger_path)
+        .env("LEDGER_PASSPHRASE", passphrase)
+        .output()
+        .expect("run search");
+    assert!(search.status.success());
+
+    let search_value: serde_json::Value =
+        serde_json::from_slice(&search.stdout).expect("parse search json");
+    let array = search_value.as_array().expect("search output array");
+    assert!(!array.is_empty());
+    let entry_id = array[0]
+        .get("id")
+        .and_then(|v| v.as_str())
+        .expect("entry id");
+
+    let show = Command::new(bin())
+        .arg("show")
+        .arg(entry_id)
+        .arg("--json")
+        .arg("--ledger")
+        .arg(&ledger_path)
+        .env("LEDGER_PASSPHRASE", passphrase)
+        .output()
+        .expect("run show");
+    assert!(show.status.success());
+    let show_value: serde_json::Value =
+        serde_json::from_slice(&show.stdout).expect("parse show json");
+    assert_eq!(
+        show_value.get("entry_type_name").and_then(|v| v.as_str()),
+        Some("journal")
+    );
+}
+
+#[test]
 fn test_cli_check_failure() {
     let ledger_path = temp_ledger_path("ledger_cli_check_fail");
     let passphrase = "test-passphrase-secure-123";
