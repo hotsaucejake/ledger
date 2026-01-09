@@ -27,6 +27,10 @@ struct Cli {
 
     #[command(subcommand)]
     command: Option<Commands>,
+
+    /// Quiet mode (minimal output)
+    #[arg(short, long, global = true)]
+    quiet: bool,
 }
 
 #[derive(Subcommand)]
@@ -109,6 +113,10 @@ enum Commands {
         /// Output as JSON
         #[arg(long)]
         json: bool,
+
+        /// Limit number of results
+        #[arg(long)]
+        limit: Option<usize>,
     },
 
     /// Show a specific entry by ID
@@ -165,7 +173,9 @@ fn main() -> anyhow::Result<()> {
             ensure_journal_entry_type(&mut storage, device_id)?;
             storage.close()?;
 
-            println!("Initialized new ledger at {}", target);
+            if !cli.quiet {
+                println!("Initialized new ledger at {}", target);
+            }
         }
         Some(Commands::Add {
             entry_type,
@@ -204,7 +214,9 @@ fn main() -> anyhow::Result<()> {
             let entry_id = storage.insert_entry(&new_entry)?;
             storage.close()?;
 
-            println!("Added entry {}", entry_id);
+            if !cli.quiet {
+                println!("Added entry {}", entry_id);
+            }
         }
         Some(Commands::List {
             entry_type,
@@ -257,6 +269,9 @@ fn main() -> anyhow::Result<()> {
                 let output = serde_json::to_string_pretty(&entries_json(&entries, &name_map))?;
                 println!("{}", output);
             } else {
+                if !cli.quiet {
+                    println!("ID | CREATED_AT | SUMMARY");
+                }
                 for entry in entries {
                     let summary = entry
                         .data
@@ -273,6 +288,7 @@ fn main() -> anyhow::Result<()> {
             r#type,
             last,
             json,
+            limit,
         }) => {
             let target = cli.ledger.ok_or_else(|| {
                 anyhow::anyhow!("No ledger path provided. Use --ledger or pass a path.")
@@ -293,12 +309,18 @@ fn main() -> anyhow::Result<()> {
                 let since = Utc::now() - window;
                 entries.retain(|entry| entry.created_at >= since);
             }
+            if let Some(lim) = limit {
+                entries.truncate(lim);
+            }
 
             if json {
                 let name_map = entry_type_name_map(&storage)?;
                 let output = serde_json::to_string_pretty(&entries_json(&entries, &name_map))?;
                 println!("{}", output);
             } else {
+                if !cli.quiet {
+                    println!("ID | CREATED_AT | SUMMARY");
+                }
                 for entry in entries {
                     let summary = entry
                         .data
@@ -327,7 +349,7 @@ fn main() -> anyhow::Result<()> {
                 let output = serde_json::to_string_pretty(&entry_json(&entry, &name_map))?;
                 println!("{}", output);
             } else {
-                print_entry(&storage, &entry)?;
+                print_entry(&storage, &entry, cli.quiet)?;
             }
         }
         Some(Commands::Export {
@@ -382,15 +404,19 @@ fn main() -> anyhow::Result<()> {
             let storage = AgeSqliteStorage::open(std::path::Path::new(&target), &passphrase)?;
             match storage.check_integrity() {
                 Ok(()) => {
-                    println!("Integrity check: OK");
-                    println!("- foreign keys: OK");
-                    println!("- entries FTS: OK");
-                    println!("- entry type versions: OK");
-                    println!("- metadata keys: OK");
+                    if !cli.quiet {
+                        println!("Integrity check: OK");
+                        println!("- foreign keys: OK");
+                        println!("- entries FTS: OK");
+                        println!("- entry type versions: OK");
+                        println!("- metadata keys: OK");
+                    }
                 }
                 Err(err) => {
-                    println!("Integrity check: FAILED");
-                    println!("- error: {}", err);
+                    if !cli.quiet {
+                        println!("Integrity check: FAILED");
+                        println!("- error: {}", err);
+                    }
                     return Err(anyhow::anyhow!("Integrity check failed"));
                 }
             }
@@ -410,7 +436,9 @@ fn main() -> anyhow::Result<()> {
             if count == 0 {
                 return Err(anyhow::anyhow!("Backup failed: zero bytes written"));
             }
-            println!("Backed up ledger to {}", destination);
+            if !cli.quiet {
+                println!("Backed up ledger to {}", destination);
+            }
         }
         None => {
             println!("Ledger v{}", VERSION);
@@ -625,6 +653,7 @@ fn entries_json(
 fn print_entry(
     storage: &AgeSqliteStorage,
     entry: &ledger_core::storage::Entry,
+    quiet: bool,
 ) -> anyhow::Result<()> {
     let name_map = entry_type_name_map(storage)?;
     let entry_type_name = name_map
@@ -638,13 +667,16 @@ fn print_entry(
         .map(|value| value.to_string())
         .unwrap_or_else(|| entry.data.to_string());
 
-    println!("ID: {}", entry.id);
-    println!("Type: {} (v{})", entry_type_name, entry.schema_version);
-    println!("Created: {}", entry.created_at);
-    println!("Device: {}", entry.device_id);
-    if !entry.tags.is_empty() {
-        println!("Tags: {}", entry.tags.join(", "));
+    if !quiet {
+        println!("ID: {}", entry.id);
+        println!("Type: {} (v{})", entry_type_name, entry.schema_version);
+        println!("Created: {}", entry.created_at);
+        println!("Device: {}", entry.device_id);
+        if !entry.tags.is_empty() {
+            println!("Tags: {}", entry.tags.join(", "));
+        }
+        println!();
     }
-    println!("\n{}", body);
+    println!("{}", body);
     Ok(())
 }
