@@ -105,6 +105,10 @@ enum Commands {
         /// Time window (e.g., "7d", "30d")
         #[arg(long)]
         last: Option<String>,
+
+        /// Output as JSON
+        #[arg(long)]
+        json: bool,
     },
 
     /// Show a specific entry by ID
@@ -112,6 +116,10 @@ enum Commands {
         /// Entry ID (full UUID or prefix)
         #[arg(value_name = "ID")]
         id: String,
+
+        /// Output as JSON
+        #[arg(long)]
+        json: bool,
     },
 
     /// Export entries
@@ -246,7 +254,7 @@ fn main() -> anyhow::Result<()> {
             let entries = storage.list_entries(&filter)?;
             if json {
                 let name_map = entry_type_name_map(&storage)?;
-                let output = serde_json::to_string_pretty(&entries_json(entries, &name_map))?;
+                let output = serde_json::to_string_pretty(&entries_json(&entries, &name_map))?;
                 println!("{}", output);
             } else {
                 for entry in entries {
@@ -264,6 +272,7 @@ fn main() -> anyhow::Result<()> {
             query,
             r#type,
             last,
+            json,
         }) => {
             let target = cli.ledger.ok_or_else(|| {
                 anyhow::anyhow!("No ledger path provided. Use --ledger or pass a path.")
@@ -285,17 +294,23 @@ fn main() -> anyhow::Result<()> {
                 entries.retain(|entry| entry.created_at >= since);
             }
 
-            for entry in entries {
-                let summary = entry
-                    .data
-                    .get("body")
-                    .and_then(|v| v.as_str())
-                    .map(|value| value.to_string())
-                    .unwrap_or_else(|| entry.data.to_string());
-                println!("{} {} {}", entry.id, entry.created_at, summary);
+            if json {
+                let name_map = entry_type_name_map(&storage)?;
+                let output = serde_json::to_string_pretty(&entries_json(&entries, &name_map))?;
+                println!("{}", output);
+            } else {
+                for entry in entries {
+                    let summary = entry
+                        .data
+                        .get("body")
+                        .and_then(|v| v.as_str())
+                        .map(|value| value.to_string())
+                        .unwrap_or_else(|| entry.data.to_string());
+                    println!("{} {} {}", entry.id, entry.created_at, summary);
+                }
             }
         }
-        Some(Commands::Show { id }) => {
+        Some(Commands::Show { id, json }) => {
             let target = cli.ledger.ok_or_else(|| {
                 anyhow::anyhow!("No ledger path provided. Use --ledger or pass a path.")
             })?;
@@ -307,7 +322,13 @@ fn main() -> anyhow::Result<()> {
             let entry = storage
                 .get_entry(&parsed)?
                 .ok_or_else(|| anyhow::anyhow!("Entry not found"))?;
-            print_entry(&storage, &entry)?;
+            if json {
+                let name_map = entry_type_name_map(&storage)?;
+                let output = serde_json::to_string_pretty(&entry_json(&entry, &name_map))?;
+                println!("{}", output);
+            } else {
+                print_entry(&storage, &entry)?;
+            }
         }
         Some(Commands::Export {
             entry_type,
@@ -337,11 +358,11 @@ fn main() -> anyhow::Result<()> {
             let name_map = entry_type_name_map(&storage)?;
             match format.as_str() {
                 "json" => {
-                    let output = serde_json::to_string_pretty(&entries_json(entries, &name_map))?;
+                    let output = serde_json::to_string_pretty(&entries_json(&entries, &name_map))?;
                     println!("{}", output);
                 }
                 "jsonl" => {
-                    for value in entries_json(entries, &name_map) {
+                    for value in entries_json(&entries, &name_map) {
                         println!("{}", serde_json::to_string(&value)?);
                     }
                 }
@@ -570,29 +591,34 @@ fn entry_type_name_map(storage: &AgeSqliteStorage) -> anyhow::Result<HashMap<Uui
     Ok(map)
 }
 
+fn entry_json(
+    entry: &ledger_core::storage::Entry,
+    name_map: &HashMap<Uuid, String>,
+) -> serde_json::Value {
+    let entry_type_name = name_map
+        .get(&entry.entry_type_id)
+        .cloned()
+        .unwrap_or_else(|| "unknown".to_string());
+    serde_json::json!({
+        "id": entry.id,
+        "entry_type_id": entry.entry_type_id,
+        "entry_type_name": entry_type_name,
+        "schema_version": entry.schema_version,
+        "created_at": entry.created_at,
+        "device_id": entry.device_id,
+        "tags": entry.tags,
+        "data": entry.data,
+        "supersedes": entry.supersedes,
+    })
+}
+
 fn entries_json(
-    entries: Vec<ledger_core::storage::Entry>,
+    entries: &[ledger_core::storage::Entry],
     name_map: &HashMap<Uuid, String>,
 ) -> Vec<serde_json::Value> {
     entries
-        .into_iter()
-        .map(|entry| {
-            let entry_type_name = name_map
-                .get(&entry.entry_type_id)
-                .cloned()
-                .unwrap_or_else(|| "unknown".to_string());
-            serde_json::json!({
-                "id": entry.id,
-                "entry_type_id": entry.entry_type_id,
-                "entry_type_name": entry_type_name,
-                "schema_version": entry.schema_version,
-                "created_at": entry.created_at,
-                "device_id": entry.device_id,
-                "tags": entry.tags,
-                "data": entry.data,
-                "supersedes": entry.supersedes,
-            })
-        })
+        .iter()
+        .map(|entry| entry_json(entry, name_map))
         .collect()
 }
 
