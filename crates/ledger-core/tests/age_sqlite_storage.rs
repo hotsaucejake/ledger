@@ -316,12 +316,7 @@ fn test_insert_entry_type_mismatch_fails() {
 
     let entry_type_id = create_basic_entry_type(&mut storage);
     let device_id = Uuid::new_v4();
-    let new_entry = NewEntry::new(
-        entry_type_id,
-        1,
-        serde_json::json!({"body": 42}),
-        device_id,
-    );
+    let new_entry = NewEntry::new(entry_type_id, 1, serde_json::json!({"body": 42}), device_id);
 
     let result = storage.insert_entry(&new_entry);
     assert!(result.is_err());
@@ -597,8 +592,10 @@ fn test_entry_type_active_flag_unique() {
     let mut storage = AgeSqliteStorage::open(&temp.path, passphrase).expect("open should succeed");
 
     let device_id = Uuid::new_v4();
-    let schema_v1 = serde_json::json!({"fields": [{"name": "body", "type": "string", "required": true}]});
-    let schema_v2 = serde_json::json!({"fields": [{"name": "body", "type": "string", "required": true}]});
+    let schema_v1 =
+        serde_json::json!({"fields": [{"name": "body", "type": "string", "required": true}]});
+    let schema_v2 =
+        serde_json::json!({"fields": [{"name": "body", "type": "string", "required": true}]});
 
     storage
         .create_entry_type(&NewEntryType::new("journal", schema_v1, device_id))
@@ -645,7 +642,8 @@ fn test_last_modified_updates_on_entry_type_create() {
     std::thread::sleep(Duration::from_millis(2));
 
     let device_id = Uuid::new_v4();
-    let schema = serde_json::json!({"fields": [{"name": "body", "type": "string", "required": true}]});
+    let schema =
+        serde_json::json!({"fields": [{"name": "body", "type": "string", "required": true}]});
     storage
         .create_entry_type(&NewEntryType::new("journal", schema, device_id))
         .expect("create should succeed");

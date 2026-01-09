@@ -115,6 +115,9 @@ pub struct NewEntry {
 
     /// Optional: Entry this supersedes
     pub supersedes: Option<Uuid>,
+
+    /// Optional: Override created_at timestamp
+    pub created_at: Option<DateTime<Utc>>,
 }
 
 impl NewEntry {
@@ -131,6 +134,7 @@ impl NewEntry {
             tags: Vec::new(),
             device_id,
             supersedes: None,
+            created_at: None,
         }
     }
 
@@ -141,6 +145,11 @@ impl NewEntry {
 
     pub fn with_supersedes(mut self, supersedes: Uuid) -> Self {
         self.supersedes = Some(supersedes);
+        self
+    }
+
+    pub fn with_created_at(mut self, created_at: DateTime<Utc>) -> Self {
+        self.created_at = Some(created_at);
         self
     }
 }

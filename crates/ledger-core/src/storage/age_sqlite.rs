@@ -135,11 +135,16 @@ impl AgeSqliteStorage {
             .unwrap_or_else(|| data.to_string())
     }
 
-    fn validate_entry_data(schema_json: &serde_json::Value, data: &serde_json::Value) -> Result<()> {
+    fn validate_entry_data(
+        schema_json: &serde_json::Value,
+        data: &serde_json::Value,
+    ) -> Result<()> {
         let fields = schema_json
             .get("fields")
             .and_then(|value| value.as_array())
-            .ok_or_else(|| LedgerError::Validation("Schema fields missing or invalid".to_string()))?;
+            .ok_or_else(|| {
+                LedgerError::Validation("Schema fields missing or invalid".to_string())
+            })?;
 
         let data_obj = data.as_object().ok_or_else(|| {
             LedgerError::Validation("Entry data must be a JSON object".to_string())
@@ -257,10 +262,7 @@ impl AgeSqliteStorage {
 
         for key in data_obj.keys() {
             if !allowed_fields.contains(key) {
-                return Err(LedgerError::Validation(format!(
-                    "Unknown field: {}",
-                    key
-                )));
+                return Err(LedgerError::Validation(format!("Unknown field: {}", key)));
             }
         }
 
@@ -547,7 +549,9 @@ impl StorageEngine for AgeSqliteStorage {
         }
 
         let id = Uuid::new_v4();
-        let created_at = Utc::now().to_rfc3339();
+        let created_at = entry.created_at.unwrap_or_else(Utc::now);
+        let created_at_str = created_at.to_rfc3339();
+        let last_modified = Utc::now().to_rfc3339();
 
         tx.execute(
             r#"
@@ -569,7 +573,7 @@ impl StorageEngine for AgeSqliteStorage {
                 entry.schema_version,
                 data_json,
                 tags_json,
-                created_at.clone(),
+                created_at_str.clone(),
                 entry.device_id.to_string(),
                 entry.supersedes.map(|id| id.to_string()),
             ),
@@ -585,7 +589,7 @@ impl StorageEngine for AgeSqliteStorage {
 
         tx.execute(
             "UPDATE meta SET value = ? WHERE key = 'last_modified'",
-            [created_at],
+            [last_modified],
         )
         .map_err(Self::sqlite_error)?;
 

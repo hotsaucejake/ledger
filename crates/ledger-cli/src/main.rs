@@ -5,8 +5,11 @@
 
 use clap::{Parser, Subcommand};
 use std::io::{self, IsTerminal, Read};
+use std::process::Command;
+use std::time::{SystemTime, UNIX_EPOCH};
 
-use dialoguer::{Input, Password};
+use chrono::{DateTime, NaiveDate, Utc};
+use dialoguer::Password;
 use ledger_core::storage::{AgeSqliteStorage, EntryFilter, NewEntry, NewEntryType, StorageEngine};
 use ledger_core::VERSION;
 use uuid::Uuid;
@@ -39,6 +42,10 @@ enum Commands {
         /// Entry type to add
         #[arg(value_name = "TYPE")]
         entry_type: String,
+
+        /// Entry body (overrides stdin/editor)
+        #[arg(long)]
+        body: Option<String>,
 
         /// Add tags to the entry
         #[arg(short, long, value_name = "TAG")]
@@ -148,8 +155,7 @@ fn main() -> anyhow::Result<()> {
                 .interact()
                 .map_err(|e| anyhow::anyhow!("Failed to read passphrase: {}", e))?;
 
-            let device_id =
-                AgeSqliteStorage::create(std::path::Path::new(&target), &passphrase)?;
+            let device_id = AgeSqliteStorage::create(std::path::Path::new(&target), &passphrase)?;
             let mut storage = AgeSqliteStorage::open(std::path::Path::new(&target), &passphrase)?;
             ensure_journal_entry_type(&mut storage, device_id)?;
             storage.close()?;
@@ -161,10 +167,9 @@ fn main() -> anyhow::Result<()> {
             tag,
             date,
             no_input,
+            body,
         }) => {
-            if date.is_some() {
-                return Err(anyhow::anyhow!("--date is not supported yet"));
-            }
+            ensure_journal_type_name(&entry_type)?;
 
             let target = cli.ledger.ok_or_else(|| {
                 anyhow::anyhow!("No ledger path provided. Use --ledger or pass a path.")
@@ -176,12 +181,20 @@ fn main() -> anyhow::Result<()> {
                 .get_entry_type(&entry_type)?
                 .ok_or_else(|| anyhow::anyhow!("Entry type \"{}\" not found", entry_type))?;
 
-            let body = read_entry_body(no_input)?;
+            let body = read_entry_body(no_input, body)?;
             let data = serde_json::json!({ "body": body });
             let metadata = storage.metadata()?;
-            let new_entry =
-                NewEntry::new(entry_type_record.id, entry_type_record.version, data, metadata.device_id)
-                    .with_tags(tag);
+            let mut new_entry = NewEntry::new(
+                entry_type_record.id,
+                entry_type_record.version,
+                data,
+                metadata.device_id,
+            )
+            .with_tags(tag);
+            if let Some(value) = date {
+                let parsed = parse_datetime(&value)?;
+                new_entry = new_entry.with_created_at(parsed);
+            }
 
             let entry_id = storage.insert_entry(&new_entry)?;
             storage.close()?;
@@ -209,6 +222,7 @@ fn main() -> anyhow::Result<()> {
 
             let mut filter = EntryFilter::new();
             if let Some(t) = entry_type {
+                ensure_journal_type_name(&t)?;
                 let entry_type_record = storage
                     .get_entry_type(&t)?
                     .ok_or_else(|| anyhow::anyhow!("Entry type \"{}\" not found", t))?;
@@ -264,6 +278,7 @@ fn main() -> anyhow::Result<()> {
 
             let mut entries = storage.search_entries(&query)?;
             if let Some(t) = r#type {
+                ensure_journal_type_name(&t)?;
                 let entry_type_record = storage
                     .get_entry_type(&t)?
                     .ok_or_else(|| anyhow::anyhow!("Entry type \"{}\" not found", t))?;
@@ -287,8 +302,8 @@ fn main() -> anyhow::Result<()> {
             let passphrase = prompt_passphrase()?;
             let storage = AgeSqliteStorage::open(std::path::Path::new(&target), &passphrase)?;
 
-            let parsed = Uuid::parse_str(&id)
-                .map_err(|e| anyhow::anyhow!("Invalid entry ID: {}", e))?;
+            let parsed =
+                Uuid::parse_str(&id).map_err(|e| anyhow::anyhow!("Invalid entry ID: {}", e))?;
             let entry = storage
                 .get_entry(&parsed)?
                 .ok_or_else(|| anyhow::anyhow!("Entry not found"))?;
@@ -341,6 +356,34 @@ fn prompt_passphrase() -> anyhow::Result<String> {
         .map_err(|e| anyhow::anyhow!("Failed to read passphrase: {}", e))
 }
 
+fn parse_datetime(value: &str) -> anyhow::Result<DateTime<Utc>> {
+    if let Ok(parsed) = DateTime::parse_from_rfc3339(value) {
+        return Ok(parsed.with_timezone(&Utc));
+    }
+
+    if let Ok(date) = NaiveDate::parse_from_str(value, "%Y-%m-%d") {
+        let naive = date
+            .and_hms_opt(0, 0, 0)
+            .ok_or_else(|| anyhow::anyhow!("Invalid date value: {}", value))?;
+        return Ok(DateTime::<Utc>::from_naive_utc_and_offset(naive, Utc));
+    }
+
+    Err(anyhow::anyhow!(
+        "Invalid date/time (expected ISO-8601 or YYYY-MM-DD): {}",
+        value
+    ))
+}
+
+fn ensure_journal_type_name(entry_type: &str) -> anyhow::Result<()> {
+    if entry_type != "journal" {
+        return Err(anyhow::anyhow!(
+            "Entry type \"{}\" is not supported in the CLI yet. Only \"journal\" is available.",
+            entry_type
+        ));
+    }
+    Ok(())
+}
+
 fn ensure_journal_entry_type(
     storage: &mut AgeSqliteStorage,
     device_id: Uuid,
@@ -359,7 +402,14 @@ fn ensure_journal_entry_type(
     Ok(())
 }
 
-fn read_entry_body(no_input: bool) -> anyhow::Result<String> {
+fn read_entry_body(no_input: bool, body: Option<String>) -> anyhow::Result<String> {
+    if let Some(value) = body {
+        if value.trim().is_empty() {
+            return Err(anyhow::anyhow!("--body cannot be empty"));
+        }
+        return Ok(value);
+    }
+
     if !io::stdin().is_terminal() {
         let mut buffer = String::new();
         io::stdin()
@@ -373,13 +423,42 @@ fn read_entry_body(no_input: bool) -> anyhow::Result<String> {
     }
 
     if no_input {
-        return Err(anyhow::anyhow!(
-            "--no-input requires content from stdin"
-        ));
+        return Err(anyhow::anyhow!("--no-input requires content from stdin"));
     }
 
-    Input::new()
-        .with_prompt("Entry")
-        .interact_text()
-        .map_err(|e| anyhow::anyhow!("Failed to read entry: {}", e))
+    read_body_from_editor()
+}
+
+fn read_body_from_editor() -> anyhow::Result<String> {
+    let editor = std::env::var("EDITOR")
+        .map_err(|_| anyhow::anyhow!("$EDITOR is not set; use --body or pipe content via stdin"))?;
+
+    let nanos = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_err(|e| anyhow::anyhow!("System time error: {}", e))?
+        .as_nanos();
+    let filename = format!("ledger_entry_{}_{}.md", std::process::id(), nanos);
+    let path = std::env::temp_dir().join(filename);
+
+    std::fs::write(&path, "").map_err(|e| anyhow::anyhow!("Failed to create temp file: {}", e))?;
+
+    let status = Command::new(editor)
+        .arg(&path)
+        .status()
+        .map_err(|e| anyhow::anyhow!("Failed to launch editor: {}", e))?;
+    if !status.success() {
+        let _ = std::fs::remove_file(&path);
+        return Err(anyhow::anyhow!("Editor exited with failure"));
+    }
+
+    let contents = std::fs::read_to_string(&path)
+        .map_err(|e| anyhow::anyhow!("Failed to read temp file: {}", e))?;
+    let _ = std::fs::remove_file(&path);
+
+    let trimmed = contents.trim_end().to_string();
+    if trimmed.is_empty() {
+        return Err(anyhow::anyhow!("Entry body is empty"));
+    }
+
+    Ok(trimmed)
 }
