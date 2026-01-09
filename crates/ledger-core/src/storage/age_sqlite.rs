@@ -145,11 +145,14 @@ impl AgeSqliteStorage {
             LedgerError::Validation("Entry data must be a JSON object".to_string())
         })?;
 
+        let mut allowed_fields = Vec::new();
+
         for field in fields {
             let name = field
                 .get("name")
                 .and_then(|value| value.as_str())
                 .ok_or_else(|| LedgerError::Validation("Schema field name missing".to_string()))?;
+            allowed_fields.push(name.to_string());
             let field_type = field
                 .get("type")
                 .and_then(|value| value.as_str())
@@ -249,6 +252,15 @@ impl AgeSqliteStorage {
                         other
                     )))
                 }
+            }
+        }
+
+        for key in data_obj.keys() {
+            if !allowed_fields.contains(key) {
+                return Err(LedgerError::Validation(format!(
+                    "Unknown field: {}",
+                    key
+                )));
             }
         }
 

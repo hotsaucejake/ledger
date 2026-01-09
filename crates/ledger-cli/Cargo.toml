@@ -17,6 +17,8 @@ ledger-core = { path = "../ledger-core" }
 # CLI dependencies from workspace
 clap = { workspace = true }
 anyhow = { workspace = true }
+chrono = { workspace = true }
+serde_json = { workspace = true }
+uuid = { workspace = true }
 
-# For future interactive prompts (M2+)
-# dialoguer = "0.11"
+dialoguer = "0.11"

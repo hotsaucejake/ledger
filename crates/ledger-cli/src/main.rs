@@ -4,7 +4,12 @@
 //! interface to the core library functionality.
 
 use clap::{Parser, Subcommand};
+use std::io::{self, IsTerminal, Read};
+
+use dialoguer::{Input, Password};
+use ledger_core::storage::{AgeSqliteStorage, EntryFilter, NewEntry, NewEntryType, StorageEngine};
 use ledger_core::VERSION;
+use uuid::Uuid;
 
 /// Ledger - A secure, encrypted, CLI-first personal journal and logbook
 #[derive(Parser)]
@@ -133,11 +138,23 @@ fn main() -> anyhow::Result<()> {
     // For Milestone 0, we just show that commands parse correctly
     match cli.command {
         Some(Commands::Init { path }) => {
-            println!("Command: init");
-            if let Some(p) = path {
-                println!("  Path: {}", p);
-            }
-            println!("\n[Milestone 0] Not yet implemented.");
+            let target = path.or(cli.ledger).ok_or_else(|| {
+                anyhow::anyhow!("No ledger path provided. Use --ledger or pass a path.")
+            })?;
+
+            let passphrase = Password::new()
+                .with_prompt("Enter passphrase")
+                .with_confirmation("Confirm passphrase", "Passphrases do not match")
+                .interact()
+                .map_err(|e| anyhow::anyhow!("Failed to read passphrase: {}", e))?;
+
+            let device_id =
+                AgeSqliteStorage::create(std::path::Path::new(&target), &passphrase)?;
+            let mut storage = AgeSqliteStorage::open(std::path::Path::new(&target), &passphrase)?;
+            ensure_journal_entry_type(&mut storage, device_id)?;
+            storage.close()?;
+
+            println!("Initialized new ledger at {}", target);
         }
         Some(Commands::Add {
             entry_type,
@@ -145,18 +162,31 @@ fn main() -> anyhow::Result<()> {
             date,
             no_input,
         }) => {
-            println!("Command: add");
-            println!("  Type: {}", entry_type);
-            if !tag.is_empty() {
-                println!("  Tags: {}", tag.join(", "));
+            if date.is_some() {
+                return Err(anyhow::anyhow!("--date is not supported yet"));
             }
-            if let Some(d) = date {
-                println!("  Date: {}", d);
-            }
-            if no_input {
-                println!("  No input: true");
-            }
-            println!("\n[Milestone 0] Not yet implemented.");
+
+            let target = cli.ledger.ok_or_else(|| {
+                anyhow::anyhow!("No ledger path provided. Use --ledger or pass a path.")
+            })?;
+            let passphrase = prompt_passphrase()?;
+
+            let mut storage = AgeSqliteStorage::open(std::path::Path::new(&target), &passphrase)?;
+            let entry_type_record = storage
+                .get_entry_type(&entry_type)?
+                .ok_or_else(|| anyhow::anyhow!("Entry type \"{}\" not found", entry_type))?;
+
+            let body = read_entry_body(no_input)?;
+            let data = serde_json::json!({ "body": body });
+            let metadata = storage.metadata()?;
+            let new_entry =
+                NewEntry::new(entry_type_record.id, entry_type_record.version, data, metadata.device_id)
+                    .with_tags(tag);
+
+            let entry_id = storage.insert_entry(&new_entry)?;
+            storage.close()?;
+
+            println!("Added entry {}", entry_id);
         }
         Some(Commands::List {
             entry_type,
@@ -167,49 +197,103 @@ fn main() -> anyhow::Result<()> {
             limit,
             json,
         }) => {
-            println!("Command: list");
+            if last.is_some() {
+                return Err(anyhow::anyhow!("--last is not supported yet"));
+            }
+
+            let target = cli.ledger.ok_or_else(|| {
+                anyhow::anyhow!("No ledger path provided. Use --ledger or pass a path.")
+            })?;
+            let passphrase = prompt_passphrase()?;
+            let storage = AgeSqliteStorage::open(std::path::Path::new(&target), &passphrase)?;
+
+            let mut filter = EntryFilter::new();
             if let Some(t) = entry_type {
-                println!("  Type: {}", t);
+                let entry_type_record = storage
+                    .get_entry_type(&t)?
+                    .ok_or_else(|| anyhow::anyhow!("Entry type \"{}\" not found", t))?;
+                filter = filter.entry_type(entry_type_record.id);
             }
             if let Some(t) = tag {
-                println!("  Tag: {}", t);
-            }
-            if let Some(l) = last {
-                println!("  Last: {}", l);
+                filter = filter.tag(t);
             }
             if let Some(s) = since {
-                println!("  Since: {}", s);
+                let parsed = chrono::DateTime::parse_from_rfc3339(&s)
+                    .map_err(|e| anyhow::anyhow!("Invalid since timestamp: {}", e))?;
+                filter = filter.since(parsed.with_timezone(&chrono::Utc));
             }
             if let Some(u) = until {
-                println!("  Until: {}", u);
+                let parsed = chrono::DateTime::parse_from_rfc3339(&u)
+                    .map_err(|e| anyhow::anyhow!("Invalid until timestamp: {}", e))?;
+                filter = filter.until(parsed.with_timezone(&chrono::Utc));
             }
             if let Some(lim) = limit {
-                println!("  Limit: {}", lim);
+                filter = filter.limit(lim);
             }
+
+            let entries = storage.list_entries(&filter)?;
             if json {
-                println!("  Format: JSON");
+                let output = serde_json::to_string_pretty(&entries)?;
+                println!("{}", output);
+            } else {
+                for entry in entries {
+                    let summary = entry
+                        .data
+                        .get("body")
+                        .and_then(|v| v.as_str())
+                        .map(|value| value.to_string())
+                        .unwrap_or_else(|| entry.data.to_string());
+                    println!("{} {} {}", entry.id, entry.created_at, summary);
+                }
             }
-            println!("\n[Milestone 0] Not yet implemented.");
         }
         Some(Commands::Search {
             query,
             r#type,
             last,
         }) => {
-            println!("Command: search");
-            println!("  Query: {}", query);
+            if last.is_some() {
+                return Err(anyhow::anyhow!("--last is not supported yet"));
+            }
+
+            let target = cli.ledger.ok_or_else(|| {
+                anyhow::anyhow!("No ledger path provided. Use --ledger or pass a path.")
+            })?;
+            let passphrase = prompt_passphrase()?;
+            let storage = AgeSqliteStorage::open(std::path::Path::new(&target), &passphrase)?;
+
+            let mut entries = storage.search_entries(&query)?;
             if let Some(t) = r#type {
-                println!("  Type: {}", t);
+                let entry_type_record = storage
+                    .get_entry_type(&t)?
+                    .ok_or_else(|| anyhow::anyhow!("Entry type \"{}\" not found", t))?;
+                entries.retain(|entry| entry.entry_type_id == entry_type_record.id);
             }
-            if let Some(l) = last {
-                println!("  Last: {}", l);
+
+            for entry in entries {
+                let summary = entry
+                    .data
+                    .get("body")
+                    .and_then(|v| v.as_str())
+                    .map(|value| value.to_string())
+                    .unwrap_or_else(|| entry.data.to_string());
+                println!("{} {} {}", entry.id, entry.created_at, summary);
             }
-            println!("\n[Milestone 0] Not yet implemented.");
         }
         Some(Commands::Show { id }) => {
-            println!("Command: show");
-            println!("  ID: {}", id);
-            println!("\n[Milestone 0] Not yet implemented.");
+            let target = cli.ledger.ok_or_else(|| {
+                anyhow::anyhow!("No ledger path provided. Use --ledger or pass a path.")
+            })?;
+            let passphrase = prompt_passphrase()?;
+            let storage = AgeSqliteStorage::open(std::path::Path::new(&target), &passphrase)?;
+
+            let parsed = Uuid::parse_str(&id)
+                .map_err(|e| anyhow::anyhow!("Invalid entry ID: {}", e))?;
+            let entry = storage
+                .get_entry(&parsed)?
+                .ok_or_else(|| anyhow::anyhow!("Entry not found"))?;
+            let output = serde_json::to_string_pretty(&entry)?;
+            println!("{}", output);
         }
         Some(Commands::Export {
             entry_type,
@@ -227,8 +311,13 @@ fn main() -> anyhow::Result<()> {
             println!("\n[Milestone 0] Not yet implemented.");
         }
         Some(Commands::Check) => {
-            println!("Command: check");
-            println!("\n[Milestone 0] Not yet implemented.");
+            let target = cli.ledger.ok_or_else(|| {
+                anyhow::anyhow!("No ledger path provided. Use --ledger or pass a path.")
+            })?;
+            let passphrase = prompt_passphrase()?;
+            let storage = AgeSqliteStorage::open(std::path::Path::new(&target), &passphrase)?;
+            storage.check_integrity()?;
+            println!("Integrity check passed.");
         }
         Some(Commands::Backup { destination }) => {
             println!("Command: backup");
@@ -243,4 +332,54 @@ fn main() -> anyhow::Result<()> {
     }
 
     Ok(())
+}
+
+fn prompt_passphrase() -> anyhow::Result<String> {
+    Password::new()
+        .with_prompt("Passphrase")
+        .interact()
+        .map_err(|e| anyhow::anyhow!("Failed to read passphrase: {}", e))
+}
+
+fn ensure_journal_entry_type(
+    storage: &mut AgeSqliteStorage,
+    device_id: Uuid,
+) -> anyhow::Result<()> {
+    if storage.get_entry_type("journal")?.is_some() {
+        return Ok(());
+    }
+
+    let schema = serde_json::json!({
+        "fields": [
+            {"name": "body", "type": "text", "required": true}
+        ]
+    });
+    let entry_type = NewEntryType::new("journal", schema, device_id);
+    storage.create_entry_type(&entry_type)?;
+    Ok(())
+}
+
+fn read_entry_body(no_input: bool) -> anyhow::Result<String> {
+    if !io::stdin().is_terminal() {
+        let mut buffer = String::new();
+        io::stdin()
+            .read_to_string(&mut buffer)
+            .map_err(|e| anyhow::anyhow!("Failed to read stdin: {}", e))?;
+        let trimmed = buffer.trim_end().to_string();
+        if trimmed.is_empty() {
+            return Err(anyhow::anyhow!("No input provided on stdin"));
+        }
+        return Ok(trimmed);
+    }
+
+    if no_input {
+        return Err(anyhow::anyhow!(
+            "--no-input requires content from stdin"
+        ));
+    }
+
+    Input::new()
+        .with_prompt("Entry")
+        .interact_text()
+        .map_err(|e| anyhow::anyhow!("Failed to read entry: {}", e))
 }
