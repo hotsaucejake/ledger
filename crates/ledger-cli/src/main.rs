@@ -9,7 +9,7 @@ use std::io::{self, IsTerminal, Read};
 use std::process::Command;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use chrono::{DateTime, NaiveDate, Utc};
+use chrono::{DateTime, Duration, NaiveDate, Utc};
 use dialoguer::Password;
 use ledger_core::storage::{AgeSqliteStorage, EntryFilter, NewEntry, NewEntryType, StorageEngine};
 use ledger_core::VERSION;
@@ -208,7 +208,9 @@ fn main() -> anyhow::Result<()> {
             json,
         }) => {
             if last.is_some() {
-                return Err(anyhow::anyhow!("--last is not supported yet"));
+                let window = parse_duration(last.as_deref().unwrap())?;
+                let since = Utc::now() - window;
+                filter = filter.since(since);
             }
 
             let target = cli.ledger.ok_or_else(|| {
@@ -265,7 +267,9 @@ fn main() -> anyhow::Result<()> {
             last,
         }) => {
             if last.is_some() {
-                return Err(anyhow::anyhow!("--last is not supported yet"));
+                let window = parse_duration(last.as_deref().unwrap())?;
+                let since = Utc::now() - window;
+                entries.retain(|entry| entry.created_at >= since);
             }
 
             let target = cli.ledger.ok_or_else(|| {
@@ -428,6 +432,34 @@ fn parse_datetime(value: &str) -> anyhow::Result<DateTime<Utc>> {
         "Invalid date/time (expected ISO-8601 or YYYY-MM-DD): {}",
         value
     ))
+}
+
+fn parse_duration(value: &str) -> anyhow::Result<Duration> {
+    if value.len() < 2 {
+        return Err(anyhow::anyhow!(
+            "Invalid duration: {} (expected <number><unit>)",
+            value
+        ));
+    }
+
+    let (num_str, unit) = value.split_at(value.len() - 1);
+    let amount: i64 = num_str
+        .parse()
+        .map_err(|_| anyhow::anyhow!("Invalid duration number: {}", value))?;
+    if amount <= 0 {
+        return Err(anyhow::anyhow!("Duration must be positive: {}", value));
+    }
+
+    match unit {
+        "d" => Ok(Duration::days(amount)),
+        "h" => Ok(Duration::hours(amount)),
+        "m" => Ok(Duration::minutes(amount)),
+        "s" => Ok(Duration::seconds(amount)),
+        _ => Err(anyhow::anyhow!(
+            "Invalid duration unit: {} (use d/h/m/s)",
+            unit
+        )),
+    }
 }
 
 fn ensure_journal_type_name(entry_type: &str) -> anyhow::Result<()> {
