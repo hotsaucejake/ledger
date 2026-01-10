@@ -24,6 +24,61 @@ use crate::storage::types::{
     Entry, EntryFilter, EntryType, LedgerMetadata, NewEntry, NewEntryType,
 };
 
+/// Raw row data from the entries table, before parsing into domain types.
+#[derive(Debug)]
+struct EntryRow {
+    id: String,
+    entry_type_id: String,
+    schema_version: i32,
+    data_json: String,
+    tags_json: Option<String>,
+    created_at: String,
+    device_id: String,
+    supersedes: Option<String>,
+}
+
+impl TryFrom<EntryRow> for Entry {
+    type Error = LedgerError;
+
+    fn try_from(row: EntryRow) -> Result<Self> {
+        let id = Uuid::parse_str(&row.id)
+            .map_err(|e| LedgerError::Storage(format!("Invalid entry UUID: {}", e)))?;
+        let entry_type_id = Uuid::parse_str(&row.entry_type_id)
+            .map_err(|e| LedgerError::Storage(format!("Invalid entry_type UUID: {}", e)))?;
+        let device_id = Uuid::parse_str(&row.device_id)
+            .map_err(|e| LedgerError::Storage(format!("Invalid device_id: {}", e)))?;
+        let created_at = DateTime::parse_from_rfc3339(&row.created_at)
+            .map_err(|e| LedgerError::Storage(format!("Invalid timestamp: {}", e)))?
+            .with_timezone(&Utc);
+        let data: serde_json::Value = serde_json::from_str(&row.data_json)
+            .map_err(|e| LedgerError::Storage(format!("Invalid JSON: {}", e)))?;
+        let tags: Vec<String> = match row.tags_json {
+            Some(ref value) => serde_json::from_str(value)
+                .map_err(|e| LedgerError::Storage(format!("Invalid tags JSON: {}", e)))?,
+            None => Vec::new(),
+        };
+        let supersedes = row
+            .supersedes
+            .as_ref()
+            .map(|s| {
+                Uuid::parse_str(s)
+                    .map_err(|e| LedgerError::Storage(format!("Invalid supersedes UUID: {}", e)))
+            })
+            .transpose()?;
+
+        Ok(Entry {
+            id,
+            entry_type_id,
+            schema_version: row.schema_version,
+            data,
+            tags,
+            created_at,
+            device_id,
+            supersedes,
+        })
+    }
+}
+
 /// Age-encrypted SQLite storage engine (Phase 0.1).
 pub struct AgeSqliteStorage {
     path: PathBuf,
@@ -73,53 +128,6 @@ impl AgeSqliteStorage {
         }
 
         Ok(normalized)
-    }
-
-    #[allow(clippy::too_many_arguments)]
-    fn entry_from_row(
-        id_str: String,
-        entry_type_id_str: String,
-        schema_version: i32,
-        data_json_str: String,
-        tags_json_str: Option<String>,
-        created_at_str: String,
-        device_id_str: String,
-        supersedes_str: Option<String>,
-    ) -> Result<Entry> {
-        let id = Uuid::parse_str(&id_str)
-            .map_err(|e| LedgerError::Storage(format!("Invalid UUID: {}", e)))?;
-        let entry_type_id = Uuid::parse_str(&entry_type_id_str)
-            .map_err(|e| LedgerError::Storage(format!("Invalid UUID: {}", e)))?;
-        let device_id = Uuid::parse_str(&device_id_str)
-            .map_err(|e| LedgerError::Storage(format!("Invalid device_id: {}", e)))?;
-        let created_at = DateTime::parse_from_rfc3339(&created_at_str)
-            .map_err(|e| LedgerError::Storage(format!("Invalid timestamp: {}", e)))?
-            .with_timezone(&Utc);
-        let data: serde_json::Value = serde_json::from_str(&data_json_str)
-            .map_err(|e| LedgerError::Storage(format!("Invalid JSON: {}", e)))?;
-        let tags: Vec<String> = match tags_json_str {
-            Some(value) => serde_json::from_str(&value)
-                .map_err(|e| LedgerError::Storage(format!("Invalid tags JSON: {}", e)))?,
-            None => Vec::new(),
-        };
-        let supersedes = match supersedes_str {
-            Some(value) => Some(
-                Uuid::parse_str(&value)
-                    .map_err(|e| LedgerError::Storage(format!("Invalid UUID: {}", e)))?,
-            ),
-            None => None,
-        };
-
-        Ok(Entry {
-            id,
-            entry_type_id,
-            schema_version,
-            data,
-            tags,
-            created_at,
-            device_id,
-            supersedes,
-        })
     }
 
     fn fts_content_for_entry(data: &serde_json::Value) -> String {
@@ -646,24 +654,27 @@ impl StorageEngine for AgeSqliteStorage {
 
         match result {
             Ok((
-                id_str,
-                entry_type_id_str,
+                id,
+                entry_type_id,
                 schema_version,
-                data_json_str,
-                tags_json_str,
-                created_at_str,
-                device_id_str,
-                supersedes_str,
-            )) => Ok(Some(Self::entry_from_row(
-                id_str,
-                entry_type_id_str,
-                schema_version,
-                data_json_str,
-                tags_json_str,
-                created_at_str,
-                device_id_str,
-                supersedes_str,
-            )?)),
+                data_json,
+                tags_json,
+                created_at,
+                device_id,
+                supersedes,
+            )) => {
+                let row = EntryRow {
+                    id,
+                    entry_type_id,
+                    schema_version,
+                    data_json,
+                    tags_json,
+                    created_at,
+                    device_id,
+                    supersedes,
+                };
+                Ok(Some(row.try_into()?))
+            }
             Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
             Err(e) => Err(e.into()),
         }
@@ -737,26 +748,26 @@ impl StorageEngine for AgeSqliteStorage {
         let mut entries = Vec::new();
         for row in rows {
             let (
-                id_str,
-                entry_type_id_str,
+                id,
+                entry_type_id,
                 schema_version,
-                data_json_str,
-                tags_json_str,
-                created_at_str,
-                device_id_str,
-                supersedes_str,
+                data_json,
+                tags_json,
+                created_at,
+                device_id,
+                supersedes,
             ) = row?;
-
-            entries.push(Self::entry_from_row(
-                id_str,
-                entry_type_id_str,
+            let entry_row = EntryRow {
+                id,
+                entry_type_id,
                 schema_version,
-                data_json_str,
-                tags_json_str,
-                created_at_str,
-                device_id_str,
-                supersedes_str,
-            )?);
+                data_json,
+                tags_json,
+                created_at,
+                device_id,
+                supersedes,
+            };
+            entries.push(entry_row.try_into()?);
         }
 
         Ok(entries)
@@ -795,26 +806,26 @@ impl StorageEngine for AgeSqliteStorage {
         let mut entries = Vec::new();
         for row in rows {
             let (
-                id_str,
-                entry_type_id_str,
+                id,
+                entry_type_id,
                 schema_version,
-                data_json_str,
-                tags_json_str,
-                created_at_str,
-                device_id_str,
-                supersedes_str,
+                data_json,
+                tags_json,
+                created_at,
+                device_id,
+                supersedes,
             ) = row?;
-
-            entries.push(Self::entry_from_row(
-                id_str,
-                entry_type_id_str,
+            let entry_row = EntryRow {
+                id,
+                entry_type_id,
                 schema_version,
-                data_json_str,
-                tags_json_str,
-                created_at_str,
-                device_id_str,
-                supersedes_str,
-            )?);
+                data_json,
+                tags_json,
+                created_at,
+                device_id,
+                supersedes,
+            };
+            entries.push(entry_row.try_into()?);
         }
 
         Ok(entries)
