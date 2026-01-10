@@ -443,6 +443,36 @@ fn test_cli_lock_succeeds_without_cache() {
 }
 
 #[test]
+fn test_cli_init_writes_ui_defaults() {
+    let passphrase = "test-passphrase-secure-123";
+    let (config_home, data_home) = temp_xdg_dirs("ledger_cli_ui_defaults");
+
+    let mut init = Command::new(bin());
+    init.arg("init")
+        .arg("--no-input")
+        .env("LEDGER_PASSPHRASE", passphrase);
+    apply_xdg_env(&mut init, &config_home, &data_home);
+    let init = init.output().expect("run init");
+    assert!(init.status.success());
+
+    let config_path = config_home.join("ledger").join("config.toml");
+    let contents = std::fs::read_to_string(&config_path).expect("read config");
+    let value: toml::Value = contents.parse().expect("parse config");
+
+    let ui = value.get("ui").expect("ui section");
+    assert_eq!(
+        ui.get("timezone").and_then(|v| v.as_str()),
+        None,
+        "timezone should be omitted by default"
+    );
+    assert_eq!(
+        ui.get("editor").and_then(|v| v.as_str()),
+        None,
+        "editor should be omitted by default"
+    );
+}
+
+#[test]
 fn test_cli_list_defaults_to_recent_limit() {
     let ledger_path = temp_ledger_path("ledger_cli_list_default");
     let passphrase = "test-passphrase-secure-123";
