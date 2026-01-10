@@ -7,6 +7,7 @@ mod cache;
 mod config;
 mod helpers;
 mod output;
+mod security;
 
 use clap::{CommandFactory, Parser, Subcommand};
 use clap_complete::{generate, Shell};
@@ -20,7 +21,8 @@ use ledger_core::VERSION;
 use uuid::Uuid;
 
 use cache::{
-    cache_clear, cache_config, cache_get, cache_socket_path, cache_store, run_cache_daemon,
+    cache_clear, cache_config, cache_get, cache_socket_path, cache_store, ledger_hash,
+    run_cache_daemon,
 };
 use config::{
     default_config_path, default_keyfile_path, default_ledger_path, read_config, write_config,
@@ -33,9 +35,21 @@ use helpers::{
 use output::{
     entries_json, entry_json, entry_summary, entry_table_summary, entry_type_name_map, print_entry,
 };
+use security::{
+    generate_key_bytes, key_bytes_to_passphrase, keychain_clear, keychain_get, keychain_set,
+    read_keyfile_encrypted, read_keyfile_plain, write_keyfile_encrypted, write_keyfile_plain,
+};
 
 const DEFAULT_LIST_LIMIT: usize = 20;
 const TABLE_SUMMARY_MAX: usize = 80;
+
+struct SecurityConfig {
+    tier: SecurityTier,
+    keychain_enabled: bool,
+    keyfile_mode: KeyfileMode,
+    keyfile_path: Option<std::path::PathBuf>,
+    cache_ttl_seconds: u64,
+}
 
 /// Ledger - A secure, encrypted, CLI-first personal journal and logbook
 #[derive(Parser)]
@@ -567,8 +581,8 @@ fn open_storage_with_retry(
     let target = resolve_ledger_path(cli)?;
     let interactive = std::io::stdin().is_terminal() && !no_input;
     let target_path = std::path::Path::new(&target);
-    let cache_ttl_seconds = cache_ttl_from_config(cli).unwrap_or(0);
-    let cache_config = cache_config(target_path, cache_ttl_seconds).unwrap_or(None);
+    let security = load_security_config(cli)?;
+    let cache_config = cache_config(target_path, security.cache_ttl_seconds).unwrap_or(None);
 
     if let Some(config) = cache_config.as_ref() {
         if let Ok(Some(passphrase)) = cache_get(config) {
@@ -582,31 +596,178 @@ fn open_storage_with_retry(
         }
     }
 
-    if let Ok(value) = std::env::var("LEDGER_PASSPHRASE") {
-        if !value.trim().is_empty() {
-            return match AgeSqliteStorage::open(target_path, &value) {
-                Ok(storage) => Ok((storage, value)),
-                Err(err) if is_incorrect_passphrase_error(&err) => {
-                    eprintln!("Error: Incorrect passphrase.");
-                    std::process::exit(5);
+    if matches!(security.tier, SecurityTier::DeviceKeyfile) {
+        if !matches!(security.keyfile_mode, KeyfileMode::Plain) {
+            eprintln!("Warning: keyfile mode is not plain for device_keyfile.");
+        }
+        let keyfile_path = security
+            .keyfile_path
+            .as_ref()
+            .ok_or_else(|| anyhow::anyhow!("Keyfile path is required for device_keyfile"))?;
+        let key_bytes = read_keyfile_plain(keyfile_path)?;
+        let passphrase = key_bytes_to_passphrase(&key_bytes);
+        return open_with_passphrase_and_cache(
+            cli,
+            target_path,
+            &passphrase,
+            cache_config.as_ref(),
+        );
+    }
+
+    if matches!(security.tier, SecurityTier::PassphraseKeyfile) {
+        if !matches!(security.keyfile_mode, KeyfileMode::Encrypted) {
+            eprintln!("Warning: keyfile mode is not encrypted for passphrase_keyfile.");
+        }
+        let keyfile_path = security
+            .keyfile_path
+            .as_ref()
+            .ok_or_else(|| anyhow::anyhow!("Keyfile path is required for passphrase_keyfile"))?;
+        let env_passphrase = std::env::var("LEDGER_PASSPHRASE")
+            .ok()
+            .filter(|v| !v.trim().is_empty());
+        let key_bytes =
+            decrypt_keyfile_with_retry(keyfile_path, env_passphrase.as_deref(), interactive)?;
+        let passphrase = key_bytes_to_passphrase(&key_bytes);
+        return open_with_passphrase_and_cache(
+            cli,
+            target_path,
+            &passphrase,
+            cache_config.as_ref(),
+        );
+    }
+
+    if matches!(security.tier, SecurityTier::PassphraseKeychain) && security.keychain_enabled {
+        let account = ledger_hash(target_path);
+        match keychain_get(&account) {
+            Ok(Some(passphrase)) => {
+                if let Ok(storage) = AgeSqliteStorage::open(target_path, &passphrase) {
+                    return Ok((storage, passphrase));
                 }
-                Err(err) if is_missing_ledger_error(&err) => {
-                    return Err(anyhow::anyhow!(missing_ledger_message(target_path)));
-                }
-                Err(err) => Err(anyhow::anyhow!(err)),
-            };
+                let _ = keychain_clear(&account);
+            }
+            Ok(None) => {}
+            Err(err) => {
+                eprintln!("Warning: {}", err);
+            }
         }
     }
 
+    let env_passphrase = std::env::var("LEDGER_PASSPHRASE")
+        .ok()
+        .filter(|v| !v.trim().is_empty());
+    if let Some(passphrase) = env_passphrase {
+        return open_with_passphrase_and_cache(
+            cli,
+            target_path,
+            &passphrase,
+            cache_config.as_ref(),
+        );
+    }
+
+    let (storage, passphrase) =
+        open_with_retry_prompt(cli, target_path, interactive, cache_config.as_ref())?;
+    if matches!(security.tier, SecurityTier::PassphraseKeychain) && security.keychain_enabled {
+        let account = ledger_hash(target_path);
+        let _ = keychain_set(&account, &passphrase);
+    }
+    Ok((storage, passphrase))
+}
+
+fn is_incorrect_passphrase_error(err: &ledger_core::error::LedgerError) -> bool {
+    err.to_string().contains("Incorrect passphrase")
+}
+
+fn is_missing_ledger_error(err: &ledger_core::error::LedgerError) -> bool {
+    matches!(err, ledger_core::error::LedgerError::Storage(message) if message == "Ledger file not found")
+}
+
+fn missing_ledger_message(path: &std::path::Path) -> String {
+    format!(
+        "No ledger found at {}\n\nRun:\n  ledger init\n\nOr specify a ledger path:\n  LEDGER_PATH=/path/to/my.ledger ledger init",
+        path.display()
+    )
+}
+
+fn missing_config_message(config_path: &std::path::Path) -> String {
+    format!(
+        "No ledger found at {}\n\nRun:\n  ledger init\n\nOr specify a ledger path:\n  LEDGER_PATH=/path/to/my.ledger ledger init",
+        config_path.display()
+    )
+}
+
+fn exit_not_found(message: &str) -> ! {
+    eprintln!("Error: {}", message);
+    std::process::exit(3);
+}
+
+fn load_security_config(_cli: &Cli) -> anyhow::Result<SecurityConfig> {
+    let config_path = default_config_path()?;
+    if config_path.exists() {
+        let config = read_config(&config_path)?;
+        let keyfile_path = config.keyfile.path.as_ref().map(std::path::PathBuf::from);
+        return Ok(SecurityConfig {
+            tier: config.security.tier,
+            keychain_enabled: config.keychain.enabled,
+            keyfile_mode: config.keyfile.mode,
+            keyfile_path,
+            cache_ttl_seconds: config.security.passphrase_cache_ttl_seconds,
+        });
+    }
+
+    Ok(SecurityConfig {
+        tier: SecurityTier::Passphrase,
+        keychain_enabled: false,
+        keyfile_mode: KeyfileMode::None,
+        keyfile_path: Some(default_keyfile_path()?),
+        cache_ttl_seconds: 0,
+    })
+}
+
+fn open_with_passphrase_and_cache(
+    cli: &Cli,
+    path: &std::path::Path,
+    passphrase: &str,
+    cache_config: Option<&cache::CacheConfig>,
+) -> anyhow::Result<(AgeSqliteStorage, String)> {
+    match AgeSqliteStorage::open(path, passphrase) {
+        Ok(storage) => {
+            if let Some(config) = cache_config {
+                if !cli.quiet {
+                    println!(
+                        "Note: Passphrase caching keeps your passphrase in memory for {} seconds.",
+                        config.ttl.as_secs()
+                    );
+                }
+                let _ = cache_store(config, passphrase);
+            }
+            Ok((storage, passphrase.to_string()))
+        }
+        Err(err) if is_incorrect_passphrase_error(&err) => {
+            eprintln!("Error: Incorrect passphrase.");
+            std::process::exit(5);
+        }
+        Err(err) if is_missing_ledger_error(&err) => {
+            Err(anyhow::anyhow!(missing_ledger_message(path)))
+        }
+        Err(err) => Err(anyhow::anyhow!(err)),
+    }
+}
+
+fn open_with_retry_prompt(
+    cli: &Cli,
+    path: &std::path::Path,
+    interactive: bool,
+    cache_config: Option<&cache::CacheConfig>,
+) -> anyhow::Result<(AgeSqliteStorage, String)> {
     let max_attempts: u32 = if interactive { 3 } else { 1 };
     let mut attempts: u32 = 0;
 
     loop {
         attempts += 1;
         let passphrase = prompt_passphrase(interactive)?;
-        match AgeSqliteStorage::open(target_path, &passphrase) {
+        match AgeSqliteStorage::open(path, &passphrase) {
             Ok(storage) => {
-                if let Some(config) = cache_config.as_ref() {
+                if let Some(config) = cache_config {
                     if !cli.quiet {
                         println!(
                             "Note: Passphrase caching keeps your passphrase in memory for {} seconds.",
@@ -635,47 +796,57 @@ fn open_storage_with_retry(
                 continue;
             }
             Err(err) if is_missing_ledger_error(&err) => {
-                return Err(anyhow::anyhow!(missing_ledger_message(target_path)));
+                return Err(anyhow::anyhow!(missing_ledger_message(path)));
             }
             Err(err) => return Err(anyhow::anyhow!(err)),
         }
     }
 }
 
-fn is_incorrect_passphrase_error(err: &ledger_core::error::LedgerError) -> bool {
-    err.to_string().contains("Incorrect passphrase")
-}
-
-fn is_missing_ledger_error(err: &ledger_core::error::LedgerError) -> bool {
-    matches!(err, ledger_core::error::LedgerError::Storage(message) if message == "Ledger file not found")
-}
-
-fn missing_ledger_message(path: &std::path::Path) -> String {
-    format!(
-        "No ledger found at {}\n\nRun:\n  ledger init\n\nOr specify a ledger path:\n  LEDGER_PATH=/path/to/my.ledger ledger init",
-        path.display()
-    )
-}
-
-fn missing_config_message(config_path: &std::path::Path) -> String {
-    format!(
-        "No ledger found at {}\n\nRun:\n  ledger init\n\nOr specify a ledger path:\n  LEDGER_PATH=/path/to/my.ledger ledger init",
-        config_path.display()
-    )
-}
-
-fn cache_ttl_from_config(_cli: &Cli) -> anyhow::Result<u64> {
-    let config_path = default_config_path()?;
-    if !config_path.exists() {
-        return Ok(0);
+fn decrypt_keyfile_with_retry(
+    path: &std::path::Path,
+    passphrase_env: Option<&str>,
+    interactive: bool,
+) -> anyhow::Result<zeroize::Zeroizing<Vec<u8>>> {
+    if let Some(passphrase) = passphrase_env {
+        return match read_keyfile_encrypted(path, passphrase) {
+            Ok(bytes) => Ok(bytes),
+            Err(err) if err.to_string().contains("Incorrect passphrase") => {
+                eprintln!("Error: Incorrect passphrase.");
+                std::process::exit(5);
+            }
+            Err(err) => Err(err),
+        };
     }
-    let config = read_config(&config_path)?;
-    Ok(config.security.passphrase_cache_ttl_seconds)
-}
 
-fn exit_not_found(message: &str) -> ! {
-    eprintln!("Error: {}", message);
-    std::process::exit(3);
+    let max_attempts: u32 = if interactive { 3 } else { 1 };
+    let mut attempts: u32 = 0;
+
+    loop {
+        attempts += 1;
+        let passphrase = prompt_passphrase(interactive)?;
+        match read_keyfile_encrypted(path, &passphrase) {
+            Ok(bytes) => return Ok(bytes),
+            Err(err) if err.to_string().contains("Incorrect passphrase") => {
+                let remaining = max_attempts.saturating_sub(attempts);
+                if remaining == 0 {
+                    eprintln!("Error: Too many failed passphrase attempts.");
+                    eprintln!(
+                        "Hint: If you forgot your passphrase, the ledger cannot be recovered."
+                    );
+                    eprintln!("      Backups use the same passphrase.");
+                    std::process::exit(5);
+                }
+                eprintln!(
+                    "Incorrect passphrase. {} attempt{} remaining.",
+                    remaining,
+                    if remaining == 1 { "" } else { "s" }
+                );
+                continue;
+            }
+            Err(err) => return Err(err),
+        }
+    }
 }
 
 fn run_init_wizard(
@@ -793,6 +964,29 @@ fn run_init_wizard(
         config_path = std::path::PathBuf::from(input);
     }
 
+    let (ledger_passphrase, keyfile_mode, keyfile_path_value) = match tier {
+        SecurityTier::Passphrase => (passphrase.clone(), KeyfileMode::None, None),
+        SecurityTier::PassphraseKeychain => (passphrase.clone(), KeyfileMode::None, None),
+        SecurityTier::PassphraseKeyfile => {
+            let key_bytes = generate_key_bytes()?;
+            write_keyfile_encrypted(&keyfile_path, &key_bytes, &passphrase)?;
+            (
+                key_bytes_to_passphrase(&key_bytes),
+                KeyfileMode::Encrypted,
+                Some(keyfile_path.clone()),
+            )
+        }
+        SecurityTier::DeviceKeyfile => {
+            let key_bytes = generate_key_bytes()?;
+            write_keyfile_plain(&keyfile_path, &key_bytes)?;
+            (
+                key_bytes_to_passphrase(&key_bytes),
+                KeyfileMode::Plain,
+                Some(keyfile_path.clone()),
+            )
+        }
+    };
+
     if let Some(parent) = ledger_path.parent() {
         std::fs::create_dir_all(parent).map_err(|e| {
             anyhow::anyhow!(
@@ -803,17 +997,10 @@ fn run_init_wizard(
         })?;
     }
 
-    let device_id = AgeSqliteStorage::create(&ledger_path, &passphrase)?;
-    let mut storage = AgeSqliteStorage::open(&ledger_path, &passphrase)?;
+    let device_id = AgeSqliteStorage::create(&ledger_path, &ledger_passphrase)?;
+    let mut storage = AgeSqliteStorage::open(&ledger_path, &ledger_passphrase)?;
     ensure_journal_entry_type(&mut storage, device_id)?;
-    storage.close(&passphrase)?;
-
-    let (keyfile_mode, keyfile_path_value) = match tier {
-        SecurityTier::Passphrase => (KeyfileMode::None, Some(keyfile_path)),
-        SecurityTier::PassphraseKeychain => (KeyfileMode::None, Some(keyfile_path)),
-        SecurityTier::PassphraseKeyfile => (KeyfileMode::Encrypted, Some(keyfile_path)),
-        SecurityTier::DeviceKeyfile => (KeyfileMode::Plain, Some(keyfile_path)),
-    };
+    storage.close(&ledger_passphrase)?;
 
     let config = LedgerConfig::new(
         ledger_path.clone(),
@@ -823,6 +1010,11 @@ fn run_init_wizard(
         keyfile_path_value,
     );
     write_config(&config_path, &config)?;
+
+    if matches!(tier, SecurityTier::PassphraseKeychain) {
+        let account = ledger_hash(&ledger_path);
+        let _ = keychain_set(&account, &passphrase);
+    }
 
     if !cli.quiet {
         println!("Ledger created at {}", ledger_path.to_string_lossy());

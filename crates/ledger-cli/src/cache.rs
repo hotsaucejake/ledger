@@ -251,7 +251,7 @@ fn ensure_daemon_running(config: &CacheConfig) -> anyhow::Result<()> {
     Err(anyhow::anyhow!("Cache daemon did not become ready in time"))
 }
 
-fn ledger_hash(path: &Path) -> String {
+pub fn ledger_hash(path: &Path) -> String {
     let canonical = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
     let hash = blake3::hash(canonical.to_string_lossy().as_bytes());
     hash.to_hex()[..16].to_string()

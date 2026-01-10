@@ -24,8 +24,8 @@ A first-time user should:
 - [x] `ledger` with no args shows quickstart
 - [x] Passphrase retries (3 attempts, then exit with code 5)
 - [x] Optional session cache (in-memory) with TTL (see `docs/design/session-cache.md`)
-- [ ] Security tiers selectable during init (all 4 tiers)
-- [ ] OS keychain support (Linux: libsecret, macOS: Keychain)
+- [x] Security tiers selectable during init (all 4 tiers)
+- [x] OS keychain support (Linux: libsecret, macOS: Keychain)
 - [ ] `ledger add journal` is smooth (editor + stdin + `--body`)
 - [x] `ledger list` defaults to recent entries (N)
 - [ ] `ledger show` is readable by default
@@ -67,15 +67,15 @@ A first-time user should:
 
 ### 4. Security Tier Implementation
 
-- [ ] Tier 1: Passphrase only (default)
-- [ ] Tier 2: Passphrase + OS keychain
+- [x] Tier 1: Passphrase only (default)
+- [x] Tier 2: Passphrase + OS keychain
   - [ ] Linux: libsecret/Secret Service D-Bus API
   - [ ] macOS: Security.framework / Keychain Services
-- [ ] Tier 3: Passphrase + encrypted keyfile
+- [x] Tier 3: Passphrase + encrypted keyfile
   - [ ] Key generation (random 32 bytes)
   - [ ] Keyfile encrypted with passphrase-derived key
   - [ ] Default path: `~/.config/ledger/ledger.key`
-- [ ] Tier 4: Device keyfile only (unencrypted)
+- [x] Tier 4: Device keyfile only (unencrypted)
   - [ ] Display explicit security warning (per `config-spec.md` §5)
   - [ ] Require confirmation before proceeding
 

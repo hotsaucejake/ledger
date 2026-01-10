@@ -28,6 +28,8 @@ base64 = "0.22"
 blake3 = "1.5"
 zeroize = "1.7"
 libc = "0.2"
+keyring = "2.3"
+getrandom = "0.2"
 
 [dev-dependencies]
 rusqlite = { workspace = true }

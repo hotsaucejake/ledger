@@ -1,10 +1,14 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::ptr::NonNull;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use rusqlite::serialize::OwnedData;
 use rusqlite::{Connection, DatabaseName};
+
+use base64::engine::general_purpose::STANDARD;
+use base64::Engine;
+use ledger_core::storage::{AgeSqliteStorage, StorageEngine};
 
 fn bin() -> PathBuf {
     PathBuf::from(env!("CARGO_BIN_EXE_ledger"))
@@ -37,6 +41,34 @@ fn apply_xdg_env(cmd: &mut Command, config: &PathBuf, data: &PathBuf) {
         .env("XDG_DATA_HOME", data);
 }
 
+fn write_config_file(
+    config_home: &Path,
+    ledger_path: &Path,
+    tier: &str,
+    keyfile_mode: &str,
+    keyfile_path: Option<&Path>,
+) {
+    let config_path = config_home.join("ledger").join("config.toml");
+    let keyfile_path_value = keyfile_path
+        .map(|path| path.to_string_lossy().to_string())
+        .unwrap_or_default();
+    let keyfile_path_line = if keyfile_path.is_some() {
+        format!("path = \"{}\"\n", keyfile_path_value)
+    } else {
+        String::new()
+    };
+    let contents = format!(
+        "[ledger]\npath = \"{}\"\n\n[security]\ntier = \"{}\"\npassphrase_cache_ttl_seconds = 0\n\n[keychain]\nenabled = false\n\n[keyfile]\nmode = \"{}\"\n{}",
+        ledger_path.to_string_lossy(),
+        tier,
+        keyfile_mode,
+        keyfile_path_line
+    );
+    std::fs::create_dir_all(config_path.parent().expect("config parent"))
+        .expect("create config dir");
+    std::fs::write(&config_path, contents).expect("write config");
+}
+
 fn open_sqlite_from_file(path: &PathBuf, passphrase: &str) -> Connection {
     let encrypted = std::fs::read(path).expect("read should succeed");
     let plaintext = ledger_core::storage::encryption::decrypt(&encrypted, passphrase)
@@ -63,6 +95,10 @@ fn open_sqlite_from_file(path: &PathBuf, passphrase: &str) -> Connection {
     conn.deserialize(DatabaseName::Main, owned, false)
         .expect("deserialize should succeed");
     conn
+}
+
+fn create_ledger_with_passphrase(path: &Path, passphrase: &str) {
+    let _ = AgeSqliteStorage::create(path, passphrase).expect("create ledger");
 }
 
 #[test]
@@ -540,4 +576,70 @@ fn test_cli_list_truncates_summary() {
     assert!(list.status.success());
     let stdout = String::from_utf8_lossy(&list.stdout);
     assert!(stdout.contains("..."));
+}
+
+#[test]
+fn test_cli_passphrase_keyfile_flow() {
+    let ledger_path = temp_ledger_path("ledger_cli_keyfile_encrypted");
+    let passphrase = "test-passphrase-secure-123";
+    let (config_home, data_home) = temp_xdg_dirs("ledger_cli_keyfile_encrypted");
+    let keyfile_path = config_home.join("ledger").join("ledger.key");
+
+    let key_bytes = vec![7u8; 32];
+    let key_passphrase = STANDARD.encode(&key_bytes);
+    create_ledger_with_passphrase(&ledger_path, &key_passphrase);
+
+    let encrypted =
+        ledger_core::storage::encryption::encrypt(&key_bytes, passphrase).expect("encrypt keyfile");
+    std::fs::create_dir_all(keyfile_path.parent().expect("keyfile parent"))
+        .expect("create keyfile dir");
+    std::fs::write(&keyfile_path, encrypted).expect("write keyfile");
+
+    write_config_file(
+        &config_home,
+        &ledger_path,
+        "passphrase_keyfile",
+        "encrypted",
+        Some(&keyfile_path),
+    );
+
+    let mut list = Command::new(bin());
+    list.arg("list")
+        .arg("--ledger")
+        .arg(&ledger_path)
+        .env("LEDGER_PASSPHRASE", passphrase);
+    apply_xdg_env(&mut list, &config_home, &data_home);
+    let list = list.output().expect("run list");
+
+    assert!(list.status.success());
+}
+
+#[test]
+fn test_cli_device_keyfile_flow() {
+    let ledger_path = temp_ledger_path("ledger_cli_keyfile_plain");
+    let (config_home, data_home) = temp_xdg_dirs("ledger_cli_keyfile_plain");
+    let keyfile_path = config_home.join("ledger").join("ledger.key");
+
+    let key_bytes = vec![9u8; 32];
+    let key_passphrase = STANDARD.encode(&key_bytes);
+    create_ledger_with_passphrase(&ledger_path, &key_passphrase);
+
+    std::fs::create_dir_all(keyfile_path.parent().expect("keyfile parent"))
+        .expect("create keyfile dir");
+    std::fs::write(&keyfile_path, &key_bytes).expect("write keyfile");
+
+    write_config_file(
+        &config_home,
+        &ledger_path,
+        "device_keyfile",
+        "plain",
+        Some(&keyfile_path),
+    );
+
+    let mut list = Command::new(bin());
+    list.arg("list").arg("--ledger").arg(&ledger_path);
+    apply_xdg_env(&mut list, &config_home, &data_home);
+    let list = list.output().expect("run list");
+
+    assert!(list.status.success());
 }
