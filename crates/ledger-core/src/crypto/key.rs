@@ -28,7 +28,6 @@ const KEY_LENGTH: usize = 32;
 #[derive(Clone, ZeroizeOnDrop)]
 pub struct DerivedKey {
     /// The raw key bytes (zeroized on drop)
-    #[zeroize(skip)]
     key: [u8; KEY_LENGTH],
 }
 

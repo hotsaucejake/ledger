@@ -1,6 +1,6 @@
 # Development Guide
 
-**For developers and AI assistants working on Ledger**
+**For developers working on Ledger**
 
 This document defines the standards, practices, and workflow for developing Ledger. Follow these guidelines to maintain quality, consistency, and long-term maintainability.
 
@@ -812,9 +812,7 @@ PR description should include:
 
 ---
 
-## Philosophy for AI Assistants
-
-When working on this project:
+## When working on this project:
 
 1. **Read first, code second**
    - Always check relevant RFCs and design docs
