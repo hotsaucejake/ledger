@@ -212,10 +212,7 @@ fn main() -> anyhow::Result<()> {
         }) => {
             ensure_journal_type_name(entry_type)?;
 
-            let target = resolve_ledger_path(&cli)?;
-            let passphrase = prompt_passphrase()?;
-
-            let mut storage = AgeSqliteStorage::open(std::path::Path::new(&target), &passphrase)?;
+            let (mut storage, passphrase) = open_storage_with_retry(&cli, *no_input)?;
             let entry_type_record = storage
                 .get_entry_type(entry_type)?
                 .ok_or_else(|| anyhow::anyhow!("Entry type \"{}\" not found", entry_type))?;
@@ -252,9 +249,7 @@ fn main() -> anyhow::Result<()> {
             json,
             format,
         }) => {
-            let target = resolve_ledger_path(&cli)?;
-            let passphrase = prompt_passphrase()?;
-            let storage = AgeSqliteStorage::open(std::path::Path::new(&target), &passphrase)?;
+            let (storage, _passphrase) = open_storage_with_retry(&cli, false)?;
 
             let mut filter = EntryFilter::new();
             if let Some(t) = entry_type {
@@ -323,9 +318,7 @@ fn main() -> anyhow::Result<()> {
             limit,
             format,
         }) => {
-            let target = resolve_ledger_path(&cli)?;
-            let passphrase = prompt_passphrase()?;
-            let storage = AgeSqliteStorage::open(std::path::Path::new(&target), &passphrase)?;
+            let (storage, _passphrase) = open_storage_with_retry(&cli, false)?;
 
             let mut entries = storage.search_entries(query)?;
             if let Some(t) = r#type {
@@ -373,9 +366,7 @@ fn main() -> anyhow::Result<()> {
             }
         }
         Some(Commands::Show { id, json }) => {
-            let target = resolve_ledger_path(&cli)?;
-            let passphrase = prompt_passphrase()?;
-            let storage = AgeSqliteStorage::open(std::path::Path::new(&target), &passphrase)?;
+            let (storage, _passphrase) = open_storage_with_retry(&cli, false)?;
 
             let parsed =
                 Uuid::parse_str(id).map_err(|e| anyhow::anyhow!("Invalid entry ID: {}", e))?;
@@ -395,9 +386,7 @@ fn main() -> anyhow::Result<()> {
             format,
             since,
         }) => {
-            let target = resolve_ledger_path(&cli)?;
-            let passphrase = prompt_passphrase()?;
-            let storage = AgeSqliteStorage::open(std::path::Path::new(&target), &passphrase)?;
+            let (storage, _passphrase) = open_storage_with_retry(&cli, false)?;
 
             let mut filter = EntryFilter::new();
             if let Some(t) = entry_type {
@@ -433,9 +422,7 @@ fn main() -> anyhow::Result<()> {
             }
         }
         Some(Commands::Check) => {
-            let target = resolve_ledger_path(&cli)?;
-            let passphrase = prompt_passphrase()?;
-            let storage = AgeSqliteStorage::open(std::path::Path::new(&target), &passphrase)?;
+            let (storage, _passphrase) = open_storage_with_retry(&cli, false)?;
             match storage.check_integrity() {
                 Ok(()) => {
                     if !cli.quiet {
@@ -519,6 +506,60 @@ fn resolve_ledger_path(cli: &Cli) -> anyhow::Result<String> {
 
     let config = read_config(&config_path)?;
     Ok(config.ledger.path)
+}
+
+fn open_storage_with_retry(
+    cli: &Cli,
+    no_input: bool,
+) -> anyhow::Result<(AgeSqliteStorage, String)> {
+    let target = resolve_ledger_path(cli)?;
+    let interactive = std::io::stdin().is_terminal() && !no_input;
+
+    if let Ok(value) = std::env::var("LEDGER_PASSPHRASE") {
+        if !value.trim().is_empty() {
+            return match AgeSqliteStorage::open(std::path::Path::new(&target), &value) {
+                Ok(storage) => Ok((storage, value)),
+                Err(err) if is_incorrect_passphrase_error(&err) => {
+                    eprintln!("Error: Incorrect passphrase.");
+                    std::process::exit(5);
+                }
+                Err(err) => Err(anyhow::anyhow!(err)),
+            };
+        }
+    }
+
+    let max_attempts: u32 = if interactive { 3 } else { 1 };
+    let mut attempts: u32 = 0;
+
+    loop {
+        attempts += 1;
+        let passphrase = prompt_passphrase(interactive)?;
+        match AgeSqliteStorage::open(std::path::Path::new(&target), &passphrase) {
+            Ok(storage) => return Ok((storage, passphrase)),
+            Err(err) if is_incorrect_passphrase_error(&err) => {
+                let remaining = max_attempts.saturating_sub(attempts);
+                if remaining == 0 {
+                    eprintln!("Error: Too many failed passphrase attempts.");
+                    eprintln!(
+                        "Hint: If you forgot your passphrase, the ledger cannot be recovered."
+                    );
+                    eprintln!("      Backups use the same passphrase.");
+                    std::process::exit(5);
+                }
+                eprintln!(
+                    "Incorrect passphrase. {} attempt{} remaining.",
+                    remaining,
+                    if remaining == 1 { "" } else { "s" }
+                );
+                continue;
+            }
+            Err(err) => return Err(anyhow::anyhow!(err)),
+        }
+    }
+}
+
+fn is_incorrect_passphrase_error(err: &ledger_core::error::LedgerError) -> bool {
+    err.to_string().contains("Incorrect passphrase")
 }
 
 fn missing_config_message(config_path: &std::path::Path) -> String {

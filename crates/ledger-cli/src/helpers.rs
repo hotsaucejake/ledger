@@ -8,11 +8,16 @@ use chrono::{DateTime, Duration, NaiveDate, Utc};
 use dialoguer::Password;
 
 /// Prompt for passphrase, or read from LEDGER_PASSPHRASE env var.
-pub fn prompt_passphrase() -> anyhow::Result<String> {
+pub fn prompt_passphrase(interactive: bool) -> anyhow::Result<String> {
     if let Ok(value) = std::env::var("LEDGER_PASSPHRASE") {
         if !value.trim().is_empty() {
             return Ok(value);
         }
+    }
+    if !interactive {
+        return Err(anyhow::anyhow!(
+            "No passphrase provided and no TTY available. Set LEDGER_PASSPHRASE."
+        ));
     }
     Password::new()
         .with_prompt("Passphrase")
