@@ -3,18 +3,22 @@
 //! This is the command-line interface for Ledger. It provides a user-friendly
 //! interface to the core library functionality.
 
+mod helpers;
+mod output;
+
 use clap::{CommandFactory, Parser, Subcommand};
 use clap_complete::{generate, Shell};
-use std::collections::HashMap;
-use std::io::{self, IsTerminal, Read};
-use std::process::Command;
-use std::time::{SystemTime, UNIX_EPOCH};
 
-use chrono::{DateTime, Duration, NaiveDate, Utc};
-use dialoguer::Password;
+use chrono::Utc;
 use ledger_core::storage::{AgeSqliteStorage, EntryFilter, NewEntry, NewEntryType, StorageEngine};
 use ledger_core::VERSION;
 use uuid::Uuid;
+
+use helpers::{
+    ensure_journal_type_name, parse_datetime, parse_duration, parse_output_format,
+    prompt_init_passphrase, prompt_passphrase, read_entry_body, OutputFormat,
+};
+use output::{entries_json, entry_json, entry_summary, entry_type_name_map, print_entry};
 
 /// Ledger - A secure, encrypted, CLI-first personal journal and logbook
 #[derive(Parser)]
@@ -488,105 +492,6 @@ fn main() -> anyhow::Result<()> {
     Ok(())
 }
 
-fn prompt_passphrase() -> anyhow::Result<String> {
-    if let Ok(value) = std::env::var("LEDGER_PASSPHRASE") {
-        if !value.trim().is_empty() {
-            return Ok(value);
-        }
-    }
-    Password::new()
-        .with_prompt("Passphrase")
-        .interact()
-        .map_err(|e| anyhow::anyhow!("Failed to read passphrase: {}", e))
-}
-
-fn prompt_init_passphrase() -> anyhow::Result<String> {
-    if let Ok(value) = std::env::var("LEDGER_PASSPHRASE") {
-        if !value.trim().is_empty() {
-            return Ok(value);
-        }
-    }
-    Password::new()
-        .with_prompt("Enter passphrase")
-        .with_confirmation("Confirm passphrase", "Passphrases do not match")
-        .interact()
-        .map_err(|e| anyhow::anyhow!("Failed to read passphrase: {}", e))
-}
-
-fn parse_datetime(value: &str) -> anyhow::Result<DateTime<Utc>> {
-    if let Ok(parsed) = DateTime::parse_from_rfc3339(value) {
-        return Ok(parsed.with_timezone(&Utc));
-    }
-
-    if let Ok(date) = NaiveDate::parse_from_str(value, "%Y-%m-%d") {
-        let naive = date
-            .and_hms_opt(0, 0, 0)
-            .ok_or_else(|| anyhow::anyhow!("Invalid date value: {}", value))?;
-        return Ok(DateTime::<Utc>::from_naive_utc_and_offset(naive, Utc));
-    }
-
-    Err(anyhow::anyhow!(
-        "Invalid date/time (expected ISO-8601 or YYYY-MM-DD): {}",
-        value
-    ))
-}
-
-fn parse_duration(value: &str) -> anyhow::Result<Duration> {
-    if value.len() < 2 {
-        return Err(anyhow::anyhow!(
-            "Invalid duration: {} (expected <number><unit>)",
-            value
-        ));
-    }
-
-    let (num_str, unit) = value.split_at(value.len() - 1);
-    let amount: i64 = num_str
-        .parse()
-        .map_err(|_| anyhow::anyhow!("Invalid duration number: {}", value))?;
-    if amount <= 0 {
-        return Err(anyhow::anyhow!("Duration must be positive: {}", value));
-    }
-
-    match unit {
-        "d" => Ok(Duration::days(amount)),
-        "h" => Ok(Duration::hours(amount)),
-        "m" => Ok(Duration::minutes(amount)),
-        "s" => Ok(Duration::seconds(amount)),
-        _ => Err(anyhow::anyhow!(
-            "Invalid duration unit: {} (use d/h/m/s)",
-            unit
-        )),
-    }
-}
-
-#[derive(Clone, Copy)]
-enum OutputFormat {
-    Table,
-    Plain,
-}
-
-fn parse_output_format(value: Option<&str>) -> anyhow::Result<Option<OutputFormat>> {
-    match value {
-        None => Ok(None),
-        Some("table") => Ok(Some(OutputFormat::Table)),
-        Some("plain") => Ok(Some(OutputFormat::Plain)),
-        Some(other) => Err(anyhow::anyhow!(
-            "Unsupported format: {} (use table or plain)",
-            other
-        )),
-    }
-}
-
-fn ensure_journal_type_name(entry_type: &str) -> anyhow::Result<()> {
-    if entry_type != "journal" {
-        return Err(anyhow::anyhow!(
-            "Entry type \"{}\" is not supported in the CLI yet. Only \"journal\" is available.",
-            entry_type
-        ));
-    }
-    Ok(())
-}
-
 fn ensure_journal_entry_type(
     storage: &mut AgeSqliteStorage,
     device_id: Uuid,
@@ -602,142 +507,5 @@ fn ensure_journal_entry_type(
     });
     let entry_type = NewEntryType::new("journal", schema, device_id);
     storage.create_entry_type(&entry_type)?;
-    Ok(())
-}
-
-fn read_entry_body(no_input: bool, body: Option<String>) -> anyhow::Result<String> {
-    if let Some(value) = body {
-        if value.trim().is_empty() {
-            return Err(anyhow::anyhow!("--body cannot be empty"));
-        }
-        return Ok(value);
-    }
-
-    if !io::stdin().is_terminal() {
-        let mut buffer = String::new();
-        io::stdin()
-            .read_to_string(&mut buffer)
-            .map_err(|e| anyhow::anyhow!("Failed to read stdin: {}", e))?;
-        let trimmed = buffer.trim_end().to_string();
-        if trimmed.is_empty() {
-            return Err(anyhow::anyhow!("No input provided on stdin"));
-        }
-        return Ok(trimmed);
-    }
-
-    if no_input {
-        return Err(anyhow::anyhow!("--no-input requires content from stdin"));
-    }
-
-    read_body_from_editor()
-}
-
-fn read_body_from_editor() -> anyhow::Result<String> {
-    let editor = std::env::var("EDITOR")
-        .map_err(|_| anyhow::anyhow!("$EDITOR is not set; use --body or pipe content via stdin"))?;
-
-    let nanos = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map_err(|e| anyhow::anyhow!("System time error: {}", e))?
-        .as_nanos();
-    let filename = format!("ledger_entry_{}_{}.md", std::process::id(), nanos);
-    let path = std::env::temp_dir().join(filename);
-
-    std::fs::write(&path, "").map_err(|e| anyhow::anyhow!("Failed to create temp file: {}", e))?;
-
-    let status = Command::new(editor)
-        .arg(&path)
-        .status()
-        .map_err(|e| anyhow::anyhow!("Failed to launch editor: {}", e))?;
-    if !status.success() {
-        let _ = std::fs::remove_file(&path);
-        return Err(anyhow::anyhow!("Editor exited with failure"));
-    }
-
-    let contents = std::fs::read_to_string(&path)
-        .map_err(|e| anyhow::anyhow!("Failed to read temp file: {}", e))?;
-    let _ = std::fs::remove_file(&path);
-
-    let trimmed = contents.trim_end().to_string();
-    if trimmed.is_empty() {
-        return Err(anyhow::anyhow!("Entry body is empty"));
-    }
-
-    Ok(trimmed)
-}
-
-fn entry_type_name_map(storage: &AgeSqliteStorage) -> anyhow::Result<HashMap<Uuid, String>> {
-    let types = storage.list_entry_types()?;
-    let mut map = HashMap::new();
-    for entry_type in types {
-        map.insert(entry_type.id, entry_type.name);
-    }
-    Ok(map)
-}
-
-/// Extract a summary from an entry's data, preferring the "body" field.
-fn entry_summary(entry: &ledger_core::storage::Entry) -> String {
-    entry
-        .data
-        .get("body")
-        .and_then(|v| v.as_str())
-        .map(String::from)
-        .unwrap_or_else(|| entry.data.to_string())
-}
-
-fn entry_json(
-    entry: &ledger_core::storage::Entry,
-    name_map: &HashMap<Uuid, String>,
-) -> serde_json::Value {
-    let entry_type_name = name_map
-        .get(&entry.entry_type_id)
-        .cloned()
-        .unwrap_or_else(|| "unknown".to_string());
-    serde_json::json!({
-        "id": entry.id,
-        "entry_type_id": entry.entry_type_id,
-        "entry_type_name": entry_type_name,
-        "schema_version": entry.schema_version,
-        "created_at": entry.created_at,
-        "device_id": entry.device_id,
-        "tags": entry.tags,
-        "data": entry.data,
-        "supersedes": entry.supersedes,
-    })
-}
-
-fn entries_json(
-    entries: &[ledger_core::storage::Entry],
-    name_map: &HashMap<Uuid, String>,
-) -> Vec<serde_json::Value> {
-    entries
-        .iter()
-        .map(|entry| entry_json(entry, name_map))
-        .collect()
-}
-
-fn print_entry(
-    storage: &AgeSqliteStorage,
-    entry: &ledger_core::storage::Entry,
-    quiet: bool,
-) -> anyhow::Result<()> {
-    let name_map = entry_type_name_map(storage)?;
-    let entry_type_name = name_map
-        .get(&entry.entry_type_id)
-        .cloned()
-        .unwrap_or_else(|| "unknown".to_string());
-    let body = entry_summary(entry);
-
-    if !quiet {
-        println!("ID: {}", entry.id);
-        println!("Type: {} (v{})", entry_type_name, entry.schema_version);
-        println!("Created: {}", entry.created_at);
-        println!("Device: {}", entry.device_id);
-        if !entry.tags.is_empty() {
-            println!("Tags: {}", entry.tags.join(", "));
-        }
-        println!();
-    }
-    println!("{}", body);
     Ok(())
 }
