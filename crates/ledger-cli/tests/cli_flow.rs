@@ -609,6 +609,79 @@ fn test_cli_list_truncates_summary() {
 }
 
 #[test]
+fn test_cli_editor_override_is_used() {
+    let ledger_path = temp_ledger_path("ledger_cli_editor_override");
+    let passphrase = "test-passphrase-secure-123";
+    let (config_home, data_home) = temp_xdg_dirs("ledger_cli_editor_override");
+
+    let mut init = Command::new(bin());
+    init.arg("init")
+        .arg(&ledger_path)
+        .env("LEDGER_PASSPHRASE", passphrase);
+    apply_xdg_env(&mut init, &config_home, &data_home);
+    let init = init.output().expect("run init");
+    assert!(init.status.success());
+
+    let editor_dir = std::env::temp_dir().join(format!(
+        "ledger_editor_{}_{}",
+        std::process::id(),
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("system time")
+            .as_nanos()
+    ));
+    std::fs::create_dir_all(&editor_dir).expect("create editor dir");
+    let editor_path = editor_dir.join("editor.sh");
+    let script = "#!/bin/sh\nprintf \"Editor content\" > \"$1\"\n";
+    std::fs::write(&editor_path, script).expect("write editor script");
+    let mut perms = std::fs::metadata(&editor_path)
+        .expect("stat editor")
+        .permissions();
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        perms.set_mode(0o700);
+        std::fs::set_permissions(&editor_path, perms).expect("chmod editor");
+    }
+
+    let config_path = config_home.join("ledger").join("config.toml");
+    let contents = format!(
+        "[ledger]\npath = \"{}\"\n\n[security]\ntier = \"passphrase\"\npassphrase_cache_ttl_seconds = 0\n\n[keychain]\nenabled = false\n\n[keyfile]\nmode = \"none\"\n\n[ui]\neditor = \"{}\"\n",
+        ledger_path.to_string_lossy(),
+        editor_path.to_string_lossy()
+    );
+    std::fs::write(&config_path, contents).expect("write config");
+
+    let mut add = Command::new(bin());
+    add.arg("add")
+        .arg("journal")
+        .arg("--ledger")
+        .arg(&ledger_path)
+        .env("LEDGER_PASSPHRASE", passphrase);
+    apply_xdg_env(&mut add, &config_home, &data_home);
+    let add = add.output().expect("run add");
+    assert!(add.status.success(), "add failed: {:?}", add);
+
+    let mut list = Command::new(bin());
+    list.arg("list")
+        .arg("--json")
+        .arg("--ledger")
+        .arg(&ledger_path)
+        .env("LEDGER_PASSPHRASE", passphrase);
+    apply_xdg_env(&mut list, &config_home, &data_home);
+    let list = list.output().expect("run list");
+    assert!(list.status.success());
+    let value: serde_json::Value = serde_json::from_slice(&list.stdout).expect("parse list json");
+    let array = value.as_array().expect("list output array");
+    let body = array[0]
+        .get("data")
+        .and_then(|data| data.get("body"))
+        .and_then(|v| v.as_str())
+        .expect("body");
+    assert_eq!(body, "Editor content");
+}
+
+#[test]
 fn test_cli_passphrase_keyfile_flow() {
     let ledger_path = temp_ledger_path("ledger_cli_keyfile_encrypted");
     let passphrase = "test-passphrase-secure-123";
