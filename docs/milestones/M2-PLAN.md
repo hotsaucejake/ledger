@@ -34,11 +34,14 @@ A first-time user should:
 ### 1. First-Run UX
 
 - [ ] Init wizard (default flow + `--advanced`)
+- [ ] Config file generated at `~/.config/ledger/config.toml`
+- [ ] Config file format matches `docs/design/config-spec.md`
 - [ ] XDG config path detection + creation
 - [ ] Default ledger path stored in config
 - [ ] Clear error when ledger is missing
 - [ ] Quickstart output for `ledger` (no args)
 - [ ] Passphrase retry loop
+ - [ ] Wizard copy matches `docs/design/init-wizard.md`
 
 ### 2. Daily UX Consistency
 
