@@ -30,9 +30,12 @@ use helpers::{
     ensure_journal_type_name, parse_datetime, parse_duration, parse_output_format,
     prompt_init_passphrase, prompt_passphrase, read_entry_body, OutputFormat,
 };
-use output::{entries_json, entry_json, entry_summary, entry_type_name_map, print_entry};
+use output::{
+    entries_json, entry_json, entry_summary, entry_table_summary, entry_type_name_map, print_entry,
+};
 
 const DEFAULT_LIST_LIMIT: usize = 20;
+const TABLE_SUMMARY_MAX: usize = 80;
 
 /// Ledger - A secure, encrypted, CLI-first personal journal and logbook
 #[derive(Parser)]
@@ -312,13 +315,19 @@ fn main() -> anyhow::Result<()> {
                 let output = serde_json::to_string_pretty(&entries_json(&entries, &name_map))?;
                 println!("{}", output);
             } else {
+                if entries.is_empty() {
+                    if !cli.quiet {
+                        println!("No entries found.");
+                    }
+                    return Ok(());
+                }
                 match format.unwrap_or(OutputFormat::Table) {
                     OutputFormat::Table => {
                         if !cli.quiet {
                             println!("ID | CREATED_AT | SUMMARY");
                         }
                         for entry in entries {
-                            let summary = entry_summary(&entry);
+                            let summary = entry_table_summary(&entry, TABLE_SUMMARY_MAX);
                             println!("{} | {} | {}", entry.id, entry.created_at, summary);
                         }
                     }
@@ -367,13 +376,19 @@ fn main() -> anyhow::Result<()> {
                 let output = serde_json::to_string_pretty(&entries_json(&entries, &name_map))?;
                 println!("{}", output);
             } else {
+                if entries.is_empty() {
+                    if !cli.quiet {
+                        println!("No entries found.");
+                    }
+                    return Ok(());
+                }
                 match format.unwrap_or(OutputFormat::Table) {
                     OutputFormat::Table => {
                         if !cli.quiet {
                             println!("ID | CREATED_AT | SUMMARY");
                         }
                         for entry in entries {
-                            let summary = entry_summary(&entry);
+                            let summary = entry_table_summary(&entry, TABLE_SUMMARY_MAX);
                             println!("{} | {} | {}", entry.id, entry.created_at, summary);
                         }
                     }

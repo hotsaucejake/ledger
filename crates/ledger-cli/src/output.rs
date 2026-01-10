@@ -25,6 +25,19 @@ pub fn entry_summary(entry: &Entry) -> String {
         .unwrap_or_else(|| entry.data.to_string())
 }
 
+/// Extract a summary for table output with truncation.
+pub fn entry_table_summary(entry: &Entry, max_len: usize) -> String {
+    let summary = entry_summary(entry);
+    if summary.len() <= max_len {
+        return summary;
+    }
+    if max_len <= 3 {
+        return summary.chars().take(max_len).collect();
+    }
+    let trimmed: String = summary.chars().take(max_len - 3).collect();
+    format!("{}...", trimmed)
+}
+
 /// Convert an entry to JSON for output.
 pub fn entry_json(entry: &Entry, name_map: &HashMap<Uuid, String>) -> serde_json::Value {
     let entry_type_name = name_map

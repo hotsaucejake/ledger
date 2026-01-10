@@ -53,7 +53,7 @@ A first-time user should:
 ### 2. Daily UX Consistency
 
 - [ ] Standard prompt rules (flags win, defaults in brackets)
-- [ ] Output rules (stable human output, stable JSON output)
+- [x] Output rules (stable human output, stable JSON output)
 - [x] Exit code consistency
 - [ ] Clear errors with next steps
 - [x] Session cache for passphrase (in-memory only, TTL)
