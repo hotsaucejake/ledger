@@ -85,6 +85,14 @@ enum Commands {
         /// Disable interactive prompts
         #[arg(long)]
         no_input: bool,
+
+        /// Set timezone (use with --advanced or --no-input)
+        #[arg(long)]
+        timezone: Option<String>,
+
+        /// Set default editor (use with --advanced or --no-input)
+        #[arg(long)]
+        editor: Option<String>,
     },
 
     /// Add a new entry to the ledger
@@ -237,8 +245,17 @@ fn main() -> anyhow::Result<()> {
             path,
             advanced,
             no_input,
+            timezone,
+            editor,
         }) => {
-            run_init_wizard(&cli, path.clone(), *advanced, *no_input)?;
+            run_init_wizard(
+                &cli,
+                path.clone(),
+                *advanced,
+                *no_input,
+                timezone.clone(),
+                editor.clone(),
+            )?;
         }
         Some(Commands::Add {
             entry_type,
@@ -858,6 +875,8 @@ fn run_init_wizard(
     path: Option<String>,
     advanced: bool,
     no_input: bool,
+    timezone_arg: Option<String>,
+    editor_arg: Option<String>,
 ) -> anyhow::Result<()> {
     let interactive = std::io::stdin().is_terminal();
     let effective_no_input = no_input || !interactive;
@@ -885,8 +904,8 @@ fn run_init_wizard(
     let mut config_path = default_config_path()?;
     let mut passphrase_cache_ttl_seconds = 0_u64;
     let mut keyfile_path = default_keyfile_path()?;
-    let mut timezone: Option<String> = None;
-    let mut editor: Option<String> = None;
+    let mut timezone: Option<String> = timezone_arg;
+    let mut editor: Option<String> = editor_arg;
 
     let passphrase = if let Ok(value) = std::env::var("LEDGER_PASSPHRASE") {
         if !value.trim().is_empty() {

@@ -37,7 +37,7 @@ A first-time user should:
 
 ### 1. First-Run UX
 
-- [ ] Init wizard (default flow + `--advanced`)
+- [x] Init wizard (default flow + `--advanced`)
 - [ ] Config file generated at `~/.config/ledger/config.toml`
 - [ ] Config file format matches `docs/design/config-spec.md`
 - [ ] XDG config path detection + creation
@@ -46,9 +46,9 @@ A first-time user should:
 - [x] Quickstart output for `ledger` (no args)
 - [x] Passphrase retry loop (3 attempts, show remaining)
 - [ ] After 3 failures: exit with code 5 (encryption/auth error per RFC-003 §14.2)
-- [ ] Wizard copy matches `docs/design/init-wizard.md`
-- [ ] `--quiet` flag suppresses wizard output (for scripting)
-- [ ] `--no-input` errors if required values missing
+- [x] Wizard copy matches `docs/design/init-wizard.md`
+- [x] `--quiet` flag suppresses wizard output (for scripting)
+- [x] `--no-input` errors if required values missing
 
 ### 2. Daily UX Consistency
 

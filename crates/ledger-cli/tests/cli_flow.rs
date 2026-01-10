@@ -682,6 +682,38 @@ fn test_cli_editor_override_is_used() {
 }
 
 #[test]
+fn test_cli_init_advanced_ui_fields() {
+    let passphrase = "test-passphrase-secure-123";
+    let (config_home, data_home) = temp_xdg_dirs("ledger_cli_init_ui_adv");
+
+    let mut init = Command::new(bin());
+    init.arg("init")
+        .arg("--no-input")
+        .arg("--timezone")
+        .arg("America/New_York")
+        .arg("--editor")
+        .arg("vim")
+        .env("LEDGER_PASSPHRASE", passphrase);
+    apply_xdg_env(&mut init, &config_home, &data_home);
+    let output = init.output().expect("run init");
+    assert!(
+        output.status.success(),
+        "init failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    let config_path = config_home.join("ledger").join("config.toml");
+    let contents = std::fs::read_to_string(&config_path).expect("read config");
+    let value: toml::Value = contents.parse().expect("parse config");
+    let ui = value.get("ui").expect("ui section");
+    assert_eq!(
+        ui.get("timezone").and_then(|v| v.as_str()),
+        Some("America/New_York")
+    );
+    assert_eq!(ui.get("editor").and_then(|v| v.as_str()), Some("vim"));
+}
+
+#[test]
 fn test_cli_passphrase_keyfile_flow() {
     let ledger_path = temp_ledger_path("ledger_cli_keyfile_encrypted");
     let passphrase = "test-passphrase-secure-123";
