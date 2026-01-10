@@ -82,6 +82,11 @@ pub fn print_entry(storage: &AgeSqliteStorage, entry: &Entry, quiet: bool) -> an
         if !entry.tags.is_empty() {
             println!("Tags: {}", entry.tags.join(", "));
         }
+        if let Some(supersedes) = entry.supersedes {
+            println!("Supersedes: {}", supersedes);
+        }
+        println!();
+        println!("---");
         println!();
     }
     println!("{}", body);

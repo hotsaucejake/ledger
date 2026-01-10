@@ -137,7 +137,7 @@ pub fn cache_socket_path() -> anyhow::Result<PathBuf> {
     #[cfg(target_os = "macos")]
     {
         let base = std::env::var("TMPDIR").unwrap_or_else(|_| "/tmp".to_string());
-        return Ok(PathBuf::from(base).join("ledger-cache.sock"));
+        Ok(PathBuf::from(base).join("ledger-cache.sock"));
     }
 
     #[cfg(not(target_os = "macos"))]
