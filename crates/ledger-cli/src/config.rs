@@ -8,6 +8,8 @@ pub struct LedgerConfig {
     pub security: SecuritySection,
     pub keychain: KeychainSection,
     pub keyfile: KeyfileSection,
+    #[serde(default)]
+    pub ui: UiSection,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -30,6 +32,12 @@ pub struct KeychainSection {
 pub struct KeyfileSection {
     pub mode: KeyfileMode,
     pub path: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Default)]
+pub struct UiSection {
+    pub timezone: Option<String>,
+    pub editor: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Copy)]
@@ -56,6 +64,8 @@ impl LedgerConfig {
         passphrase_cache_ttl_seconds: u64,
         keyfile_mode: KeyfileMode,
         keyfile_path: Option<PathBuf>,
+        timezone: Option<String>,
+        editor: Option<String>,
     ) -> Self {
         Self {
             ledger: LedgerSection {
@@ -72,6 +82,7 @@ impl LedgerConfig {
                 mode: keyfile_mode,
                 path: keyfile_path.map(|path| path.to_string_lossy().to_string()),
             },
+            ui: UiSection { timezone, editor },
         }
     }
 }

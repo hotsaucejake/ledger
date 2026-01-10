@@ -881,6 +881,8 @@ fn run_init_wizard(
     let mut config_path = default_config_path()?;
     let mut passphrase_cache_ttl_seconds = 0_u64;
     let mut keyfile_path = default_keyfile_path()?;
+    let mut timezone: Option<String> = None;
+    let mut editor: Option<String> = None;
 
     let passphrase = if let Ok(value) = std::env::var("LEDGER_PASSPHRASE") {
         if !value.trim().is_empty() {
@@ -935,6 +937,25 @@ fn run_init_wizard(
     }
 
     if advanced && !effective_no_input {
+        let tz_input: String = Input::new()
+            .with_prompt("Timezone")
+            .default("auto".to_string())
+            .interact_text()?;
+        if tz_input.trim().is_empty() || tz_input.trim().eq_ignore_ascii_case("auto") {
+            timezone = None;
+        } else {
+            timezone = Some(tz_input);
+        }
+
+        let default_editor = default_editor();
+        let editor_input: String = Input::new()
+            .with_prompt("Default editor")
+            .default(default_editor)
+            .interact_text()?;
+        if !editor_input.trim().is_empty() {
+            editor = Some(editor_input);
+        }
+
         let ttl_input: String = Input::new()
             .with_prompt("Passphrase cache (seconds)")
             .default(passphrase_cache_ttl_seconds.to_string())
@@ -1008,6 +1029,8 @@ fn run_init_wizard(
         passphrase_cache_ttl_seconds,
         keyfile_mode,
         keyfile_path_value,
+        timezone,
+        editor,
     );
     write_config(&config_path, &config)?;
 
@@ -1028,4 +1051,8 @@ fn run_init_wizard(
     }
 
     Ok(())
+}
+
+fn default_editor() -> String {
+    std::env::var("EDITOR").unwrap_or_else(|_| "nano".to_string())
 }
