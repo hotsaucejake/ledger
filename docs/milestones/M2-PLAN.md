@@ -15,8 +15,13 @@ A first-time user should:
 ## Exit Criteria
 
 - [ ] `ledger init` wizard with safe defaults
+- [ ] XDG config support with default ledger path
 - [ ] Friendly “no ledger found” message for all commands
 - [ ] `ledger` with no args shows quickstart
+- [ ] Passphrase retries (3 attempts)
+- [ ] Optional session cache (in-memory) with TTL
+- [ ] Security tiers selectable during init
+- [ ] OS keychain support (optional)
 - [ ] `ledger add journal` is smooth (editor + stdin + `--body`)
 - [ ] `ledger list` defaults to recent entries (N)
 - [ ] `ledger show` is readable by default
@@ -29,8 +34,11 @@ A first-time user should:
 ### 1. First-Run UX
 
 - [ ] Init wizard (default flow + `--advanced`)
+- [ ] XDG config path detection + creation
+- [ ] Default ledger path stored in config
 - [ ] Clear error when ledger is missing
 - [ ] Quickstart output for `ledger` (no args)
+- [ ] Passphrase retry loop
 
 ### 2. Daily UX Consistency
 
@@ -38,12 +46,14 @@ A first-time user should:
 - [ ] Output rules (stable human output, stable JSON output)
 - [ ] Exit code consistency
 - [ ] Clear errors with next steps
+- [ ] Session cache for passphrase (in-memory only, TTL)
 
 ### 3. Trust & Safety UX
 
 - [ ] `ledger check` actionable output
 - [ ] `ledger backup` safe defaults
 - [ ] Export wording emphasizes data ownership
+- [ ] Security tier selection + explicit warnings
 
 ### 4. Optional (Still M2-safe)
 
@@ -62,3 +72,13 @@ A first-time user should:
 
 - M2 should not expand the data model.
 - Focus on a “product‑ready” feel.
+- Config should follow XDG:
+  - Linux: `~/.config/ledger/config.toml`
+
+### Security Tiers (user selectable)
+
+1. **Passphrase only** (default)
+2. **Passphrase + OS keychain** (store passphrase in keychain)
+3. **Passphrase + encrypted key file** (key file protected by passphrase)
+4. **Device key only (unencrypted key file)**  
+   - Allowed by user choice, but must display a clear security warning.
