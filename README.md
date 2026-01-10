@@ -33,6 +33,7 @@ The encrypted storage and CLI flows are now functional for Phase 0.1 journaling:
 
 ```bash
 ledger init                  # Initialize encrypted ledger
+ledger init --advanced       # Advanced init wizard (editor, timezone, cache, keyfile)
 ledger add <type>            # Add entry
 ledger add journal --body "" # Add inline entry
 ledger list [type]           # List entries
@@ -80,6 +81,16 @@ cargo install --path crates/ledger-cli
 
 - Minimum length: **12 characters**
 - Must not be empty or whitespace-only
+
+## Config Overview
+
+Ledger writes a config at `~/.config/ledger/config.toml` by default. It includes:
+
+- Ledger path (`[ledger].path`)
+- Security tier selection (`[security].tier`)
+- Passphrase cache TTL (`[security].passphrase_cache_ttl_seconds`)
+- Keychain/keyfile settings
+- Optional UI defaults (`[ui].editor`, `[ui].timezone`)
 
 ## Development Roadmap
 
