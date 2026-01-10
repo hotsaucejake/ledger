@@ -14,6 +14,12 @@ On Linux, config lives at:
 
 This file is optional. If missing, Ledger will prompt to initialize a ledger.
 
+You can override the config location with:
+
+```
+LEDGER_CONFIG=/path/to/config.toml
+```
+
 ## 2. File Format (TOML)
 
 ```toml

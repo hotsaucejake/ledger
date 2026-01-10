@@ -353,6 +353,29 @@ fn test_cli_missing_config_message() {
 }
 
 #[test]
+fn test_cli_missing_config_message_uses_env_override() {
+    let (_config_home, data_home) = temp_xdg_dirs("ledger_cli_missing_config_env");
+    let override_path = std::env::temp_dir().join(format!(
+        "ledger_config_{}_{}.toml",
+        std::process::id(),
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("system time")
+            .as_nanos()
+    ));
+
+    let mut list = Command::new(bin());
+    list.arg("list").env("LEDGER_CONFIG", &override_path);
+    apply_xdg_env(&mut list, &_config_home, &data_home);
+    let list = list.output().expect("run list");
+
+    assert!(!list.status.success());
+    let stderr = String::from_utf8_lossy(&list.stderr);
+    assert!(stderr.contains("No ledger found at"));
+    assert!(stderr.contains(&*override_path.to_string_lossy()));
+}
+
+#[test]
 fn test_cli_missing_ledger_message() {
     let (config_home, data_home) = temp_xdg_dirs("ledger_cli_missing_ledger");
     let missing = temp_ledger_path("ledger_missing");

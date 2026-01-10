@@ -63,7 +63,7 @@ Before making changes, read:
 
 - `LEDGER_PATH`: default ledger file path.
 - `LEDGER_PASSPHRASE`: non-interactive passphrase (useful for tests/scripts).
-- `LEDGER_CONFIG`: override config path (planned; not yet implemented).
+- `LEDGER_CONFIG`: override config path.
 
 4. **Fail loudly, never silently**
    - Use `Result<T>` for all fallible operations

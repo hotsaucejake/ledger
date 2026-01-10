@@ -584,7 +584,7 @@ fn resolve_ledger_path(cli: &Cli) -> anyhow::Result<String> {
         return Ok(path);
     }
 
-    let config_path = default_config_path()?;
+    let config_path = resolve_config_path()?;
     if !config_path.exists() {
         return Err(anyhow::anyhow!(missing_config_message(&config_path)));
     }
@@ -720,7 +720,7 @@ fn exit_not_found(message: &str) -> ! {
 }
 
 fn load_security_config(_cli: &Cli) -> anyhow::Result<SecurityConfig> {
-    let config_path = default_config_path()?;
+    let config_path = resolve_config_path()?;
     if config_path.exists() {
         let config = read_config(&config_path)?;
         let keyfile_path = config.keyfile.path.as_ref().map(std::path::PathBuf::from);
@@ -901,7 +901,7 @@ fn run_init_wizard(
         }
     };
 
-    let mut config_path = default_config_path()?;
+    let mut config_path = resolve_config_path()?;
     let mut passphrase_cache_ttl_seconds = 0_u64;
     let mut keyfile_path = default_keyfile_path()?;
     let mut timezone: Option<String> = timezone_arg;
@@ -1078,4 +1078,13 @@ fn run_init_wizard(
 
 fn default_editor() -> String {
     std::env::var("EDITOR").unwrap_or_else(|_| "nano".to_string())
+}
+
+fn resolve_config_path() -> anyhow::Result<std::path::PathBuf> {
+    if let Ok(value) = std::env::var("LEDGER_CONFIG") {
+        if !value.trim().is_empty() {
+            return Ok(std::path::PathBuf::from(value));
+        }
+    }
+    default_config_path()
 }

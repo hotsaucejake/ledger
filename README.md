@@ -58,6 +58,7 @@ Environment variables:
 ```bash
 LEDGER_PATH=/path/to/ledger.ledger
 LEDGER_PASSPHRASE="your passphrase"
+LEDGER_CONFIG=/path/to/config.toml
 ```
 
 ## Building
