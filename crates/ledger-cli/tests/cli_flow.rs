@@ -299,3 +299,38 @@ fn test_cli_init_writes_default_config() {
         Some("none")
     );
 }
+
+#[test]
+fn test_cli_missing_config_message() {
+    let (config_home, data_home) = temp_xdg_dirs("ledger_cli_missing_config");
+
+    let mut list = Command::new(bin());
+    list.arg("list");
+    apply_xdg_env(&mut list, &config_home, &data_home);
+    let list = list.output().expect("run list");
+
+    assert!(!list.status.success());
+    let stderr = String::from_utf8_lossy(&list.stderr);
+    let expected_path = config_home.join("ledger").join("config.toml");
+    assert!(stderr.contains("No ledger found at"));
+    assert!(stderr.contains(&*expected_path.to_string_lossy()));
+}
+
+#[test]
+fn test_cli_missing_ledger_message() {
+    let (config_home, data_home) = temp_xdg_dirs("ledger_cli_missing_ledger");
+    let missing = temp_ledger_path("ledger_missing");
+
+    let mut list = Command::new(bin());
+    list.arg("list")
+        .arg("--ledger")
+        .arg(&missing)
+        .env("LEDGER_PASSPHRASE", "test-passphrase-secure-123");
+    apply_xdg_env(&mut list, &config_home, &data_home);
+    let list = list.output().expect("run list");
+
+    assert!(!list.status.success());
+    let stderr = String::from_utf8_lossy(&list.stderr);
+    assert!(stderr.contains("No ledger found at"));
+    assert!(stderr.contains(&*missing.to_string_lossy()));
+}

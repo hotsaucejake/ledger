@@ -442,6 +442,10 @@ fn main() -> anyhow::Result<()> {
         }
         Some(Commands::Backup { destination }) => {
             let source = resolve_ledger_path(&cli)?;
+            let source_path = std::path::Path::new(&source);
+            if !source_path.exists() {
+                return Err(anyhow::anyhow!(missing_ledger_message(source_path)));
+            }
             let count = std::fs::copy(&source, destination).map_err(|e| {
                 anyhow::anyhow!(
                     "Failed to copy ledger from {} to {}: {}",
@@ -514,14 +518,18 @@ fn open_storage_with_retry(
 ) -> anyhow::Result<(AgeSqliteStorage, String)> {
     let target = resolve_ledger_path(cli)?;
     let interactive = std::io::stdin().is_terminal() && !no_input;
+    let target_path = std::path::Path::new(&target);
 
     if let Ok(value) = std::env::var("LEDGER_PASSPHRASE") {
         if !value.trim().is_empty() {
-            return match AgeSqliteStorage::open(std::path::Path::new(&target), &value) {
+            return match AgeSqliteStorage::open(target_path, &value) {
                 Ok(storage) => Ok((storage, value)),
                 Err(err) if is_incorrect_passphrase_error(&err) => {
                     eprintln!("Error: Incorrect passphrase.");
                     std::process::exit(5);
+                }
+                Err(err) if is_missing_ledger_error(&err) => {
+                    return Err(anyhow::anyhow!(missing_ledger_message(target_path)));
                 }
                 Err(err) => Err(anyhow::anyhow!(err)),
             };
@@ -534,7 +542,7 @@ fn open_storage_with_retry(
     loop {
         attempts += 1;
         let passphrase = prompt_passphrase(interactive)?;
-        match AgeSqliteStorage::open(std::path::Path::new(&target), &passphrase) {
+        match AgeSqliteStorage::open(target_path, &passphrase) {
             Ok(storage) => return Ok((storage, passphrase)),
             Err(err) if is_incorrect_passphrase_error(&err) => {
                 let remaining = max_attempts.saturating_sub(attempts);
@@ -553,6 +561,9 @@ fn open_storage_with_retry(
                 );
                 continue;
             }
+            Err(err) if is_missing_ledger_error(&err) => {
+                return Err(anyhow::anyhow!(missing_ledger_message(target_path)));
+            }
             Err(err) => return Err(anyhow::anyhow!(err)),
         }
     }
@@ -560,6 +571,17 @@ fn open_storage_with_retry(
 
 fn is_incorrect_passphrase_error(err: &ledger_core::error::LedgerError) -> bool {
     err.to_string().contains("Incorrect passphrase")
+}
+
+fn is_missing_ledger_error(err: &ledger_core::error::LedgerError) -> bool {
+    matches!(err, ledger_core::error::LedgerError::Storage(message) if message == "Ledger file not found")
+}
+
+fn missing_ledger_message(path: &std::path::Path) -> String {
+    format!(
+        "No ledger found at {}\n\nRun:\n  ledger init\n\nOr specify a ledger path:\n  LEDGER_PATH=/path/to/my.ledger ledger init",
+        path.display()
+    )
 }
 
 fn missing_config_message(config_path: &std::path::Path) -> String {
