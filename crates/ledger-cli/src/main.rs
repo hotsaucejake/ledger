@@ -3,17 +3,24 @@
 //! This is the command-line interface for Ledger. It provides a user-friendly
 //! interface to the core library functionality.
 
+mod config;
 mod helpers;
 mod output;
 
 use clap::{CommandFactory, Parser, Subcommand};
 use clap_complete::{generate, Shell};
+use dialoguer::{Confirm, Input, Select};
+use std::io::IsTerminal;
 
 use chrono::Utc;
 use ledger_core::storage::{AgeSqliteStorage, EntryFilter, NewEntry, NewEntryType, StorageEngine};
 use ledger_core::VERSION;
 use uuid::Uuid;
 
+use config::{
+    default_config_path, default_keyfile_path, default_ledger_path, read_config, write_config,
+    KeyfileMode, LedgerConfig, SecurityTier,
+};
 use helpers::{
     ensure_journal_type_name, parse_datetime, parse_duration, parse_output_format,
     prompt_init_passphrase, prompt_passphrase, read_entry_body, OutputFormat,
@@ -45,6 +52,14 @@ enum Commands {
         /// Path where the ledger will be created
         #[arg(value_name = "PATH")]
         path: Option<String>,
+
+        /// Show advanced setup prompts
+        #[arg(long)]
+        advanced: bool,
+
+        /// Disable interactive prompts
+        #[arg(long)]
+        no_input: bool,
     },
 
     /// Add a new entry to the ledger
@@ -180,22 +195,13 @@ fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
 
     // For Milestone 0, we just show that commands parse correctly
-    match cli.command {
-        Some(Commands::Init { path }) => {
-            let target = path.or(cli.ledger).ok_or_else(|| {
-                anyhow::anyhow!("No ledger path provided. Use --ledger or pass a path.")
-            })?;
-
-            let passphrase = prompt_init_passphrase()?;
-
-            let device_id = AgeSqliteStorage::create(std::path::Path::new(&target), &passphrase)?;
-            let mut storage = AgeSqliteStorage::open(std::path::Path::new(&target), &passphrase)?;
-            ensure_journal_entry_type(&mut storage, device_id)?;
-            storage.close(&passphrase)?;
-
-            if !cli.quiet {
-                println!("Initialized new ledger at {}", target);
-            }
+    match &cli.command {
+        Some(Commands::Init {
+            path,
+            advanced,
+            no_input,
+        }) => {
+            run_init_wizard(&cli, path.clone(), *advanced, *no_input)?;
         }
         Some(Commands::Add {
             entry_type,
@@ -204,19 +210,17 @@ fn main() -> anyhow::Result<()> {
             no_input,
             body,
         }) => {
-            ensure_journal_type_name(&entry_type)?;
+            ensure_journal_type_name(entry_type)?;
 
-            let target = cli.ledger.ok_or_else(|| {
-                anyhow::anyhow!("No ledger path provided. Use --ledger or pass a path.")
-            })?;
+            let target = resolve_ledger_path(&cli)?;
             let passphrase = prompt_passphrase()?;
 
             let mut storage = AgeSqliteStorage::open(std::path::Path::new(&target), &passphrase)?;
             let entry_type_record = storage
-                .get_entry_type(&entry_type)?
+                .get_entry_type(entry_type)?
                 .ok_or_else(|| anyhow::anyhow!("Entry type \"{}\" not found", entry_type))?;
 
-            let body = read_entry_body(no_input, body)?;
+            let body = read_entry_body(*no_input, body.clone())?;
             let data = serde_json::json!({ "body": body });
             let metadata = storage.metadata()?;
             let mut new_entry = NewEntry::new(
@@ -225,9 +229,9 @@ fn main() -> anyhow::Result<()> {
                 data,
                 metadata.device_id,
             )
-            .with_tags(tag);
+            .with_tags(tag.clone());
             if let Some(value) = date {
-                let parsed = parse_datetime(&value)?;
+                let parsed = parse_datetime(value)?;
                 new_entry = new_entry.with_created_at(parsed);
             }
 
@@ -248,45 +252,43 @@ fn main() -> anyhow::Result<()> {
             json,
             format,
         }) => {
-            let target = cli.ledger.ok_or_else(|| {
-                anyhow::anyhow!("No ledger path provided. Use --ledger or pass a path.")
-            })?;
+            let target = resolve_ledger_path(&cli)?;
             let passphrase = prompt_passphrase()?;
             let storage = AgeSqliteStorage::open(std::path::Path::new(&target), &passphrase)?;
 
             let mut filter = EntryFilter::new();
             if let Some(t) = entry_type {
-                ensure_journal_type_name(&t)?;
+                ensure_journal_type_name(t)?;
                 let entry_type_record = storage
-                    .get_entry_type(&t)?
+                    .get_entry_type(t)?
                     .ok_or_else(|| anyhow::anyhow!("Entry type \"{}\" not found", t))?;
                 filter = filter.entry_type(entry_type_record.id);
             }
             if let Some(t) = tag {
-                filter = filter.tag(t);
+                filter = filter.tag(t.clone());
             }
-            if let Some(ref l) = last {
+            if let Some(l) = last {
                 let window = parse_duration(l)?;
                 let since_time = Utc::now() - window;
                 filter = filter.since(since_time);
             }
             if let Some(s) = since {
-                let parsed = chrono::DateTime::parse_from_rfc3339(&s)
+                let parsed = chrono::DateTime::parse_from_rfc3339(s)
                     .map_err(|e| anyhow::anyhow!("Invalid since timestamp: {}", e))?;
                 filter = filter.since(parsed.with_timezone(&chrono::Utc));
             }
             if let Some(u) = until {
-                let parsed = chrono::DateTime::parse_from_rfc3339(&u)
+                let parsed = chrono::DateTime::parse_from_rfc3339(u)
                     .map_err(|e| anyhow::anyhow!("Invalid until timestamp: {}", e))?;
                 filter = filter.until(parsed.with_timezone(&chrono::Utc));
             }
             if let Some(lim) = limit {
-                filter = filter.limit(lim);
+                filter = filter.limit(*lim);
             }
 
             let entries = storage.list_entries(&filter)?;
             let format = parse_output_format(format.as_deref())?;
-            if json {
+            if *json {
                 if format.is_some() {
                     return Err(anyhow::anyhow!("--format cannot be used with --json"));
                 }
@@ -321,31 +323,29 @@ fn main() -> anyhow::Result<()> {
             limit,
             format,
         }) => {
-            let target = cli.ledger.ok_or_else(|| {
-                anyhow::anyhow!("No ledger path provided. Use --ledger or pass a path.")
-            })?;
+            let target = resolve_ledger_path(&cli)?;
             let passphrase = prompt_passphrase()?;
             let storage = AgeSqliteStorage::open(std::path::Path::new(&target), &passphrase)?;
 
-            let mut entries = storage.search_entries(&query)?;
+            let mut entries = storage.search_entries(query)?;
             if let Some(t) = r#type {
-                ensure_journal_type_name(&t)?;
+                ensure_journal_type_name(t)?;
                 let entry_type_record = storage
-                    .get_entry_type(&t)?
+                    .get_entry_type(t)?
                     .ok_or_else(|| anyhow::anyhow!("Entry type \"{}\" not found", t))?;
                 entries.retain(|entry| entry.entry_type_id == entry_type_record.id);
             }
-            if let Some(ref l) = last {
+            if let Some(l) = last {
                 let window = parse_duration(l)?;
                 let since = Utc::now() - window;
                 entries.retain(|entry| entry.created_at >= since);
             }
             if let Some(lim) = limit {
-                entries.truncate(lim);
+                entries.truncate(*lim);
             }
 
             let format = parse_output_format(format.as_deref())?;
-            if json {
+            if *json {
                 if format.is_some() {
                     return Err(anyhow::anyhow!("--format cannot be used with --json"));
                 }
@@ -373,18 +373,16 @@ fn main() -> anyhow::Result<()> {
             }
         }
         Some(Commands::Show { id, json }) => {
-            let target = cli.ledger.ok_or_else(|| {
-                anyhow::anyhow!("No ledger path provided. Use --ledger or pass a path.")
-            })?;
+            let target = resolve_ledger_path(&cli)?;
             let passphrase = prompt_passphrase()?;
             let storage = AgeSqliteStorage::open(std::path::Path::new(&target), &passphrase)?;
 
             let parsed =
-                Uuid::parse_str(&id).map_err(|e| anyhow::anyhow!("Invalid entry ID: {}", e))?;
+                Uuid::parse_str(id).map_err(|e| anyhow::anyhow!("Invalid entry ID: {}", e))?;
             let entry = storage
                 .get_entry(&parsed)?
                 .ok_or_else(|| anyhow::anyhow!("Entry not found"))?;
-            if json {
+            if *json {
                 let name_map = entry_type_name_map(&storage)?;
                 let output = serde_json::to_string_pretty(&entry_json(&entry, &name_map))?;
                 println!("{}", output);
@@ -397,22 +395,20 @@ fn main() -> anyhow::Result<()> {
             format,
             since,
         }) => {
-            let target = cli.ledger.ok_or_else(|| {
-                anyhow::anyhow!("No ledger path provided. Use --ledger or pass a path.")
-            })?;
+            let target = resolve_ledger_path(&cli)?;
             let passphrase = prompt_passphrase()?;
             let storage = AgeSqliteStorage::open(std::path::Path::new(&target), &passphrase)?;
 
             let mut filter = EntryFilter::new();
             if let Some(t) = entry_type {
-                ensure_journal_type_name(&t)?;
+                ensure_journal_type_name(t)?;
                 let entry_type_record = storage
-                    .get_entry_type(&t)?
+                    .get_entry_type(t)?
                     .ok_or_else(|| anyhow::anyhow!("Entry type \"{}\" not found", t))?;
                 filter = filter.entry_type(entry_type_record.id);
             }
             if let Some(s) = since {
-                let parsed = parse_datetime(&s)?;
+                let parsed = parse_datetime(s)?;
                 filter = filter.since(parsed);
             }
 
@@ -437,9 +433,7 @@ fn main() -> anyhow::Result<()> {
             }
         }
         Some(Commands::Check) => {
-            let target = cli.ledger.ok_or_else(|| {
-                anyhow::anyhow!("No ledger path provided. Use --ledger or pass a path.")
-            })?;
+            let target = resolve_ledger_path(&cli)?;
             let passphrase = prompt_passphrase()?;
             let storage = AgeSqliteStorage::open(std::path::Path::new(&target), &passphrase)?;
             match storage.check_integrity() {
@@ -460,10 +454,8 @@ fn main() -> anyhow::Result<()> {
             }
         }
         Some(Commands::Backup { destination }) => {
-            let source = cli.ledger.ok_or_else(|| {
-                anyhow::anyhow!("No ledger path provided. Use --ledger or pass a path.")
-            })?;
-            let count = std::fs::copy(&source, &destination).map_err(|e| {
+            let source = resolve_ledger_path(&cli)?;
+            let count = std::fs::copy(&source, destination).map_err(|e| {
                 anyhow::anyhow!(
                     "Failed to copy ledger from {} to {}: {}",
                     source,
@@ -480,12 +472,17 @@ fn main() -> anyhow::Result<()> {
         }
         Some(Commands::Completions { shell }) => {
             let mut cmd = Cli::command();
-            generate(shell, &mut cmd, "ledger", &mut std::io::stdout());
+            generate(*shell, &mut cmd, "ledger", &mut std::io::stdout());
         }
         None => {
             println!("Ledger v{}", VERSION);
-            println!("\nRun `ledger --help` for usage information.");
-            println!("\n[Milestone 0] Core functionality not yet implemented.");
+            println!("\nQuickstart:");
+            println!("  ledger init");
+            println!("  ledger add journal --body \"Hello\"");
+            println!("  ledger list --last 7d");
+            println!("  ledger search \"Hello\"");
+            println!("  ledger show <id>");
+            println!("\nRun `ledger --help` for full usage.");
         }
     }
 
@@ -507,5 +504,180 @@ fn ensure_journal_entry_type(
     });
     let entry_type = NewEntryType::new("journal", schema, device_id);
     storage.create_entry_type(&entry_type)?;
+    Ok(())
+}
+
+fn resolve_ledger_path(cli: &Cli) -> anyhow::Result<String> {
+    if let Some(path) = cli.ledger.clone() {
+        return Ok(path);
+    }
+
+    let config_path = default_config_path()?;
+    if !config_path.exists() {
+        return Err(anyhow::anyhow!(missing_config_message(&config_path)));
+    }
+
+    let config = read_config(&config_path)?;
+    Ok(config.ledger.path)
+}
+
+fn missing_config_message(config_path: &std::path::Path) -> String {
+    format!(
+        "No ledger found at {}\n\nRun:\n  ledger init\n\nOr specify a ledger path:\n  LEDGER_PATH=/path/to/my.ledger ledger init",
+        config_path.display()
+    )
+}
+
+fn run_init_wizard(
+    cli: &Cli,
+    path: Option<String>,
+    advanced: bool,
+    no_input: bool,
+) -> anyhow::Result<()> {
+    let interactive = std::io::stdin().is_terminal();
+    let effective_no_input = no_input || !interactive;
+
+    if !cli.quiet && !effective_no_input {
+        println!("Welcome to Ledger.\n");
+    }
+
+    let default_ledger = default_ledger_path()?;
+    let ledger_path = match path.or_else(|| cli.ledger.clone()) {
+        Some(value) => std::path::PathBuf::from(value),
+        None => {
+            if effective_no_input {
+                default_ledger.clone()
+            } else {
+                let input: String = Input::new()
+                    .with_prompt("Ledger file location")
+                    .default(default_ledger.to_string_lossy().to_string())
+                    .interact_text()?;
+                std::path::PathBuf::from(input)
+            }
+        }
+    };
+
+    let mut config_path = default_config_path()?;
+    let mut passphrase_cache_ttl_seconds = 0_u64;
+    let mut keyfile_path = default_keyfile_path()?;
+
+    let passphrase = if let Ok(value) = std::env::var("LEDGER_PASSPHRASE") {
+        if !value.trim().is_empty() {
+            value
+        } else if effective_no_input {
+            return Err(anyhow::anyhow!(
+                "--no-input requires LEDGER_PASSPHRASE for initialization"
+            ));
+        } else {
+            prompt_init_passphrase()?
+        }
+    } else if effective_no_input {
+        return Err(anyhow::anyhow!(
+            "--no-input requires LEDGER_PASSPHRASE for initialization"
+        ));
+    } else {
+        prompt_init_passphrase()?
+    };
+
+    let mut tier = SecurityTier::Passphrase;
+    if !effective_no_input {
+        let options = [
+            "Passphrase only (recommended)",
+            "Passphrase + OS keychain",
+            "Passphrase + encrypted keyfile",
+            "Device keyfile only (reduced security)",
+        ];
+        let choice = Select::new()
+            .with_prompt("Security level")
+            .default(0)
+            .items(&options)
+            .interact()?;
+        tier = match choice {
+            0 => SecurityTier::Passphrase,
+            1 => SecurityTier::PassphraseKeychain,
+            2 => SecurityTier::PassphraseKeyfile,
+            3 => SecurityTier::DeviceKeyfile,
+            _ => SecurityTier::Passphrase,
+        };
+    }
+
+    if matches!(tier, SecurityTier::DeviceKeyfile) && !effective_no_input {
+        let proceed = Confirm::new()
+            .with_prompt(
+                "WARNING: You selected device_keyfile. This stores an unencrypted key on disk.\nIf your device is compromised, your ledger can be decrypted without a passphrase.\nContinue?",
+            )
+            .default(false)
+            .interact()?;
+        if !proceed {
+            return Err(anyhow::anyhow!("Initialization cancelled"));
+        }
+    }
+
+    if advanced && !effective_no_input {
+        let ttl_input: String = Input::new()
+            .with_prompt("Passphrase cache (seconds)")
+            .default(passphrase_cache_ttl_seconds.to_string())
+            .interact_text()?;
+        passphrase_cache_ttl_seconds = ttl_input.parse().map_err(|_| {
+            anyhow::anyhow!(
+                "Invalid cache TTL: {} (expected integer seconds)",
+                ttl_input
+            )
+        })?;
+
+        if matches!(
+            tier,
+            SecurityTier::PassphraseKeyfile | SecurityTier::DeviceKeyfile
+        ) {
+            let input: String = Input::new()
+                .with_prompt("Keyfile path")
+                .default(keyfile_path.to_string_lossy().to_string())
+                .interact_text()?;
+            keyfile_path = std::path::PathBuf::from(input);
+        }
+
+        let input: String = Input::new()
+            .with_prompt("Ledger config path")
+            .default(config_path.to_string_lossy().to_string())
+            .interact_text()?;
+        config_path = std::path::PathBuf::from(input);
+    }
+
+    if let Some(parent) = ledger_path.parent() {
+        std::fs::create_dir_all(parent).map_err(|e| {
+            anyhow::anyhow!(
+                "Failed to create ledger directory {}: {}",
+                parent.display(),
+                e
+            )
+        })?;
+    }
+
+    let device_id = AgeSqliteStorage::create(&ledger_path, &passphrase)?;
+    let mut storage = AgeSqliteStorage::open(&ledger_path, &passphrase)?;
+    ensure_journal_entry_type(&mut storage, device_id)?;
+    storage.close(&passphrase)?;
+
+    let (keyfile_mode, keyfile_path_value) = match tier {
+        SecurityTier::Passphrase => (KeyfileMode::None, Some(keyfile_path)),
+        SecurityTier::PassphraseKeychain => (KeyfileMode::None, Some(keyfile_path)),
+        SecurityTier::PassphraseKeyfile => (KeyfileMode::Encrypted, Some(keyfile_path)),
+        SecurityTier::DeviceKeyfile => (KeyfileMode::Plain, Some(keyfile_path)),
+    };
+
+    let config = LedgerConfig::new(
+        ledger_path.clone(),
+        tier,
+        passphrase_cache_ttl_seconds,
+        keyfile_mode,
+        keyfile_path_value,
+    );
+    write_config(&config_path, &config)?;
+
+    if !cli.quiet {
+        println!("Ledger created at {}", ledger_path.to_string_lossy());
+        println!("Config written to {}", config_path.to_string_lossy());
+    }
+
     Ok(())
 }

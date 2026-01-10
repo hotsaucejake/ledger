@@ -19,6 +19,24 @@ fn temp_ledger_path(prefix: &str) -> PathBuf {
     std::env::temp_dir().join(filename)
 }
 
+fn temp_xdg_dirs(prefix: &str) -> (PathBuf, PathBuf) {
+    let nanos = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .expect("system time")
+        .as_nanos();
+    let base = std::env::temp_dir().join(format!("{}_{}_{}", prefix, std::process::id(), nanos));
+    let config = base.join("config");
+    let data = base.join("data");
+    std::fs::create_dir_all(&config).expect("create config dir");
+    std::fs::create_dir_all(&data).expect("create data dir");
+    (config, data)
+}
+
+fn apply_xdg_env(cmd: &mut Command, config: &PathBuf, data: &PathBuf) {
+    cmd.env("XDG_CONFIG_HOME", config)
+        .env("XDG_DATA_HOME", data);
+}
+
 fn open_sqlite_from_file(path: &PathBuf, passphrase: &str) -> Connection {
     let encrypted = std::fs::read(path).expect("read should succeed");
     let plaintext = ledger_core::storage::encryption::decrypt(&encrypted, passphrase)
@@ -51,13 +69,14 @@ fn open_sqlite_from_file(path: &PathBuf, passphrase: &str) -> Connection {
 fn test_cli_init_add_list_show() {
     let ledger_path = temp_ledger_path("ledger_cli_flow");
     let passphrase = "test-passphrase-secure-123";
+    let (config_home, data_home) = temp_xdg_dirs("ledger_cli_flow");
 
-    let init = Command::new(bin())
-        .arg("init")
+    let mut init = Command::new(bin());
+    init.arg("init")
         .arg(&ledger_path)
-        .env("LEDGER_PASSPHRASE", passphrase)
-        .output()
-        .expect("run init");
+        .env("LEDGER_PASSPHRASE", passphrase);
+    apply_xdg_env(&mut init, &config_home, &data_home);
+    let init = init.output().expect("run init");
     assert!(
         init.status.success(),
         "init failed: stdout={}, stderr={}",
@@ -65,26 +84,26 @@ fn test_cli_init_add_list_show() {
         String::from_utf8_lossy(&init.stderr)
     );
 
-    let add = Command::new(bin())
-        .arg("add")
+    let mut add = Command::new(bin());
+    add.arg("add")
         .arg("journal")
         .arg("--body")
         .arg("Hello from CLI")
         .arg("--ledger")
         .arg(&ledger_path)
-        .env("LEDGER_PASSPHRASE", passphrase)
-        .output()
-        .expect("run add");
+        .env("LEDGER_PASSPHRASE", passphrase);
+    apply_xdg_env(&mut add, &config_home, &data_home);
+    let add = add.output().expect("run add");
     assert!(add.status.success());
 
-    let list = Command::new(bin())
-        .arg("list")
+    let mut list = Command::new(bin());
+    list.arg("list")
         .arg("--json")
         .arg("--ledger")
         .arg(&ledger_path)
-        .env("LEDGER_PASSPHRASE", passphrase)
-        .output()
-        .expect("run list");
+        .env("LEDGER_PASSPHRASE", passphrase);
+    apply_xdg_env(&mut list, &config_home, &data_home);
+    let list = list.output().expect("run list");
     assert!(list.status.success());
 
     let value: serde_json::Value = serde_json::from_slice(&list.stdout).expect("parse list json");
@@ -95,14 +114,14 @@ fn test_cli_init_add_list_show() {
         .and_then(|v| v.as_str())
         .expect("entry id");
 
-    let show = Command::new(bin())
-        .arg("show")
+    let mut show = Command::new(bin());
+    show.arg("show")
         .arg(entry_id)
         .arg("--ledger")
         .arg(&ledger_path)
-        .env("LEDGER_PASSPHRASE", passphrase)
-        .output()
-        .expect("run show");
+        .env("LEDGER_PASSPHRASE", passphrase);
+    apply_xdg_env(&mut show, &config_home, &data_home);
+    let show = show.output().expect("run show");
     assert!(show.status.success());
     let output = String::from_utf8_lossy(&show.stdout);
     assert!(output.contains("Hello from CLI"));
@@ -113,36 +132,38 @@ fn test_cli_init_add_list_show() {
 fn test_cli_search_and_show_json() {
     let ledger_path = temp_ledger_path("ledger_cli_json");
     let passphrase = "test-passphrase-secure-123";
+    let (config_home, data_home) = temp_xdg_dirs("ledger_cli_json");
 
-    let init = Command::new(bin())
-        .arg("init")
+    let mut init = Command::new(bin());
+    init.arg("init")
         .arg(&ledger_path)
-        .env("LEDGER_PASSPHRASE", passphrase)
-        .output()
-        .expect("run init");
+        .env("LEDGER_PASSPHRASE", passphrase);
+    apply_xdg_env(&mut init, &config_home, &data_home);
+    let init = init.output().expect("run init");
     assert!(init.status.success());
 
-    let add = Command::new(bin())
-        .arg("add")
+    let mut add = Command::new(bin());
+    add.arg("add")
         .arg("journal")
         .arg("--body")
         .arg("JSON output")
         .arg("--ledger")
         .arg(&ledger_path)
-        .env("LEDGER_PASSPHRASE", passphrase)
-        .output()
-        .expect("run add");
+        .env("LEDGER_PASSPHRASE", passphrase);
+    apply_xdg_env(&mut add, &config_home, &data_home);
+    let add = add.output().expect("run add");
     assert!(add.status.success());
 
-    let search = Command::new(bin())
+    let mut search = Command::new(bin());
+    search
         .arg("search")
         .arg("JSON")
         .arg("--json")
         .arg("--ledger")
         .arg(&ledger_path)
-        .env("LEDGER_PASSPHRASE", passphrase)
-        .output()
-        .expect("run search");
+        .env("LEDGER_PASSPHRASE", passphrase);
+    apply_xdg_env(&mut search, &config_home, &data_home);
+    let search = search.output().expect("run search");
     assert!(search.status.success());
 
     let search_value: serde_json::Value =
@@ -154,15 +175,15 @@ fn test_cli_search_and_show_json() {
         .and_then(|v| v.as_str())
         .expect("entry id");
 
-    let show = Command::new(bin())
-        .arg("show")
+    let mut show = Command::new(bin());
+    show.arg("show")
         .arg(entry_id)
         .arg("--json")
         .arg("--ledger")
         .arg(&ledger_path)
-        .env("LEDGER_PASSPHRASE", passphrase)
-        .output()
-        .expect("run show");
+        .env("LEDGER_PASSPHRASE", passphrase);
+    apply_xdg_env(&mut show, &config_home, &data_home);
+    let show = show.output().expect("run show");
     assert!(show.status.success());
     let show_value: serde_json::Value =
         serde_json::from_slice(&show.stdout).expect("parse show json");
@@ -176,25 +197,26 @@ fn test_cli_search_and_show_json() {
 fn test_cli_check_failure() {
     let ledger_path = temp_ledger_path("ledger_cli_check_fail");
     let passphrase = "test-passphrase-secure-123";
+    let (config_home, data_home) = temp_xdg_dirs("ledger_cli_check_fail");
 
-    let init = Command::new(bin())
-        .arg("init")
+    let mut init = Command::new(bin());
+    init.arg("init")
         .arg(&ledger_path)
-        .env("LEDGER_PASSPHRASE", passphrase)
-        .output()
-        .expect("run init");
+        .env("LEDGER_PASSPHRASE", passphrase);
+    apply_xdg_env(&mut init, &config_home, &data_home);
+    let init = init.output().expect("run init");
     assert!(init.status.success());
 
-    let add = Command::new(bin())
-        .arg("add")
+    let mut add = Command::new(bin());
+    add.arg("add")
         .arg("journal")
         .arg("--body")
         .arg("Integrity break")
         .arg("--ledger")
         .arg(&ledger_path)
-        .env("LEDGER_PASSPHRASE", passphrase)
-        .output()
-        .expect("run add");
+        .env("LEDGER_PASSPHRASE", passphrase);
+    apply_xdg_env(&mut add, &config_home, &data_home);
+    let add = add.output().expect("run add");
     assert!(add.status.success());
 
     let conn = open_sqlite_from_file(&ledger_path, passphrase);
@@ -211,14 +233,69 @@ fn test_cli_check_failure() {
         ledger_core::storage::encryption::encrypt(data.as_ref(), passphrase).expect("encrypt");
     std::fs::write(&ledger_path, encrypted).expect("write");
 
-    let check = Command::new(bin())
+    let mut check = Command::new(bin());
+    check
         .arg("check")
         .arg("--ledger")
         .arg(&ledger_path)
-        .env("LEDGER_PASSPHRASE", passphrase)
-        .output()
-        .expect("run check");
+        .env("LEDGER_PASSPHRASE", passphrase);
+    apply_xdg_env(&mut check, &config_home, &data_home);
+    let check = check.output().expect("run check");
     assert!(!check.status.success());
     let output = String::from_utf8_lossy(&check.stderr);
     assert!(output.contains("Integrity check: FAILED"));
+}
+
+#[test]
+fn test_cli_init_writes_default_config() {
+    let passphrase = "test-passphrase-secure-123";
+    let (config_home, data_home) = temp_xdg_dirs("ledger_cli_init_config");
+
+    let mut init = Command::new(bin());
+    init.arg("init").env("LEDGER_PASSPHRASE", passphrase);
+    apply_xdg_env(&mut init, &config_home, &data_home);
+    let init = init.output().expect("run init");
+    assert!(
+        init.status.success(),
+        "init failed: stdout={}, stderr={}",
+        String::from_utf8_lossy(&init.stdout),
+        String::from_utf8_lossy(&init.stderr)
+    );
+
+    let ledger_path = data_home.join("ledger").join("ledger.ledger");
+    assert!(ledger_path.exists(), "ledger file should exist");
+
+    let config_path = config_home.join("ledger").join("config.toml");
+    assert!(config_path.exists(), "config file should exist");
+
+    let contents = std::fs::read_to_string(&config_path).expect("read config");
+    let value: toml::Value = contents.parse().expect("parse config");
+    assert_eq!(
+        value
+            .get("ledger")
+            .and_then(|section| section.get("path"))
+            .and_then(|path| path.as_str()),
+        Some(ledger_path.to_string_lossy().as_ref())
+    );
+    assert_eq!(
+        value
+            .get("security")
+            .and_then(|section| section.get("tier"))
+            .and_then(|tier| tier.as_str()),
+        Some("passphrase")
+    );
+    assert_eq!(
+        value
+            .get("keychain")
+            .and_then(|section| section.get("enabled"))
+            .and_then(|enabled| enabled.as_bool()),
+        Some(false)
+    );
+    assert_eq!(
+        value
+            .get("keyfile")
+            .and_then(|section| section.get("mode"))
+            .and_then(|mode| mode.as_str()),
+        Some("none")
+    );
 }
