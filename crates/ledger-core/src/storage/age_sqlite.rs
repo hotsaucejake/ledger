@@ -8,7 +8,7 @@ use std::fs;
 use std::fs::OpenOptions;
 use std::path::{Path, PathBuf};
 use std::ptr::NonNull;
-use std::sync::Mutex;
+use std::sync::{Mutex, MutexGuard};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use chrono::{DateTime, NaiveDate, Utc};
@@ -91,6 +91,13 @@ impl AgeSqliteStorage {
     const MAX_TAG_BYTES: usize = 128;
     const MAX_TAGS_PER_ENTRY: usize = 100;
     const MAX_DATA_BYTES: usize = 1024 * 1024;
+
+    /// Lock the database connection, returning an error if the mutex is poisoned.
+    fn lock_conn(&self) -> Result<MutexGuard<'_, Connection>> {
+        self.conn
+            .lock()
+            .map_err(|_| LedgerError::Storage("SQLite connection poisoned".to_string()))
+    }
 
     fn normalize_tags(tags: &[String]) -> Result<Vec<String>> {
         if tags.len() > Self::MAX_TAGS_PER_ENTRY {
@@ -482,10 +489,7 @@ impl StorageEngine for AgeSqliteStorage {
     }
 
     fn metadata(&self) -> Result<LedgerMetadata> {
-        let conn = self
-            .conn
-            .lock()
-            .map_err(|_| LedgerError::Storage("SQLite connection poisoned".to_string()))?;
+        let conn = self.lock_conn()?;
 
         let format_version: String = conn.query_row(
             "SELECT value FROM meta WHERE key = 'format_version'",
@@ -520,10 +524,7 @@ impl StorageEngine for AgeSqliteStorage {
     }
 
     fn insert_entry(&mut self, entry: &NewEntry) -> Result<Uuid> {
-        let mut conn = self
-            .conn
-            .lock()
-            .map_err(|_| LedgerError::Storage("SQLite connection poisoned".to_string()))?;
+        let mut conn = self.lock_conn()?;
 
         let tx = conn.transaction()?;
 
@@ -626,10 +627,7 @@ impl StorageEngine for AgeSqliteStorage {
     }
 
     fn get_entry(&self, id: &Uuid) -> Result<Option<Entry>> {
-        let conn = self
-            .conn
-            .lock()
-            .map_err(|_| LedgerError::Storage("SQLite connection poisoned".to_string()))?;
+        let conn = self.lock_conn()?;
 
         let result = conn.query_row(
             r#"
@@ -681,10 +679,7 @@ impl StorageEngine for AgeSqliteStorage {
     }
 
     fn list_entries(&self, filter: &EntryFilter) -> Result<Vec<Entry>> {
-        let conn = self
-            .conn
-            .lock()
-            .map_err(|_| LedgerError::Storage("SQLite connection poisoned".to_string()))?;
+        let conn = self.lock_conn()?;
 
         let mut conditions: Vec<String> = Vec::new();
         let mut params: Vec<Box<dyn rusqlite::ToSql>> = Vec::new();
@@ -774,10 +769,7 @@ impl StorageEngine for AgeSqliteStorage {
     }
 
     fn search_entries(&self, query: &str) -> Result<Vec<Entry>> {
-        let conn = self
-            .conn
-            .lock()
-            .map_err(|_| LedgerError::Storage("SQLite connection poisoned".to_string()))?;
+        let conn = self.lock_conn()?;
 
         let mut stmt = conn.prepare(
             r#"
@@ -832,10 +824,7 @@ impl StorageEngine for AgeSqliteStorage {
     }
 
     fn get_entry_type(&self, name: &str) -> Result<Option<EntryType>> {
-        let conn = self
-            .conn
-            .lock()
-            .map_err(|_| LedgerError::Storage("SQLite connection poisoned".to_string()))?;
+        let conn = self.lock_conn()?;
 
         let result = conn.query_row(
             r#"
@@ -893,10 +882,7 @@ impl StorageEngine for AgeSqliteStorage {
     }
 
     fn create_entry_type(&mut self, entry_type: &NewEntryType) -> Result<Uuid> {
-        let mut conn = self
-            .conn
-            .lock()
-            .map_err(|_| LedgerError::Storage("SQLite connection poisoned".to_string()))?;
+        let mut conn = self.lock_conn()?;
 
         let tx = conn.transaction()?;
 
@@ -974,10 +960,7 @@ impl StorageEngine for AgeSqliteStorage {
     }
 
     fn list_entry_types(&self) -> Result<Vec<EntryType>> {
-        let conn = self
-            .conn
-            .lock()
-            .map_err(|_| LedgerError::Storage("SQLite connection poisoned".to_string()))?;
+        let conn = self.lock_conn()?;
 
         let mut stmt = conn.prepare(
             r#"
@@ -1039,10 +1022,7 @@ impl StorageEngine for AgeSqliteStorage {
     }
 
     fn check_integrity(&self) -> Result<()> {
-        let conn = self
-            .conn
-            .lock()
-            .map_err(|_| LedgerError::Storage("SQLite connection poisoned".to_string()))?;
+        let conn = self.lock_conn()?;
 
         let mut stmt = conn.prepare("PRAGMA foreign_key_check")?;
         let mut rows = stmt.query([])?;
