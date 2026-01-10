@@ -176,6 +176,41 @@ Before submitting a PR:
 3. Run `cargo test`
 4. Update relevant documentation
 
+## Daily Workflow
+
+### Typical Commands
+
+```bash
+# Build
+cargo build
+
+# Run all tests
+cargo test
+
+# Run only core library tests
+cargo test -p ledger-core
+
+# Run only CLI tests
+cargo test -p ledger-cli
+```
+
+### Manual Testing Loop
+
+```bash
+ledger init ./test.ledger
+ledger add journal --body "Hello"
+ledger list --json
+ledger search "Hello"
+ledger show <id>
+ledger export --json
+ledger backup ./test.ledger.bak
+```
+
+### Common Environment Variables
+
+- `LEDGER_PATH`: default ledger file path.
+- `LEDGER_PASSPHRASE`: non-interactive passphrase (useful for tests/scripts).
+
 ## Acknowledgments
 
 Inspired by tools like `jrnl`, `pass`, and the personal data management philosophy of offline-first, user-owned systems.

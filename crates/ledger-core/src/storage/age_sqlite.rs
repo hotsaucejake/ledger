@@ -283,12 +283,23 @@ impl AgeSqliteStorage {
             .len()
             .try_into()
             .map_err(|_| LedgerError::Storage("SQLite payload too large".to_string()))?;
+
+        // SAFETY: sqlite3_malloc is a standard SQLite allocation function that returns
+        // a valid pointer or null. We check for null immediately after and return an
+        // error if allocation failed. The size has been validated to fit in i32.
         let raw = unsafe { rusqlite::ffi::sqlite3_malloc(size) as *mut u8 };
         if raw.is_null() {
             return Err(LedgerError::Storage("SQLite allocation failed".to_string()));
         }
 
-        // Allocate with sqlite3_malloc so SQLite can own the buffer on deserialize.
+        // SAFETY:
+        // - `raw` is valid: allocated above via sqlite3_malloc, confirmed non-null
+        // - `raw` is writable for `bytes.len()` bytes: sqlite3_malloc(size) allocates
+        //   exactly `size` bytes, and size == bytes.len() (validated via try_into)
+        // - `bytes.as_ptr()` is valid for reads of `bytes.len()` bytes: guaranteed by slice
+        // - The regions don't overlap: `raw` is freshly allocated heap memory
+        // - `OwnedData::from_raw_nonnull` takes ownership of the sqlite3_malloc'd buffer,
+        //   which will be freed by SQLite when the OwnedData is dropped or consumed
         unsafe {
             std::ptr::copy_nonoverlapping(bytes.as_ptr(), raw, bytes.len());
             let ptr = NonNull::new(raw).ok_or_else(|| {
