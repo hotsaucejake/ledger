@@ -37,10 +37,6 @@ impl AgeSqliteStorage {
     const MAX_TAGS_PER_ENTRY: usize = 100;
     const MAX_DATA_BYTES: usize = 1024 * 1024;
 
-    fn sqlite_error(err: rusqlite::Error) -> LedgerError {
-        LedgerError::Storage(format!("SQLite error: {}", err))
-    }
-
     fn normalize_tags(tags: &[String]) -> Result<Vec<String>> {
         if tags.len() > Self::MAX_TAGS_PER_ENTRY {
             return Err(LedgerError::Validation(format!(
@@ -268,9 +264,7 @@ impl AgeSqliteStorage {
     }
 
     fn empty_payload(conn: &Connection) -> Result<Vec<u8>> {
-        let data = conn
-            .serialize(DatabaseName::Main)
-            .map_err(Self::sqlite_error)?;
+        let data = conn.serialize(DatabaseName::Main)?;
         Ok(data.as_ref().to_vec())
     }
 
@@ -359,9 +353,8 @@ impl StorageEngine for AgeSqliteStorage {
         validate_passphrase(passphrase)?;
 
         let device_id = Uuid::new_v4();
-        let conn = Connection::open_in_memory().map_err(Self::sqlite_error)?;
-        conn.execute_batch("PRAGMA foreign_keys = ON;")
-            .map_err(Self::sqlite_error)?;
+        let conn = Connection::open_in_memory()?;
+        conn.execute_batch("PRAGMA foreign_keys = ON;")?;
 
         // Initialize schema
         conn.execute_batch(
@@ -409,31 +402,26 @@ impl StorageEngine for AgeSqliteStorage {
                 tokenize = 'porter'
             );
             "#,
-        )
-        .map_err(Self::sqlite_error)?;
+        )?;
 
         // Insert metadata
         let created_at = chrono::Utc::now().to_rfc3339();
         conn.execute(
             "INSERT INTO meta (key, value) VALUES (?, ?)",
             ["format_version", "0.1"],
-        )
-        .map_err(Self::sqlite_error)?;
+        )?;
         conn.execute(
             "INSERT INTO meta (key, value) VALUES (?, ?)",
             ["device_id", &device_id.to_string()],
-        )
-        .map_err(Self::sqlite_error)?;
+        )?;
         conn.execute(
             "INSERT INTO meta (key, value) VALUES (?, ?)",
             ["created_at", &created_at],
-        )
-        .map_err(Self::sqlite_error)?;
+        )?;
         conn.execute(
             "INSERT INTO meta (key, value) VALUES (?, ?)",
             ["last_modified", &created_at],
-        )
-        .map_err(Self::sqlite_error)?;
+        )?;
 
         // Serialize and encrypt
         let plaintext = Self::empty_payload(&conn)?;
@@ -452,21 +440,17 @@ impl StorageEngine for AgeSqliteStorage {
 
         let encrypted = fs::read(path)?;
         let plaintext = decrypt(&encrypted, passphrase)?;
-        let mut conn = Connection::open_in_memory().map_err(Self::sqlite_error)?;
-        conn.execute_batch("PRAGMA foreign_keys = ON;")
-            .map_err(Self::sqlite_error)?;
+        let mut conn = Connection::open_in_memory()?;
+        conn.execute_batch("PRAGMA foreign_keys = ON;")?;
         let owned_data = Self::owned_data_from_bytes(&plaintext)?;
-        conn.deserialize(DatabaseName::Main, owned_data, false)
-            .map_err(Self::sqlite_error)?;
+        conn.deserialize(DatabaseName::Main, owned_data, false)?;
 
         // Read device_id from metadata
-        let device_id_str: String = conn
-            .query_row(
-                "SELECT value FROM meta WHERE key = 'device_id'",
-                [],
-                |row| row.get(0),
-            )
-            .map_err(Self::sqlite_error)?;
+        let device_id_str: String = conn.query_row(
+            "SELECT value FROM meta WHERE key = 'device_id'",
+            [],
+            |row| row.get(0),
+        )?;
         let device_id = Uuid::parse_str(&device_id_str)
             .map_err(|e| LedgerError::Storage(format!("Invalid device_id in metadata: {}", e)))?;
 
@@ -483,9 +467,7 @@ impl StorageEngine for AgeSqliteStorage {
             .conn
             .into_inner()
             .map_err(|_| LedgerError::Storage("SQLite connection poisoned".to_string()))?;
-        let data = conn
-            .serialize(DatabaseName::Main)
-            .map_err(Self::sqlite_error)?;
+        let data = conn.serialize(DatabaseName::Main)?;
         let encrypted = encrypt(data.as_ref(), passphrase)?;
         Self::write_atomic(&self.path, &encrypted)?;
         Ok(())
@@ -497,32 +479,26 @@ impl StorageEngine for AgeSqliteStorage {
             .lock()
             .map_err(|_| LedgerError::Storage("SQLite connection poisoned".to_string()))?;
 
-        let format_version: String = conn
-            .query_row(
-                "SELECT value FROM meta WHERE key = 'format_version'",
-                [],
-                |row| row.get(0),
-            )
-            .map_err(Self::sqlite_error)?;
+        let format_version: String = conn.query_row(
+            "SELECT value FROM meta WHERE key = 'format_version'",
+            [],
+            |row| row.get(0),
+        )?;
 
-        let created_at_str: String = conn
-            .query_row(
-                "SELECT value FROM meta WHERE key = 'created_at'",
-                [],
-                |row| row.get(0),
-            )
-            .map_err(Self::sqlite_error)?;
+        let created_at_str: String = conn.query_row(
+            "SELECT value FROM meta WHERE key = 'created_at'",
+            [],
+            |row| row.get(0),
+        )?;
         let created_at = DateTime::parse_from_rfc3339(&created_at_str)
             .map_err(|e| LedgerError::Storage(format!("Invalid created_at timestamp: {}", e)))?
             .with_timezone(&Utc);
 
-        let last_modified_str: String = conn
-            .query_row(
-                "SELECT value FROM meta WHERE key = 'last_modified'",
-                [],
-                |row| row.get(0),
-            )
-            .map_err(Self::sqlite_error)?;
+        let last_modified_str: String = conn.query_row(
+            "SELECT value FROM meta WHERE key = 'last_modified'",
+            [],
+            |row| row.get(0),
+        )?;
         let last_modified = DateTime::parse_from_rfc3339(&last_modified_str)
             .map_err(|e| LedgerError::Storage(format!("Invalid last_modified timestamp: {}", e)))?
             .with_timezone(&Utc);
@@ -541,7 +517,7 @@ impl StorageEngine for AgeSqliteStorage {
             .lock()
             .map_err(|_| LedgerError::Storage("SQLite connection poisoned".to_string()))?;
 
-        let tx = conn.transaction().map_err(Self::sqlite_error)?;
+        let tx = conn.transaction()?;
 
         let exists: Option<String> = tx
             .query_row(
@@ -549,8 +525,7 @@ impl StorageEngine for AgeSqliteStorage {
                 [entry.entry_type_id.to_string()],
                 |row| row.get(0),
             )
-            .optional()
-            .map_err(Self::sqlite_error)?;
+            .optional()?;
         if exists.is_none() {
             return Err(LedgerError::Validation(
                 "Entry type does not exist".to_string(),
@@ -564,7 +539,7 @@ impl StorageEngine for AgeSqliteStorage {
                 |row| row.get(0),
             )
             .optional()
-            .map_err(Self::sqlite_error)?;
+            ?;
         let schema_json = if let Some(value) = schema_json {
             value
         } else {
@@ -624,23 +599,20 @@ impl StorageEngine for AgeSqliteStorage {
                 entry.device_id.to_string(),
                 entry.supersedes.map(|id| id.to_string()),
             ),
-        )
-        .map_err(Self::sqlite_error)?;
+        )?;
 
         let fts_content = Self::fts_content_for_entry(&entry.data);
         tx.execute(
             "INSERT INTO entries_fts (entry_id, content) VALUES (?, ?)",
             (id.to_string(), fts_content),
-        )
-        .map_err(Self::sqlite_error)?;
+        )?;
 
         tx.execute(
             "UPDATE meta SET value = ? WHERE key = 'last_modified'",
             [last_modified],
-        )
-        .map_err(Self::sqlite_error)?;
+        )?;
 
-        tx.commit().map_err(Self::sqlite_error)?;
+        tx.commit()?;
 
         Ok(id)
     }
@@ -693,7 +665,7 @@ impl StorageEngine for AgeSqliteStorage {
                 supersedes_str,
             )?)),
             Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
-            Err(e) => Err(Self::sqlite_error(e)),
+            Err(e) => Err(e.into()),
         }
     }
 
@@ -748,21 +720,19 @@ impl StorageEngine for AgeSqliteStorage {
             params.push(Box::new(limit as i64));
         }
 
-        let mut stmt = conn.prepare(&query).map_err(Self::sqlite_error)?;
-        let rows = stmt
-            .query_map(rusqlite::params_from_iter(params.iter()), |row| {
-                Ok((
-                    row.get::<_, String>(0)?,
-                    row.get::<_, String>(1)?,
-                    row.get::<_, i32>(2)?,
-                    row.get::<_, String>(3)?,
-                    row.get::<_, Option<String>>(4)?,
-                    row.get::<_, String>(5)?,
-                    row.get::<_, String>(6)?,
-                    row.get::<_, Option<String>>(7)?,
-                ))
-            })
-            .map_err(Self::sqlite_error)?;
+        let mut stmt = conn.prepare(&query)?;
+        let rows = stmt.query_map(rusqlite::params_from_iter(params.iter()), |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, i32>(2)?,
+                row.get::<_, String>(3)?,
+                row.get::<_, Option<String>>(4)?,
+                row.get::<_, String>(5)?,
+                row.get::<_, String>(6)?,
+                row.get::<_, Option<String>>(7)?,
+            ))
+        })?;
 
         let mut entries = Vec::new();
         for row in rows {
@@ -775,7 +745,7 @@ impl StorageEngine for AgeSqliteStorage {
                 created_at_str,
                 device_id_str,
                 supersedes_str,
-            ) = row.map_err(Self::sqlite_error)?;
+            ) = row?;
 
             entries.push(Self::entry_from_row(
                 id_str,
@@ -798,9 +768,8 @@ impl StorageEngine for AgeSqliteStorage {
             .lock()
             .map_err(|_| LedgerError::Storage("SQLite connection poisoned".to_string()))?;
 
-        let mut stmt = conn
-            .prepare(
-                r#"
+        let mut stmt = conn.prepare(
+            r#"
                 SELECT e.id, e.entry_type_id, e.schema_version, e.data_json, e.tags_json,
                        e.created_at, e.device_id, e.supersedes
                 FROM entries_fts f
@@ -808,23 +777,20 @@ impl StorageEngine for AgeSqliteStorage {
                 WHERE entries_fts MATCH ?
                 ORDER BY bm25(entries_fts), e.created_at DESC
                 "#,
-            )
-            .map_err(Self::sqlite_error)?;
+        )?;
 
-        let rows = stmt
-            .query_map([query], |row| {
-                Ok((
-                    row.get::<_, String>(0)?,
-                    row.get::<_, String>(1)?,
-                    row.get::<_, i32>(2)?,
-                    row.get::<_, String>(3)?,
-                    row.get::<_, Option<String>>(4)?,
-                    row.get::<_, String>(5)?,
-                    row.get::<_, String>(6)?,
-                    row.get::<_, Option<String>>(7)?,
-                ))
-            })
-            .map_err(Self::sqlite_error)?;
+        let rows = stmt.query_map([query], |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, i32>(2)?,
+                row.get::<_, String>(3)?,
+                row.get::<_, Option<String>>(4)?,
+                row.get::<_, String>(5)?,
+                row.get::<_, String>(6)?,
+                row.get::<_, Option<String>>(7)?,
+            ))
+        })?;
 
         let mut entries = Vec::new();
         for row in rows {
@@ -837,7 +803,7 @@ impl StorageEngine for AgeSqliteStorage {
                 created_at_str,
                 device_id_str,
                 supersedes_str,
-            ) = row.map_err(Self::sqlite_error)?;
+            ) = row?;
 
             entries.push(Self::entry_from_row(
                 id_str,
@@ -911,7 +877,7 @@ impl StorageEngine for AgeSqliteStorage {
                 }))
             }
             Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
-            Err(e) => Err(Self::sqlite_error(e)),
+            Err(e) => Err(e.into()),
         }
     }
 
@@ -921,7 +887,7 @@ impl StorageEngine for AgeSqliteStorage {
             .lock()
             .map_err(|_| LedgerError::Storage("SQLite connection poisoned".to_string()))?;
 
-        let tx = conn.transaction().map_err(Self::sqlite_error)?;
+        let tx = conn.transaction()?;
 
         // Check if entry type with this name already exists
         let base_type_id: Option<String> = tx
@@ -930,20 +896,17 @@ impl StorageEngine for AgeSqliteStorage {
                 [&entry_type.name],
                 |row| row.get(0),
             )
-            .optional()
-            .map_err(Self::sqlite_error)?;
+            .optional()?;
 
         let (base_id, version) = if let Some(ref id_str) = base_type_id {
             // Entry type exists, get the max version and increment
             let base_id = Uuid::parse_str(id_str)
                 .map_err(|e| LedgerError::Storage(format!("Invalid UUID: {}", e)))?;
-            let max_version: i32 = tx
-                .query_row(
-                    "SELECT MAX(version) FROM entry_type_versions WHERE entry_type_id = ?",
-                    [id_str],
-                    |row| row.get(0),
-                )
-                .map_err(Self::sqlite_error)?;
+            let max_version: i32 = tx.query_row(
+                "SELECT MAX(version) FROM entry_type_versions WHERE entry_type_id = ?",
+                [id_str],
+                |row| row.get(0),
+            )?;
             (base_id, max_version + 1)
         } else {
             // New entry type, create base record
@@ -957,8 +920,7 @@ impl StorageEngine for AgeSqliteStorage {
                     created_at,
                     entry_type.device_id.to_string(),
                 ),
-            )
-            .map_err(Self::sqlite_error)?;
+            )?;
             (base_id, 1)
         };
 
@@ -966,8 +928,7 @@ impl StorageEngine for AgeSqliteStorage {
         tx.execute(
             "UPDATE entry_type_versions SET active = 0 WHERE entry_type_id = ? AND active = 1",
             [base_id.to_string()],
-        )
-        .map_err(Self::sqlite_error)?;
+        )?;
 
         // Create version record
         let version_id = Uuid::new_v4();
@@ -988,16 +949,15 @@ impl StorageEngine for AgeSqliteStorage {
                 created_at.clone(),
             ),
         )
-        .map_err(Self::sqlite_error)?;
+        ?;
 
         // Update last_modified
         tx.execute(
             "UPDATE meta SET value = ? WHERE key = 'last_modified'",
             [created_at],
-        )
-        .map_err(Self::sqlite_error)?;
+        )?;
 
-        tx.commit().map_err(Self::sqlite_error)?;
+        tx.commit()?;
 
         Ok(base_id)
     }
@@ -1008,9 +968,8 @@ impl StorageEngine for AgeSqliteStorage {
             .lock()
             .map_err(|_| LedgerError::Storage("SQLite connection poisoned".to_string()))?;
 
-        let mut stmt = conn
-            .prepare(
-                r#"
+        let mut stmt = conn.prepare(
+            r#"
                 SELECT et.id, et.name, etv.version, etv.created_at, et.device_id, etv.schema_json
                 FROM entry_type_versions etv
                 JOIN entry_types et ON et.id = etv.entry_type_id
@@ -1021,33 +980,29 @@ impl StorageEngine for AgeSqliteStorage {
                 )
                 ORDER BY et.name
                 "#,
-            )
-            .map_err(Self::sqlite_error)?;
+        )?;
 
-        let rows = stmt
-            .query_map([], |row| {
-                let id_str: String = row.get(0)?;
-                let name: String = row.get(1)?;
-                let version: i32 = row.get(2)?;
-                let created_at_str: String = row.get(3)?;
-                let device_id_str: String = row.get(4)?;
-                let schema_json_str: String = row.get(5)?;
+        let rows = stmt.query_map([], |row| {
+            let id_str: String = row.get(0)?;
+            let name: String = row.get(1)?;
+            let version: i32 = row.get(2)?;
+            let created_at_str: String = row.get(3)?;
+            let device_id_str: String = row.get(4)?;
+            let schema_json_str: String = row.get(5)?;
 
-                Ok((
-                    id_str,
-                    name,
-                    version,
-                    created_at_str,
-                    device_id_str,
-                    schema_json_str,
-                ))
-            })
-            .map_err(Self::sqlite_error)?;
+            Ok((
+                id_str,
+                name,
+                version,
+                created_at_str,
+                device_id_str,
+                schema_json_str,
+            ))
+        })?;
 
         let mut entry_types = Vec::new();
         for row in rows {
-            let (id_str, name, version, created_at_str, device_id_str, schema_json_str) =
-                row.map_err(Self::sqlite_error)?;
+            let (id_str, name, version, created_at_str, device_id_str, schema_json_str) = row?;
 
             let id = Uuid::parse_str(&id_str)
                 .map_err(|e| LedgerError::Storage(format!("Invalid UUID: {}", e)))?;
@@ -1078,11 +1033,9 @@ impl StorageEngine for AgeSqliteStorage {
             .lock()
             .map_err(|_| LedgerError::Storage("SQLite connection poisoned".to_string()))?;
 
-        let mut stmt = conn
-            .prepare("PRAGMA foreign_key_check")
-            .map_err(Self::sqlite_error)?;
-        let mut rows = stmt.query([]).map_err(Self::sqlite_error)?;
-        if rows.next().map_err(Self::sqlite_error)?.is_some() {
+        let mut stmt = conn.prepare("PRAGMA foreign_key_check")?;
+        let mut rows = stmt.query([])?;
+        if rows.next()?.is_some() {
             return Err(LedgerError::Storage(
                 "Foreign key integrity check failed".to_string(),
             ));
@@ -1094,7 +1047,7 @@ impl StorageEngine for AgeSqliteStorage {
                 [],
                 |row| row.get(0),
             )
-            .map_err(Self::sqlite_error)?;
+            ?;
         if missing_fts > 0 {
             return Err(LedgerError::Storage(
                 "FTS index missing entries".to_string(),
@@ -1107,7 +1060,7 @@ impl StorageEngine for AgeSqliteStorage {
                 [],
                 |row| row.get(0),
             )
-            .map_err(Self::sqlite_error)?;
+            ?;
         if orphaned_fts > 0 {
             return Err(LedgerError::Storage(
                 "FTS index has orphaned rows".to_string(),
@@ -1120,7 +1073,7 @@ impl StorageEngine for AgeSqliteStorage {
                 [],
                 |row| row.get(0),
             )
-            .map_err(Self::sqlite_error)?;
+            ?;
         if invalid_active > 0 {
             return Err(LedgerError::Storage(
                 "Entry type versions have invalid active state".to_string(),
@@ -1133,7 +1086,7 @@ impl StorageEngine for AgeSqliteStorage {
                 [],
                 |row| row.get(0),
             )
-            .map_err(Self::sqlite_error)?;
+            ?;
         if metadata_count < 4 {
             return Err(LedgerError::Storage(
                 "Metadata table missing required keys".to_string(),

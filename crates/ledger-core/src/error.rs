@@ -5,6 +5,7 @@
 //! to user-friendly messages.
 
 use thiserror::Error;
+use uuid::Uuid;
 
 /// Result type alias for Ledger operations.
 pub type Result<T> = std::result::Result<T, LedgerError>;
@@ -24,11 +25,26 @@ pub enum LedgerError {
     #[error("Validation error: {0}")]
     Validation(String),
 
-    /// Storage backend error
+    /// Storage backend error (generic)
     #[error("Storage error: {0}")]
     Storage(String),
 
-    /// Resource not found
+    /// SQLite-specific storage error
+    #[error("SQLite error: {source}")]
+    Sqlite {
+        #[from]
+        source: rusqlite::Error,
+    },
+
+    /// Entry not found by ID
+    #[error("Entry not found: {0}")]
+    EntryNotFound(Uuid),
+
+    /// Entry type not found by name
+    #[error("Entry type not found: {0}")]
+    EntryTypeNotFound(String),
+
+    /// Generic resource not found
     #[error("Not found: {0}")]
     NotFound(String),
 
@@ -36,19 +52,21 @@ pub enum LedgerError {
     #[error("Invalid input: {0}")]
     InvalidInput(String),
 
+    /// I/O error
+    #[error("I/O error: {source}")]
+    Io {
+        #[from]
+        source: std::io::Error,
+    },
+
+    /// JSON serialization/deserialization error
+    #[error("JSON error: {source}")]
+    Json {
+        #[from]
+        source: serde_json::Error,
+    },
+
     /// Generic error (fallback)
     #[error("{0}")]
     Other(String),
-}
-
-impl From<std::io::Error> for LedgerError {
-    fn from(err: std::io::Error) -> Self {
-        LedgerError::Storage(err.to_string())
-    }
-}
-
-impl From<serde_json::Error> for LedgerError {
-    fn from(err: serde_json::Error) -> Self {
-        LedgerError::Validation(err.to_string())
-    }
 }
