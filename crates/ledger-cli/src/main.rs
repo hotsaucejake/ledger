@@ -296,23 +296,13 @@ fn main() -> anyhow::Result<()> {
                             println!("ID | CREATED_AT | SUMMARY");
                         }
                         for entry in entries {
-                            let summary = entry
-                                .data
-                                .get("body")
-                                .and_then(|v| v.as_str())
-                                .map(|value| value.to_string())
-                                .unwrap_or_else(|| entry.data.to_string());
+                            let summary = entry_summary(&entry);
                             println!("{} | {} | {}", entry.id, entry.created_at, summary);
                         }
                     }
                     OutputFormat::Plain => {
                         for entry in entries {
-                            let summary = entry
-                                .data
-                                .get("body")
-                                .and_then(|v| v.as_str())
-                                .map(|value| value.to_string())
-                                .unwrap_or_else(|| entry.data.to_string());
+                            let summary = entry_summary(&entry);
                             println!("{} {} {}", entry.id, entry.created_at, summary);
                         }
                     }
@@ -365,23 +355,13 @@ fn main() -> anyhow::Result<()> {
                             println!("ID | CREATED_AT | SUMMARY");
                         }
                         for entry in entries {
-                            let summary = entry
-                                .data
-                                .get("body")
-                                .and_then(|v| v.as_str())
-                                .map(|value| value.to_string())
-                                .unwrap_or_else(|| entry.data.to_string());
+                            let summary = entry_summary(&entry);
                             println!("{} | {} | {}", entry.id, entry.created_at, summary);
                         }
                     }
                     OutputFormat::Plain => {
                         for entry in entries {
-                            let summary = entry
-                                .data
-                                .get("body")
-                                .and_then(|v| v.as_str())
-                                .map(|value| value.to_string())
-                                .unwrap_or_else(|| entry.data.to_string());
+                            let summary = entry_summary(&entry);
                             println!("{} {} {}", entry.id, entry.created_at, summary);
                         }
                     }
@@ -695,6 +675,16 @@ fn entry_type_name_map(storage: &AgeSqliteStorage) -> anyhow::Result<HashMap<Uui
     Ok(map)
 }
 
+/// Extract a summary from an entry's data, preferring the "body" field.
+fn entry_summary(entry: &ledger_core::storage::Entry) -> String {
+    entry
+        .data
+        .get("body")
+        .and_then(|v| v.as_str())
+        .map(String::from)
+        .unwrap_or_else(|| entry.data.to_string())
+}
+
 fn entry_json(
     entry: &ledger_core::storage::Entry,
     name_map: &HashMap<Uuid, String>,
@@ -736,12 +726,7 @@ fn print_entry(
         .get(&entry.entry_type_id)
         .cloned()
         .unwrap_or_else(|| "unknown".to_string());
-    let body = entry
-        .data
-        .get("body")
-        .and_then(|v| v.as_str())
-        .map(|value| value.to_string())
-        .unwrap_or_else(|| entry.data.to_string());
+    let body = entry_summary(entry);
 
     if !quiet {
         println!("ID: {}", entry.id);
