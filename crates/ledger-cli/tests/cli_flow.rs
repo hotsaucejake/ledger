@@ -405,3 +405,46 @@ fn test_cli_lock_succeeds_without_cache() {
 
     assert!(lock.status.success());
 }
+
+#[test]
+fn test_cli_list_defaults_to_recent_limit() {
+    let ledger_path = temp_ledger_path("ledger_cli_list_default");
+    let passphrase = "test-passphrase-secure-123";
+    let (config_home, data_home) = temp_xdg_dirs("ledger_cli_list_default");
+
+    let mut init = Command::new(bin());
+    init.arg("init")
+        .arg(&ledger_path)
+        .env("LEDGER_PASSPHRASE", passphrase);
+    apply_xdg_env(&mut init, &config_home, &data_home);
+    let init = init.output().expect("run init");
+    assert!(init.status.success());
+
+    for idx in 0..25 {
+        let mut add = Command::new(bin());
+        add.arg("add")
+            .arg("journal")
+            .arg("--body")
+            .arg(format!("Entry {}", idx))
+            .arg("--ledger")
+            .arg(&ledger_path)
+            .env("LEDGER_PASSPHRASE", passphrase);
+        apply_xdg_env(&mut add, &config_home, &data_home);
+        let add = add.output().expect("run add");
+        assert!(add.status.success());
+    }
+
+    let mut list = Command::new(bin());
+    list.arg("list")
+        .arg("--json")
+        .arg("--ledger")
+        .arg(&ledger_path)
+        .env("LEDGER_PASSPHRASE", passphrase);
+    apply_xdg_env(&mut list, &config_home, &data_home);
+    let list = list.output().expect("run list");
+    assert!(list.status.success());
+
+    let value: serde_json::Value = serde_json::from_slice(&list.stdout).expect("parse list json");
+    let array = value.as_array().expect("list output array");
+    assert_eq!(array.len(), 20);
+}

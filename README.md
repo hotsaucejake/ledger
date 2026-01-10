@@ -48,6 +48,7 @@ ledger show <id> --json      # Show entry as JSON
 ledger export                # Export data
 ledger check                 # Integrity check
 ledger backup <dest>         # Backup ledger
+ledger lock                  # Clear passphrase cache
 ledger completions bash      # Generate shell completions
 ```
 

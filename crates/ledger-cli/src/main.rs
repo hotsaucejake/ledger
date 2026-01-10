@@ -32,6 +32,8 @@ use helpers::{
 };
 use output::{entries_json, entry_json, entry_summary, entry_type_name_map, print_entry};
 
+const DEFAULT_LIST_LIMIT: usize = 20;
+
 /// Ledger - A secure, encrypted, CLI-first personal journal and logbook
 #[derive(Parser)]
 #[command(name = "ledger")]
@@ -230,9 +232,9 @@ fn main() -> anyhow::Result<()> {
             ensure_journal_type_name(entry_type)?;
 
             let (mut storage, passphrase) = open_storage_with_retry(&cli, *no_input)?;
-            let entry_type_record = storage
-                .get_entry_type(entry_type)?
-                .ok_or_else(|| anyhow::anyhow!("Entry type \"{}\" not found", entry_type))?;
+            let entry_type_record = storage.get_entry_type(entry_type)?.unwrap_or_else(|| {
+                exit_not_found(&format!("Entry type \"{}\" not found", entry_type))
+            });
 
             let body = read_entry_body(*no_input, body.clone())?;
             let data = serde_json::json!({ "body": body });
@@ -273,7 +275,7 @@ fn main() -> anyhow::Result<()> {
                 ensure_journal_type_name(t)?;
                 let entry_type_record = storage
                     .get_entry_type(t)?
-                    .ok_or_else(|| anyhow::anyhow!("Entry type \"{}\" not found", t))?;
+                    .unwrap_or_else(|| exit_not_found(&format!("Entry type \"{}\" not found", t)));
                 filter = filter.entry_type(entry_type_record.id);
             }
             if let Some(t) = tag {
@@ -296,6 +298,8 @@ fn main() -> anyhow::Result<()> {
             }
             if let Some(lim) = limit {
                 filter = filter.limit(*lim);
+            } else if last.is_none() && since.is_none() && until.is_none() {
+                filter = filter.limit(DEFAULT_LIST_LIMIT);
             }
 
             let entries = storage.list_entries(&filter)?;
@@ -342,7 +346,7 @@ fn main() -> anyhow::Result<()> {
                 ensure_journal_type_name(t)?;
                 let entry_type_record = storage
                     .get_entry_type(t)?
-                    .ok_or_else(|| anyhow::anyhow!("Entry type \"{}\" not found", t))?;
+                    .unwrap_or_else(|| exit_not_found(&format!("Entry type \"{}\" not found", t)));
                 entries.retain(|entry| entry.entry_type_id == entry_type_record.id);
             }
             if let Some(l) = last {
@@ -389,7 +393,7 @@ fn main() -> anyhow::Result<()> {
                 Uuid::parse_str(id).map_err(|e| anyhow::anyhow!("Invalid entry ID: {}", e))?;
             let entry = storage
                 .get_entry(&parsed)?
-                .ok_or_else(|| anyhow::anyhow!("Entry not found"))?;
+                .unwrap_or_else(|| exit_not_found("Entry not found"));
             if *json {
                 let name_map = entry_type_name_map(&storage)?;
                 let output = serde_json::to_string_pretty(&entry_json(&entry, &name_map))?;
@@ -410,7 +414,7 @@ fn main() -> anyhow::Result<()> {
                 ensure_journal_type_name(t)?;
                 let entry_type_record = storage
                     .get_entry_type(t)?
-                    .ok_or_else(|| anyhow::anyhow!("Entry type \"{}\" not found", t))?;
+                    .unwrap_or_else(|| exit_not_found(&format!("Entry type \"{}\" not found", t)));
                 filter = filter.entry_type(entry_type_record.id);
             }
             if let Some(s) = since {
@@ -652,6 +656,11 @@ fn cache_ttl_from_config(_cli: &Cli) -> anyhow::Result<u64> {
     }
     let config = read_config(&config_path)?;
     Ok(config.security.passphrase_cache_ttl_seconds)
+}
+
+fn exit_not_found(message: &str) -> ! {
+    eprintln!("Error: {}", message);
+    std::process::exit(3);
 }
 
 fn run_init_wizard(

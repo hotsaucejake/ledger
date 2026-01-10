@@ -20,14 +20,14 @@ A first-time user should:
 
 - [ ] `ledger init` wizard with safe defaults
 - [ ] XDG config support with default ledger path (`~/.local/share/ledger/ledger.ledger`)
-- [ ] Friendly "no ledger found" message for all commands
-- [ ] `ledger` with no args shows quickstart
-- [ ] Passphrase retries (3 attempts, then exit with code 5)
-- [ ] Optional session cache (in-memory) with TTL (see `docs/design/session-cache.md`)
+- [x] Friendly "no ledger found" message for all commands
+- [x] `ledger` with no args shows quickstart
+- [x] Passphrase retries (3 attempts, then exit with code 5)
+- [x] Optional session cache (in-memory) with TTL (see `docs/design/session-cache.md`)
 - [ ] Security tiers selectable during init (all 4 tiers)
 - [ ] OS keychain support (Linux: libsecret, macOS: Keychain)
 - [ ] `ledger add journal` is smooth (editor + stdin + `--body`)
-- [ ] `ledger list` defaults to recent entries (N)
+- [x] `ledger list` defaults to recent entries (N)
 - [ ] `ledger show` is readable by default
 - [ ] `ledger check` prints clear diagnostics
 - [ ] `ledger backup` confirms output path
@@ -42,9 +42,9 @@ A first-time user should:
 - [ ] Config file format matches `docs/design/config-spec.md`
 - [ ] XDG config path detection + creation
 - [ ] Default ledger path: `~/.local/share/ledger/ledger.ledger`
-- [ ] Clear error when ledger is missing (see RFC-003 §15)
-- [ ] Quickstart output for `ledger` (no args)
-- [ ] Passphrase retry loop (3 attempts, show remaining)
+- [x] Clear error when ledger is missing (see RFC-003 §15)
+- [x] Quickstart output for `ledger` (no args)
+- [x] Passphrase retry loop (3 attempts, show remaining)
 - [ ] After 3 failures: exit with code 5 (encryption/auth error per RFC-003 §14.2)
 - [ ] Wizard copy matches `docs/design/init-wizard.md`
 - [ ] `--quiet` flag suppresses wizard output (for scripting)
@@ -54,9 +54,9 @@ A first-time user should:
 
 - [ ] Standard prompt rules (flags win, defaults in brackets)
 - [ ] Output rules (stable human output, stable JSON output)
-- [ ] Exit code consistency
+- [x] Exit code consistency
 - [ ] Clear errors with next steps
-- [ ] Session cache for passphrase (in-memory only, TTL)
+- [x] Session cache for passphrase (in-memory only, TTL)
 
 ### 3. Trust & Safety UX
 
@@ -83,10 +83,10 @@ A first-time user should:
 
 See `docs/design/session-cache.md` for design details.
 
-- [ ] In-memory passphrase cache with TTL
+- [x] In-memory passphrase cache with TTL
 - [ ] Cache mechanism: Unix domain socket (Linux/macOS)
 - [ ] Automatic cache expiry
-- [ ] `ledger lock` command to clear cache immediately
+- [x] `ledger lock` command to clear cache immediately
 - [ ] Cache disabled by default (`passphrase_cache_ttl_seconds = 0`)
 
 ### 6. Optional (Still M2-safe)
@@ -118,7 +118,7 @@ See `docs/design/session-cache.md` for design details.
 - [ ] Init wizard respects `--no-input` flag (errors on missing required values)
 - [ ] Init wizard respects `--quiet` flag
 - [ ] Prompts skipped when flags provided
-- [ ] Passphrase retry shows attempts remaining
+- [x] Passphrase retry shows attempts remaining
 - [ ] After 3 failed attempts, exits with code 5
 - [ ] `ledger` (no args) shows quickstart help
 - [ ] "No ledger found" message is clear and actionable
