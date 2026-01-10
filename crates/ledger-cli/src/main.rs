@@ -3,6 +3,7 @@
 //! This is the command-line interface for Ledger. It provides a user-friendly
 //! interface to the core library functionality.
 
+mod cache;
 mod config;
 mod helpers;
 mod output;
@@ -11,12 +12,16 @@ use clap::{CommandFactory, Parser, Subcommand};
 use clap_complete::{generate, Shell};
 use dialoguer::{Confirm, Input, Select};
 use std::io::IsTerminal;
+use std::time::Duration;
 
 use chrono::Utc;
 use ledger_core::storage::{AgeSqliteStorage, EntryFilter, NewEntry, NewEntryType, StorageEngine};
 use ledger_core::VERSION;
 use uuid::Uuid;
 
+use cache::{
+    cache_clear, cache_config, cache_get, cache_socket_path, cache_store, run_cache_daemon,
+};
 use config::{
     default_config_path, default_keyfile_path, default_ledger_path, read_config, write_config,
     KeyfileMode, LedgerConfig, SecurityTier,
@@ -183,11 +188,23 @@ enum Commands {
         destination: String,
     },
 
+    /// Clear cached passphrase (if enabled)
+    Lock,
+
     /// Generate shell completions
     Completions {
         /// Shell to generate completions for
         #[arg(value_name = "SHELL")]
         shell: Shell,
+    },
+
+    /// Internal cache daemon (not user-facing)
+    #[command(hide = true, name = "internal-cache-daemon")]
+    InternalCacheDaemon {
+        #[arg(long)]
+        ttl: u64,
+        #[arg(long)]
+        socket: String,
     },
 }
 
@@ -461,9 +478,21 @@ fn main() -> anyhow::Result<()> {
                 println!("Backed up ledger to {}", destination);
             }
         }
+        Some(Commands::Lock) => {
+            if let Ok(socket_path) = cache_socket_path() {
+                let _ = cache_clear(&socket_path);
+            }
+            if !cli.quiet {
+                println!("Passphrase cache cleared.");
+            }
+        }
         Some(Commands::Completions { shell }) => {
             let mut cmd = Cli::command();
             generate(*shell, &mut cmd, "ledger", &mut std::io::stdout());
+        }
+        Some(Commands::InternalCacheDaemon { ttl, socket }) => {
+            let socket_path = std::path::PathBuf::from(socket);
+            run_cache_daemon(Duration::from_secs(*ttl), &socket_path)?;
         }
         None => {
             println!("Ledger v{}", VERSION);
@@ -519,6 +548,20 @@ fn open_storage_with_retry(
     let target = resolve_ledger_path(cli)?;
     let interactive = std::io::stdin().is_terminal() && !no_input;
     let target_path = std::path::Path::new(&target);
+    let cache_ttl_seconds = cache_ttl_from_config(cli).unwrap_or(0);
+    let cache_config = cache_config(target_path, cache_ttl_seconds).unwrap_or(None);
+
+    if let Some(config) = cache_config.as_ref() {
+        if let Ok(Some(passphrase)) = cache_get(config) {
+            match AgeSqliteStorage::open(target_path, &passphrase) {
+                Ok(storage) => return Ok((storage, passphrase)),
+                Err(err) if is_incorrect_passphrase_error(&err) => {
+                    let _ = cache_clear(&config.socket_path);
+                }
+                Err(err) => return Err(anyhow::anyhow!(err)),
+            }
+        }
+    }
 
     if let Ok(value) = std::env::var("LEDGER_PASSPHRASE") {
         if !value.trim().is_empty() {
@@ -543,7 +586,18 @@ fn open_storage_with_retry(
         attempts += 1;
         let passphrase = prompt_passphrase(interactive)?;
         match AgeSqliteStorage::open(target_path, &passphrase) {
-            Ok(storage) => return Ok((storage, passphrase)),
+            Ok(storage) => {
+                if let Some(config) = cache_config.as_ref() {
+                    if !cli.quiet {
+                        println!(
+                            "Note: Passphrase caching keeps your passphrase in memory for {} seconds.",
+                            config.ttl.as_secs()
+                        );
+                    }
+                    let _ = cache_store(config, &passphrase);
+                }
+                return Ok((storage, passphrase));
+            }
             Err(err) if is_incorrect_passphrase_error(&err) => {
                 let remaining = max_attempts.saturating_sub(attempts);
                 if remaining == 0 {
@@ -589,6 +643,15 @@ fn missing_config_message(config_path: &std::path::Path) -> String {
         "No ledger found at {}\n\nRun:\n  ledger init\n\nOr specify a ledger path:\n  LEDGER_PATH=/path/to/my.ledger ledger init",
         config_path.display()
     )
+}
+
+fn cache_ttl_from_config(_cli: &Cli) -> anyhow::Result<u64> {
+    let config_path = default_config_path()?;
+    if !config_path.exists() {
+        return Ok(0);
+    }
+    let config = read_config(&config_path)?;
+    Ok(config.security.passphrase_cache_ttl_seconds)
 }
 
 fn run_init_wizard(
@@ -740,6 +803,12 @@ fn run_init_wizard(
     if !cli.quiet {
         println!("Ledger created at {}", ledger_path.to_string_lossy());
         println!("Config written to {}", config_path.to_string_lossy());
+        if passphrase_cache_ttl_seconds > 0 {
+            println!(
+                "Note: Passphrase caching keeps your passphrase in memory for {} seconds.",
+                passphrase_cache_ttl_seconds
+            );
+        }
     }
 
     Ok(())

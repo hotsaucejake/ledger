@@ -24,6 +24,10 @@ serde_json = { workspace = true }
 serde = { workspace = true }
 toml = "0.8"
 uuid = { workspace = true }
+base64 = "0.22"
+blake3 = "1.5"
+zeroize = "1.7"
+libc = "0.2"
 
 [dev-dependencies]
 rusqlite = { workspace = true }

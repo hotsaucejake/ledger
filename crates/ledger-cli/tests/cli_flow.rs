@@ -393,3 +393,15 @@ fn test_cli_init_quiet_suppresses_output() {
     assert!(!stdout.contains("Welcome to Ledger"));
     assert!(stdout.trim().is_empty());
 }
+
+#[test]
+fn test_cli_lock_succeeds_without_cache() {
+    let (config_home, data_home) = temp_xdg_dirs("ledger_cli_lock");
+
+    let mut lock = Command::new(bin());
+    lock.arg("lock");
+    apply_xdg_env(&mut lock, &config_home, &data_home);
+    let lock = lock.output().expect("run lock");
+
+    assert!(lock.status.success());
+}
