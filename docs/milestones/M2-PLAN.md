@@ -108,7 +108,7 @@ See `docs/design/session-cache.md` for design details.
 
 - [ ] Config parsing matches `config-spec.md` format
 - [ ] Passphrase validation (min 12 chars, not whitespace-only)
-- [ ] Security tier configuration validation
+- [x] Security tier configuration validation
 - [ ] XDG path resolution on Linux
 
 ### Integration Tests
@@ -127,9 +127,9 @@ See `docs/design/session-cache.md` for design details.
 ### Security Tier Tests
 
 - [ ] Tier 1: Passphrase round-trip works
-- [ ] Tier 2: Keychain storage/retrieval works (platform-specific)
-- [ ] Tier 3: Encrypted keyfile round-trip works
-- [ ] Tier 4: Unencrypted keyfile works + warning displayed
+- [x] Tier 2: Keychain storage/retrieval works (platform-specific)
+- [x] Tier 3: Encrypted keyfile round-trip works
+- [x] Tier 4: Unencrypted keyfile works + warning displayed
 - [ ] Wrong passphrase fails gracefully (code 5)
 
 ### Session Cache Tests

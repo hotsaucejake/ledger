@@ -616,9 +616,6 @@ fn open_storage_with_retry(
     }
 
     if matches!(security.tier, SecurityTier::DeviceKeyfile) {
-        if !matches!(security.keyfile_mode, KeyfileMode::Plain) {
-            eprintln!("Warning: keyfile mode is not plain for device_keyfile.");
-        }
         let keyfile_path = security
             .keyfile_path
             .as_ref()
@@ -634,9 +631,6 @@ fn open_storage_with_retry(
     }
 
     if matches!(security.tier, SecurityTier::PassphraseKeyfile) {
-        if !matches!(security.keyfile_mode, KeyfileMode::Encrypted) {
-            eprintln!("Warning: keyfile mode is not encrypted for passphrase_keyfile.");
-        }
         let keyfile_path = security
             .keyfile_path
             .as_ref()
@@ -675,12 +669,13 @@ fn open_storage_with_retry(
         .ok()
         .filter(|v| !v.trim().is_empty());
     if let Some(passphrase) = env_passphrase {
-        return open_with_passphrase_and_cache(
-            cli,
-            target_path,
-            &passphrase,
-            cache_config.as_ref(),
-        );
+        let (storage, passphrase) =
+            open_with_passphrase_and_cache(cli, target_path, &passphrase, cache_config.as_ref())?;
+        if matches!(security.tier, SecurityTier::PassphraseKeychain) && security.keychain_enabled {
+            let account = ledger_hash(target_path);
+            let _ = keychain_set(&account, &passphrase);
+        }
+        return Ok((storage, passphrase));
     }
 
     let (storage, passphrase) =
@@ -724,14 +719,16 @@ fn load_security_config(_cli: &Cli) -> anyhow::Result<SecurityConfig> {
     if config_path.exists() {
         let config = read_config(&config_path)?;
         let keyfile_path = config.keyfile.path.as_ref().map(std::path::PathBuf::from);
-        return Ok(SecurityConfig {
+        let security = SecurityConfig {
             tier: config.security.tier,
             keychain_enabled: config.keychain.enabled,
             keyfile_mode: config.keyfile.mode,
             keyfile_path,
             cache_ttl_seconds: config.security.passphrase_cache_ttl_seconds,
             editor: config.ui.editor,
-        });
+        };
+        validate_security_config(&security)?;
+        return Ok(security);
     }
 
     Ok(SecurityConfig {
@@ -742,6 +739,37 @@ fn load_security_config(_cli: &Cli) -> anyhow::Result<SecurityConfig> {
         cache_ttl_seconds: 0,
         editor: None,
     })
+}
+
+fn validate_security_config(config: &SecurityConfig) -> anyhow::Result<()> {
+    match config.tier {
+        SecurityTier::PassphraseKeyfile => {
+            if !matches!(config.keyfile_mode, KeyfileMode::Encrypted) {
+                return Err(anyhow::anyhow!(
+                    "keyfile mode must be encrypted for passphrase_keyfile"
+                ));
+            }
+            if config.keyfile_path.is_none() {
+                return Err(anyhow::anyhow!(
+                    "keyfile path is required for passphrase_keyfile"
+                ));
+            }
+        }
+        SecurityTier::DeviceKeyfile => {
+            if !matches!(config.keyfile_mode, KeyfileMode::Plain) {
+                return Err(anyhow::anyhow!(
+                    "keyfile mode must be plain for device_keyfile"
+                ));
+            }
+            if config.keyfile_path.is_none() {
+                return Err(anyhow::anyhow!(
+                    "keyfile path is required for device_keyfile"
+                ));
+            }
+        }
+        _ => {}
+    }
+    Ok(())
 }
 
 fn open_with_passphrase_and_cache(
@@ -949,9 +977,7 @@ fn run_init_wizard(
 
     if matches!(tier, SecurityTier::DeviceKeyfile) && !effective_no_input {
         let proceed = Confirm::new()
-            .with_prompt(
-                "WARNING: You selected device_keyfile. This stores an unencrypted key on disk.\nIf your device is compromised, your ledger can be decrypted without a passphrase.\nContinue?",
-            )
+            .with_prompt(device_keyfile_warning())
             .default(false)
             .interact()?;
         if !proceed {
@@ -1087,4 +1113,21 @@ fn resolve_config_path() -> anyhow::Result<std::path::PathBuf> {
         }
     }
     default_config_path()
+}
+
+fn device_keyfile_warning() -> &'static str {
+    "WARNING: You selected device_keyfile. This stores an unencrypted key on disk.\nIf your device is compromised, your ledger can be decrypted without a passphrase.\nContinue?"
+}
+
+#[cfg(test)]
+mod tests {
+    use super::device_keyfile_warning;
+
+    #[test]
+    fn test_device_keyfile_warning_copy() {
+        let warning = device_keyfile_warning();
+        assert!(warning.contains("device_keyfile"));
+        assert!(warning.contains("unencrypted key on disk"));
+        assert!(warning.contains("Continue?"));
+    }
 }

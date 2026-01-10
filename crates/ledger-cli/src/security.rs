@@ -1,4 +1,4 @@
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use base64::engine::general_purpose::STANDARD;
 use base64::Engine;
@@ -64,6 +64,9 @@ pub fn read_keyfile_encrypted(path: &Path, passphrase: &str) -> anyhow::Result<Z
 }
 
 pub fn keychain_get(account: &str) -> anyhow::Result<Option<String>> {
+    if let Some(path) = test_keychain_path() {
+        return test_keychain_get(&path, account);
+    }
     let entry = keychain_entry(account)?;
     match entry.get_password() {
         Ok(value) => Ok(Some(value)),
@@ -73,6 +76,9 @@ pub fn keychain_get(account: &str) -> anyhow::Result<Option<String>> {
 }
 
 pub fn keychain_set(account: &str, passphrase: &str) -> anyhow::Result<()> {
+    if let Some(path) = test_keychain_path() {
+        return test_keychain_set(&path, account, passphrase);
+    }
     let entry = keychain_entry(account)?;
     entry
         .set_password(passphrase)
@@ -80,6 +86,9 @@ pub fn keychain_set(account: &str, passphrase: &str) -> anyhow::Result<()> {
 }
 
 pub fn keychain_clear(account: &str) -> anyhow::Result<()> {
+    if let Some(path) = test_keychain_path() {
+        return test_keychain_clear(&path, account);
+    }
     let entry = keychain_entry(account)?;
     match entry.delete_password() {
         Ok(()) => Ok(()),
@@ -114,5 +123,65 @@ fn set_file_permissions(path: &Path) -> anyhow::Result<()> {
         perms.set_mode(0o600);
         std::fs::set_permissions(path, perms)?;
     }
+    Ok(())
+}
+
+fn test_keychain_path() -> Option<PathBuf> {
+    std::env::var("LEDGER_TEST_KEYCHAIN_PATH")
+        .ok()
+        .filter(|value| !value.trim().is_empty())
+        .map(PathBuf::from)
+}
+
+fn test_keychain_get(path: &Path, account: &str) -> anyhow::Result<Option<String>> {
+    let map = read_test_keychain(path)?;
+    Ok(map.get(account).cloned())
+}
+
+fn test_keychain_set(path: &Path, account: &str, passphrase: &str) -> anyhow::Result<()> {
+    let mut map = read_test_keychain(path)?;
+    map.insert(account.to_string(), passphrase.to_string());
+    write_test_keychain(path, &map)
+}
+
+fn test_keychain_clear(path: &Path, account: &str) -> anyhow::Result<()> {
+    let mut map = read_test_keychain(path)?;
+    map.remove(account);
+    write_test_keychain(path, &map)
+}
+
+fn read_test_keychain(path: &Path) -> anyhow::Result<std::collections::HashMap<String, String>> {
+    if !path.exists() {
+        return Ok(std::collections::HashMap::new());
+    }
+    let contents = std::fs::read_to_string(path)
+        .map_err(|e| anyhow::anyhow!("Failed to read test keychain {}: {}", path.display(), e))?;
+    let mut map = std::collections::HashMap::new();
+    for line in contents.lines() {
+        if let Some((key, value)) = line.split_once('\t') {
+            let decoded = STANDARD
+                .decode(value.as_bytes())
+                .map_err(|e| anyhow::anyhow!("Test keychain decode failed: {}", e))?;
+            let passphrase = String::from_utf8(decoded)
+                .map_err(|_| anyhow::anyhow!("Test keychain entry not UTF-8"))?;
+            map.insert(key.to_string(), passphrase);
+        }
+    }
+    Ok(map)
+}
+
+fn write_test_keychain(
+    path: &Path,
+    map: &std::collections::HashMap<String, String>,
+) -> anyhow::Result<()> {
+    ensure_parent_dir(path)?;
+    let mut lines = Vec::new();
+    for (key, value) in map {
+        let encoded = STANDARD.encode(value.as_bytes());
+        lines.push(format!("{}\t{}", key, encoded));
+    }
+    std::fs::write(path, lines.join("\n"))
+        .map_err(|e| anyhow::anyhow!("Failed to write test keychain {}: {}", path.display(), e))?;
+    set_file_permissions(path)?;
     Ok(())
 }
