@@ -4,6 +4,7 @@
 //! with Age passphrase encryption. SQLite schema and entry operations
 //! will be added in subsequent steps.
 
+use std::collections::HashSet;
 use std::fs;
 use std::fs::OpenOptions;
 use std::path::{Path, PathBuf};
@@ -107,7 +108,9 @@ impl AgeSqliteStorage {
             )));
         }
 
-        let mut normalized = Vec::new();
+        let mut seen = HashSet::with_capacity(tags.len());
+        let mut normalized = Vec::with_capacity(tags.len());
+
         for tag in tags {
             let trimmed = tag.trim().to_ascii_lowercase();
             if trimmed.is_empty() {
@@ -129,7 +132,8 @@ impl AgeSqliteStorage {
                     "Tag contains invalid characters".to_string(),
                 ));
             }
-            if !normalized.contains(&trimmed) {
+            // Use HashSet for O(1) duplicate detection instead of Vec::contains O(n)
+            if seen.insert(trimmed.clone()) {
                 normalized.push(trimmed);
             }
         }
