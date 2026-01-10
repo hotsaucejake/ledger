@@ -119,7 +119,11 @@ pub fn ensure_journal_type_name(entry_type: &str) -> anyhow::Result<()> {
 }
 
 /// Read entry body from --body flag, stdin, or $EDITOR.
-pub fn read_entry_body(no_input: bool, body: Option<String>) -> anyhow::Result<String> {
+pub fn read_entry_body(
+    no_input: bool,
+    body: Option<String>,
+    editor_override: Option<&str>,
+) -> anyhow::Result<String> {
     if let Some(value) = body {
         if value.trim().is_empty() {
             return Err(anyhow::anyhow!("--body cannot be empty"));
@@ -143,13 +147,17 @@ pub fn read_entry_body(no_input: bool, body: Option<String>) -> anyhow::Result<S
         return Err(anyhow::anyhow!("--no-input requires content from stdin"));
     }
 
-    read_body_from_editor()
+    read_body_from_editor(editor_override)
 }
 
 /// Open $EDITOR to compose entry body.
-fn read_body_from_editor() -> anyhow::Result<String> {
-    let editor = std::env::var("EDITOR")
-        .map_err(|_| anyhow::anyhow!("$EDITOR is not set; use --body or pipe content via stdin"))?;
+fn read_body_from_editor(editor_override: Option<&str>) -> anyhow::Result<String> {
+    let editor = editor_override
+        .map(|value| value.to_string())
+        .or_else(|| std::env::var("EDITOR").ok())
+        .ok_or_else(|| {
+            anyhow::anyhow!("$EDITOR is not set; use --body or pipe content via stdin")
+        })?;
 
     let nanos = SystemTime::now()
         .duration_since(UNIX_EPOCH)

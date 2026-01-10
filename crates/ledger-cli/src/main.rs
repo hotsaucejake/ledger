@@ -49,6 +49,7 @@ struct SecurityConfig {
     keyfile_mode: KeyfileMode,
     keyfile_path: Option<std::path::PathBuf>,
     cache_ttl_seconds: u64,
+    editor: Option<String>,
 }
 
 /// Ledger - A secure, encrypted, CLI-first personal journal and logbook
@@ -253,7 +254,8 @@ fn main() -> anyhow::Result<()> {
                 exit_not_found(&format!("Entry type \"{}\" not found", entry_type))
             });
 
-            let body = read_entry_body(*no_input, body.clone())?;
+            let editor_override = load_security_config(&cli)?.editor;
+            let body = read_entry_body(*no_input, body.clone(), editor_override.as_deref())?;
             let data = serde_json::json!({ "body": body });
             let metadata = storage.metadata()?;
             let mut new_entry = NewEntry::new(
@@ -711,6 +713,7 @@ fn load_security_config(_cli: &Cli) -> anyhow::Result<SecurityConfig> {
             keyfile_mode: config.keyfile.mode,
             keyfile_path,
             cache_ttl_seconds: config.security.passphrase_cache_ttl_seconds,
+            editor: config.ui.editor,
         });
     }
 
@@ -720,6 +723,7 @@ fn load_security_config(_cli: &Cli) -> anyhow::Result<SecurityConfig> {
         keyfile_mode: KeyfileMode::None,
         keyfile_path: Some(default_keyfile_path()?),
         cache_ttl_seconds: 0,
+        editor: None,
     })
 }
 
