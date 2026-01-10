@@ -97,10 +97,53 @@ Entry saved.
 
 ---
 
-## 5. Rules
+## 5. Passphrase Retry Behavior
+
+When opening an existing ledger (not during init), passphrase entry follows these rules:
+
+### 5.1 Retry Flow
+
+```
+Enter passphrase:
+[incorrect]
+
+Incorrect passphrase. 2 attempts remaining.
+Enter passphrase:
+[incorrect]
+
+Incorrect passphrase. 1 attempt remaining.
+Enter passphrase:
+[incorrect]
+
+Error: Too many failed passphrase attempts.
+Hint: If you forgot your passphrase, the ledger cannot be recovered.
+      Backups use the same passphrase.
+
+Exit code: 5
+```
+
+### 5.2 Rules
+
+- Maximum 3 attempts per invocation
+- Show remaining attempts after each failure
+- After 3 failures, exit with code 5 (encryption/auth error per RFC-003 §14.2)
+- No lockout period (user can immediately retry by running command again)
+- `--no-input` mode: single attempt only, no retry loop
+
+### 5.3 Scripting Considerations
+
+For scripts using `LEDGER_PASSPHRASE` environment variable:
+- Single attempt (no retry loop)
+- Exit code 5 on failure
+- Clear error message to stderr
+
+---
+
+## 6. Rules
 
 - Defaults are always shown in brackets.
 - Prompts are skipped if flags are provided.
 - `--no-input` is respected; missing required values should error.
 - No passphrase is printed or logged.
+- `--quiet` suppresses informational output (errors still printed to stderr).
 
