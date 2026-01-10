@@ -334,3 +334,62 @@ fn test_cli_missing_ledger_message() {
     assert!(stderr.contains("No ledger found at"));
     assert!(stderr.contains(&*missing.to_string_lossy()));
 }
+
+#[test]
+fn test_cli_init_no_input_requires_passphrase() {
+    let (config_home, data_home) = temp_xdg_dirs("ledger_cli_init_no_input");
+
+    let mut init = Command::new(bin());
+    init.arg("init").arg("--no-input");
+    apply_xdg_env(&mut init, &config_home, &data_home);
+    let init = init.output().expect("run init");
+
+    assert!(!init.status.success());
+    let stderr = String::from_utf8_lossy(&init.stderr);
+    assert!(stderr.contains("--no-input requires LEDGER_PASSPHRASE"));
+}
+
+#[test]
+fn test_cli_init_no_input_advanced_uses_defaults() {
+    let passphrase = "test-passphrase-secure-123";
+    let (config_home, data_home) = temp_xdg_dirs("ledger_cli_init_advanced_no_input");
+
+    let mut init = Command::new(bin());
+    init.arg("init")
+        .arg("--advanced")
+        .arg("--no-input")
+        .env("LEDGER_PASSPHRASE", passphrase);
+    apply_xdg_env(&mut init, &config_home, &data_home);
+    let init = init.output().expect("run init");
+
+    assert!(
+        init.status.success(),
+        "init failed: stdout={}, stderr={}",
+        String::from_utf8_lossy(&init.stdout),
+        String::from_utf8_lossy(&init.stderr)
+    );
+
+    let ledger_path = data_home.join("ledger").join("ledger.ledger");
+    assert!(ledger_path.exists(), "ledger file should exist");
+
+    let config_path = config_home.join("ledger").join("config.toml");
+    assert!(config_path.exists(), "config file should exist");
+}
+
+#[test]
+fn test_cli_init_quiet_suppresses_output() {
+    let passphrase = "test-passphrase-secure-123";
+    let (config_home, data_home) = temp_xdg_dirs("ledger_cli_init_quiet");
+
+    let mut init = Command::new(bin());
+    init.arg("init")
+        .arg("--quiet")
+        .env("LEDGER_PASSPHRASE", passphrase);
+    apply_xdg_env(&mut init, &config_home, &data_home);
+    let init = init.output().expect("run init");
+
+    assert!(init.status.success());
+    let stdout = String::from_utf8_lossy(&init.stdout);
+    assert!(!stdout.contains("Welcome to Ledger"));
+    assert!(stdout.trim().is_empty());
+}
