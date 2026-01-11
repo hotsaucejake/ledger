@@ -38,7 +38,7 @@ Welcome to Ledger.
 Ledger file location:
   [~/.local/share/ledger/ledger.ledger]
 
-Create a passphrase (min 12 chars):
+Create a passphrase (min 8 chars):
   Passphrase:
   Confirm:
 

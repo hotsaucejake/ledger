@@ -98,9 +98,7 @@ pub fn decrypt(encrypted_data: &[u8], passphrase: &str) -> Result<Vec<u8>> {
         .map_err(|e| match e {
             age::DecryptError::NoMatchingKeys
             | age::DecryptError::DecryptionFailed
-            | age::DecryptError::KeyDecryptionFailed => {
-                LedgerError::Crypto("Incorrect passphrase or corrupted data".to_string())
-            }
+            | age::DecryptError::KeyDecryptionFailed => LedgerError::IncorrectPassphrase,
             _ => LedgerError::Crypto(format!("Decryption failed: {}", e)),
         })?;
 
@@ -149,11 +147,7 @@ mod tests {
 
         // Attempting to decrypt with wrong passphrase should fail
         let result = decrypt(&encrypted, passphrase2);
-        assert!(result.is_err());
-        assert!(result
-            .unwrap_err()
-            .to_string()
-            .contains("Incorrect passphrase"));
+        assert!(matches!(result, Err(LedgerError::IncorrectPassphrase)));
     }
 
     #[test]

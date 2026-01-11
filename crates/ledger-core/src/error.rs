@@ -13,6 +13,14 @@ pub type Result<T> = std::result::Result<T, LedgerError>;
 /// Core error type for Ledger operations.
 #[derive(Debug, Error)]
 pub enum LedgerError {
+    /// Incorrect passphrase during decryption
+    #[error("Incorrect passphrase")]
+    IncorrectPassphrase,
+
+    /// Ledger file not found
+    #[error("Ledger file not found")]
+    LedgerNotFound,
+
     /// Encryption or decryption error
     #[error("Encryption error: {0}")]
     Crypto(String),

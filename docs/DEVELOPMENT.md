@@ -59,6 +59,20 @@ Before making changes, read:
    - No manual testing as substitute for automated tests
    - Integration tests for user-facing behavior
 
+## Environment Variables
+
+- `LEDGER_PATH`: default ledger file path.
+- `LEDGER_PASSPHRASE`: non-interactive passphrase (useful for tests/scripts).
+- `LEDGER_CONFIG`: override config path.
+
+## Test Support Feature
+
+Some integration tests rely on test-only hooks. Run them with:
+
+```bash
+cargo test -p ledger-cli --features test-support
+```
+
 4. **Fail loudly, never silently**
    - Use `Result<T>` for all fallible operations
    - Rich error messages with context
@@ -652,7 +666,7 @@ echo "✅ All checks passed!"
 
 ### Passphrase Requirements
 
-- Minimum length: **12 characters**
+- Minimum length: **8 characters**
 - Must not be empty or whitespace-only
 - Enforced in `ledger-core::crypto::validate_passphrase`
 

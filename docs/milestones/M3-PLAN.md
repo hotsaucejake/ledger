@@ -5,14 +5,14 @@
 
 ## Goals
 
-- Stable, versioned export formats (JSON/JSONL)
+- Stable, versioned export formats (JSON/JSONL) covering entries, templates, and compositions
 - Consistent query/filter behavior across CLI commands
 - Clear “export is the contract” documentation
 
 ## Exit Criteria
 
-- [ ] JSON export schema versioned and documented
-- [ ] JSONL export schema versioned and documented
+- [ ] JSON export schema versioned and documented (entries, templates, compositions)
+- [ ] JSONL export schema versioned and documented (entries, templates, compositions)
 - [ ] `ledger export` outputs stable fields with metadata header
 - [ ] `ledger list`, `ledger search`, `ledger export` share filter semantics
 - [ ] Golden-file export tests in CI
@@ -22,8 +22,8 @@
 
 ### 1. Export Format Spec
 
-- [ ] Define export JSON schema (fields + types)
-- [ ] Define JSONL schema (per-entry record)
+- [ ] Define export JSON schema (fields + types, including templates/compositions)
+- [ ] Define JSONL schema (per-entry record + template/composition records)
 - [ ] Add metadata header for JSON exports
 - [ ] Document in `docs/design/format-spec.md` or new `docs/design/export-spec.md`
 

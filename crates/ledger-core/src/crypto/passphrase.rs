@@ -5,13 +5,13 @@
 use crate::error::{LedgerError, Result};
 
 /// Minimum passphrase length in characters.
-const MIN_PASSPHRASE_LENGTH: usize = 12;
+const MIN_PASSPHRASE_LENGTH: usize = 8;
 
 /// Validate passphrase meets minimum security requirements.
 ///
 /// # Requirements
 ///
-/// - At least 12 characters long
+/// - At least 8 characters long
 /// - Not empty or only whitespace
 ///
 /// # Arguments
@@ -68,7 +68,7 @@ mod tests {
         assert!(result
             .unwrap_err()
             .to_string()
-            .contains("at least 12 characters"));
+            .contains("at least 8 characters"));
     }
 
     #[test]
@@ -80,9 +80,9 @@ mod tests {
 
     #[test]
     fn test_passphrase_exactly_min_length() {
-        // Exactly 12 characters should pass
-        let exactly_12 = "123456789012";
-        assert_eq!(exactly_12.len(), 12);
-        assert!(validate_passphrase(exactly_12).is_ok());
+        // Exactly 8 characters should pass
+        let exactly_8 = "12345678";
+        assert_eq!(exactly_8.len(), 8);
+        assert!(validate_passphrase(exactly_8).is_ok());
     }
 }

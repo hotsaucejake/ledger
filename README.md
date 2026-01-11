@@ -5,7 +5,7 @@
 [![CI](https://github.com/hotsaucejake/ledger/actions/workflows/ci.yml/badge.svg)](https://github.com/hotsaucejake/ledger/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-MIT%2FApache--2.0-blue.svg)](LICENSE)
 
-> **Status**: Milestone 1 (Encrypted Storage) — Core functionality in progress
+> **Status**: Milestone 2 (UX Polish) — Core UX implemented, verification in progress
 
 ## Overview
 
@@ -19,7 +19,7 @@ Ledger combines strong encryption at rest, structured queryable data, user-defin
 - **Structure without rigidity**: Free-form writing, structured metrics, or hybrid
 - **Future-proof**: Versioned schemas, explicit migrations, documented format
 
-## Current Status: Milestone 1 (In Progress)
+## Current Status: Phase 0.1 (Journal Workflow)
 
 The encrypted storage and CLI flows are now functional for Phase 0.1 journaling:
 
@@ -33,21 +33,25 @@ The encrypted storage and CLI flows are now functional for Phase 0.1 journaling:
 
 ```bash
 ledger init                  # Initialize encrypted ledger
+ledger init --advanced       # Advanced init wizard (editor, timezone, cache, keyfile)
 ledger add <type>            # Add entry
 ledger add journal --body "" # Add inline entry
 ledger list [type]           # List entries
 ledger list --json           # List entries as JSON
 ledger list --last 7d        # List recent entries
 ledger list --format plain   # Plain list output
+ledger list --history        # Include superseded revisions
 ledger search <query>        # Full-text search
 ledger search --type journal # Filter by entry type
 ledger search --json         # Search as JSON
 ledger search --format plain # Plain search output
+ledger search --history      # Include superseded revisions
 ledger show <id>             # Show entry by ID
 ledger show <id> --json      # Show entry as JSON
-ledger export                # Export data
+ledger export                # Export data (portable, you own your data)
 ledger check                 # Integrity check
 ledger backup <dest>         # Backup ledger
+ledger lock                  # Clear passphrase cache
 ledger completions bash      # Generate shell completions
 ```
 
@@ -56,6 +60,7 @@ Environment variables:
 ```bash
 LEDGER_PATH=/path/to/ledger.ledger
 LEDGER_PASSPHRASE="your passphrase"
+LEDGER_CONFIG=/path/to/config.toml
 ```
 
 ## Building
@@ -77,8 +82,18 @@ cargo install --path crates/ledger-cli
 
 ## Passphrase Requirements
 
-- Minimum length: **12 characters**
+- Minimum length: **8 characters**
 - Must not be empty or whitespace-only
+
+## Config Overview
+
+Ledger writes a config at `~/.config/ledger/config.toml` by default. It includes:
+
+- Ledger path (`[ledger].path`)
+- Security tier selection (`[security].tier`)
+- Passphrase cache TTL (`[security].passphrase_cache_ttl_seconds`)
+- Keychain/keyfile settings
+- Optional UI defaults (`[ui].editor`, `[ui].timezone`)
 
 ## Development Roadmap
 
@@ -91,11 +106,13 @@ cargo install --path crates/ledger-cli
 
 Exit criteria: Can create, search, and export encrypted journal entries.
 
-### Phase 0.2 — Structured Schemas
+### Phase 0.2 — Structured Schemas, Templates, Compositions
 
 - User-defined entry types
 - Schema creation with guardrails
 - Compositions (semantic grouping)
+- Templates stored in the ledger (reusable defaults)
+- Enum fields (single/multi-select)
 
 ### Phase 0.3 — Query & Analysis
 
@@ -133,6 +150,7 @@ ledger/
 - [RFC-005](docs/RFC/RFC-005.md) — Implementation plan
 - [RFC-006](docs/RFC/RFC-006.md) — Compositions
 - [Format Spec](docs/design/format-spec.md) — File format specification
+- [Templates Spec](docs/design/templates.md) — Template storage and behavior
 
 ## For Developers
 

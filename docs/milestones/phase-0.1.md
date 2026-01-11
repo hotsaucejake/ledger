@@ -7,7 +7,7 @@
 
 ## Scope Statement
 
-Phase 0.1 delivers the **smallest useful encrypted journal**. It proves the core experience works before adding structured schemas, compositions, or advanced queries.
+Phase 0.1 delivers the **smallest useful encrypted journal**. It proves the core experience works before adding structured schemas, templates, compositions, or advanced queries.
 
 If Phase 0.1 fails, we learn cheaply. If it succeeds, we have a solid foundation.
 
@@ -60,11 +60,12 @@ Per format-spec.md §7:
 - `data` (JSON with `body` field)
 - `tags` (array, normalized per §7.5)
 - `device_id` (UUID v7)
+- `supersedes` (optional UUID for revisions)
 
 **Not implemented:**
-- `supersedes` (revision support deferred)
 - `deleted_at` (soft delete deferred)
 - Multi-entry type CLI (Phase 0.2)
+- Templates (Phase 0.2)
 
 ### CLI Commands
 
@@ -85,6 +86,10 @@ Per format-spec.md §7:
 | `ledger export --json` | Export all entries as JSON |
 | `ledger export --jsonl` | Export as JSONL |
 | `ledger backup <dest>` | Backup ledger file |
+| `ledger check` | Integrity check |
+| `ledger edit <id>` | Create a revision |
+| `ledger doctor` | Onboarding diagnostics |
+| `ledger lock` | Clear session cache |
 
 ### Full-Text Search
 
@@ -95,13 +100,13 @@ Per format-spec.md §7:
 ### Security
 
 - Passphrase prompted at each operation
-- No passphrase caching in Phase 0.1
-- Age encryption with scrypt KDF
+- Optional in-memory session cache (off by default)
+- Age encryption with Argon2id KDF
 - In-memory SQLite (no plaintext temp files)
 - Atomic writes with backup
 
 **Passphrase requirements:**
-- Minimum length: 12 characters
+- Minimum length: 8 characters
 - Must not be empty or whitespace-only
 
 ---
@@ -114,17 +119,24 @@ These are **not bugs** in Phase 0.1. They are intentionally deferred.
 |---------|-------------|
 | Custom entry types | Phase 0.2 |
 | Schema creation (`ledger types create`) | Phase 0.2 |
+| Templates | Phase 0.2 |
 | Compositions | Phase 0.2 |
-| Entry revisions (`supersedes`) | Phase 0.2 |
+| Enum fields | Phase 0.2 |
 | Soft delete | v1.0 |
 | Advanced queries | Phase 0.3 |
 | Field-aware filtering | Phase 0.3 |
-| Passphrase caching | Future |
 | Import from other tools | v1.0 |
 | Multi-device sync | Future |
 | Alternative backends | Future |
 
 ---
+
+## Implemented Ahead of Scope
+
+The following items landed early during the M2 UX milestone:
+
+- Entry revisions (`supersedes`)
+- Optional passphrase session cache
 
 ## Exit Criteria
 
@@ -145,7 +157,7 @@ Phase 0.1 is complete when:
 ## Technical Milestones (from RFC-005)
 
 > **Note**: These are the original technical milestones from RFC-005. The implementation
-> plans in `docs/milestones/` (M1-PLAN.md, M2-PLAN.md, etc.) represent focused work
+> plans in `docs/milestones/` (M1-PLAN.md, archived M2-PLAN, etc.) represent focused work
 > packages that may span or reorder these technical milestones based on implementation
 > learnings. See each M*-PLAN.md file for current scope and status.
 
@@ -161,9 +173,9 @@ Phase 0.1 is complete when:
 
 **Current Implementation Plan Mapping:**
 - `M1-PLAN.md` — Encrypted Storage (covers technical M1)
-- `M2-PLAN.md` — UX Polish & First-Run Experience (cross-cutting UX improvements)
-- `M3-PLAN.md` — TBD
-- `M4-PLAN.md` — TBD
+- `archive/M2-PLAN.md` — UX Polish & First-Run Experience (cross-cutting UX improvements)
+- `M3-PLAN.md` — Query & Export Stability
+- `M4-PLAN.md` — Revisions, History, and Trust
 
 ---
 

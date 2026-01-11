@@ -30,6 +30,7 @@ This spec exists to support Ledger’s long-term goal:
 | Ledger         | A logical container for encrypted user data           |
 | Entry          | A single immutable record created by the user         |
 | Entry Type     | A schema defining fields for entries                  |
+| Template       | Reusable defaults for creating entries                |
 | Composition    | A semantic grouping of entries                        |
 | Backend        | A concrete storage implementation (e.g. Age + SQLite) |
 | Format Version | Version of this specification                         |
@@ -50,6 +51,7 @@ Conceptually:
 Ledger
 ├── Metadata
 ├── Entry Types (schemas)
+├── Templates (v0.2+)
 ├── Entries
 ├── Compositions (v0.2+)
 └── Indexes (rebuildable)
@@ -70,6 +72,7 @@ The following are guaranteed stable across Ledger versions:
 * Entry timestamps
 * Entry schema version references
 * Composition identity (UUID)
+* Template identity (UUID)
 * JSON field semantics
 * Exported JSON / JSONL formats
 
@@ -173,7 +176,7 @@ An Entry is immutable and contains:
 * `schema_version` (integer, references Entry Type `version`)
 * `created_at` (UTC, ISO-8601, millisecond precision)
 * `data` (JSON object)
-* `tags` (array of normalized strings — see §7.5)
+* `tags` (array of normalized strings — see §7.6)
 * `device_id` (UUID, identifies creating device)
 * `supersedes` (optional UUID, for revisions)
 * `deleted_at` (reserved for v1.0, soft delete timestamp; **MUST be null in v0.x**)
@@ -200,15 +203,61 @@ An Entry Type defines:
 * `created_at` (UTC, ISO-8601, millisecond precision)
 * `device_id` (UUID, identifies creating device)
 * `fields` (JSON array of field definitions)
-* `defaults` (JSON object, default values)
+* `default_composition_id` (optional UUID, references Composition)
 * `validation` (JSON object, validation rules)
-* `default_composition` (optional UUID, references Composition)
 
 Entry Types are versioned and append-only. Each version is a separate record; the `name` + `version` pair is unique.
 
 ---
 
-### 7.3 Composition (Introduced v0.2)
+### 7.3 Template (Introduced v0.2)
+
+A Template provides reusable defaults for creating entries:
+
+* `id` (UUID v7 preferred, v4 acceptable)
+* `name` (unique string identifier)
+* `entry_type_id` (UUID, references Entry Type `id`)
+* `version` (integer, incremented on template changes)
+* `created_at` (UTC, ISO-8601, millisecond precision)
+* `device_id` (UUID, identifies creating device)
+* `defaults` (JSON object, default values)
+* `default_tags` (JSON array)
+* `default_compositions` (JSON array of UUIDs)
+* `prompt_overrides` (JSON object)
+
+Templates are associated to entry types via a mapping table:
+
+* `entry_type_templates` (entry_type_id, template_id, active)
+
+Best-practice constraints:
+
+* One active mapping per entry type.
+* New defaults deactivate prior mappings.
+
+Example SQL (SQLite):
+
+```sql
+CREATE TABLE entry_type_templates (
+    entry_type_id TEXT NOT NULL,
+    template_id TEXT NOT NULL,
+    active INTEGER NOT NULL DEFAULT 1,
+
+    PRIMARY KEY (entry_type_id, template_id),
+    FOREIGN KEY (entry_type_id) REFERENCES entry_types(id),
+    FOREIGN KEY (template_id) REFERENCES templates(id)
+);
+
+CREATE UNIQUE INDEX entry_type_templates_active
+ON entry_type_templates (entry_type_id)
+WHERE active = 1;
+```
+
+Templates are versioned and append-only. Each version is a separate record; the `name` + `version`
+pair is unique.
+
+---
+
+### 7.4 Composition (Introduced v0.2)
 
 A Composition is a semantic grouping:
 
@@ -224,7 +273,7 @@ Compositions do not define schema and do not own entries. Deleting a composition
 
 ---
 
-### 7.4 Metadata Table
+### 7.5 Metadata Table
 
 The metadata table stores ledger-level configuration:
 
@@ -243,7 +292,7 @@ Additional keys may be added in future versions. Unknown keys must be preserved 
 
 ---
 
-### 7.5 Tag Normalization
+### 7.6 Tag Normalization
 
 Tags are normalized before storage:
 
@@ -282,10 +331,13 @@ All text data is UTF-8. No other encodings are supported.
 |-------|--------------|
 | Entry `data` JSON | 1 MB |
 | Entry Type `fields` JSON | 64 KB |
+| Template `defaults` JSON | 64 KB |
 | Single tag | 128 bytes |
 | Tags per entry | 100 |
 | Composition `metadata` JSON | 64 KB |
 | Entry Type `name` | 64 bytes |
+| Template `name` | 256 bytes |
+| Template `description` | 4 KB |
 | Composition `name` | 256 bytes |
 | Composition `description` | 4 KB |
 
@@ -297,6 +349,7 @@ A valid empty ledger contains:
 * Metadata table with required keys (format_version, device_id, created_at)
 * Zero entries
 * Zero entry types
+* Zero templates
 * Zero compositions
 
 Empty ledgers are valid and must be handled correctly.
@@ -327,6 +380,7 @@ Ledger implementations must support exporting:
 
 * Entries
 * Entry Types
+* Templates (v0.2+)
 * Compositions (v0.2+)
 
 In:
@@ -335,6 +389,32 @@ In:
 * JSONL
 
 Exported data must be sufficient to reconstruct a Ledger.
+
+### 11.1 Export Schema (Best Practice)
+
+JSON export should include a top-level object with:
+
+```json
+{
+  "format_version": "0.2",
+  "exported_at": "2026-01-07T14:32:11Z",
+  "entry_types": [],
+  "templates": [],
+  "compositions": [],
+  "entries": []
+}
+```
+
+JSONL export should emit one record per line with a `kind` field:
+
+```json
+{ "kind": "entry_type", "record": { ... } }
+{ "kind": "template", "record": { ... } }
+{ "kind": "composition", "record": { ... } }
+{ "kind": "entry", "record": { ... } }
+```
+
+This keeps exports forward-compatible and easy to stream.
 
 ---
 

@@ -225,18 +225,22 @@ We proceed in **layers**, validating core assumptions before adding complexity.
 * Encrypted storage (simplest viable backend)
 * Journal entries only (text + timestamp + tags)
 * Append-only, UUID-based entries
-* `add`, `list`, `search` commands
+* `add`, `list`, `search`, `show`, `export`, `backup`, `check` commands
 * Prove the encryption + CLI UX works
 
 **Goal:** Validate build story and core experience before committing to complex dependencies.
 
-### Phase 0.2 — Structured Schemas & Compositions
+Note: Some UX and revision features landed early via M2; see `docs/milestones/archive/M2-PLAN.md`.
+
+### Phase 0.2 — Structured Schemas, Templates, & Compositions
 
 * User-defined entry types
 * Schema validation
 * Prompted field input
 * Compositions (semantic entry grouping)
 * Entry type default compositions
+* Templates stored in the ledger (reusable defaults)
+* Enum fields (single/multi-select)
 
 ### Phase 0.3 — Query & Analysis
 
@@ -292,6 +296,7 @@ The RFCs that follow define the system in detail:
    * Schema definition
    * Validation
    * Evolution with guardrails
+   * Templates + enum fields
 
 3. **RFC-003: CLI Command Taxonomy**
    * Command structure
@@ -312,3 +317,9 @@ The RFCs that follow define the system in detail:
    * Semantic entry grouping
    * Many-to-many entry relationships
    * Entry type default compositions
+
+---
+
+## Archived Work
+
+Completed milestones live under `docs/milestones/archive/` to keep active work visible.
