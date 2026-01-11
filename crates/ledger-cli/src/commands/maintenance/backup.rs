@@ -57,13 +57,8 @@ fn backup_atomic_copy(source: &Path, destination: &Path) -> anyhow::Result<u64> 
         )
     })?;
 
-    if let Err(err) = std::fs::rename(&temp_path, destination) {
-        let _ = std::fs::remove_file(destination);
-        std::fs::rename(&temp_path, destination).map_err(|e| {
-            let _ = std::fs::remove_file(&temp_path);
-            anyhow::anyhow!("Atomic rename failed ({}): {}", err, e)
-        })?;
-    }
+    ledger_core::fs::rename_with_fallback(&temp_path, destination)
+        .map_err(|e| anyhow::anyhow!("Atomic rename failed: {}", e))?;
 
     Ok(bytes)
 }

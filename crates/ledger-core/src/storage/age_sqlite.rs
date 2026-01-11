@@ -348,14 +348,8 @@ impl AgeSqliteStorage {
         file.sync_all()
             .map_err(|e| LedgerError::Storage(format!("Temp file sync failed: {}", e)))?;
 
-        if let Err(err) = fs::rename(&temp_path, path) {
-            // Best-effort replace on platforms where rename fails if target exists.
-            let _ = fs::remove_file(path);
-            fs::rename(&temp_path, path).map_err(|e| {
-                let _ = fs::remove_file(&temp_path);
-                LedgerError::Storage(format!("Atomic rename failed ({}): {}", err, e))
-            })?;
-        }
+        crate::fs::rename_with_fallback(&temp_path, path)
+            .map_err(|e| LedgerError::Storage(format!("Atomic rename failed: {}", e)))?;
 
         Ok(())
     }
@@ -452,7 +446,7 @@ impl StorageEngine for AgeSqliteStorage {
 
     fn open(path: &Path, passphrase: &str) -> Result<Self> {
         if !path.exists() {
-            return Err(LedgerError::Storage("Ledger file not found".to_string()));
+            return Err(LedgerError::LedgerNotFound);
         }
 
         validate_passphrase(passphrase)?;

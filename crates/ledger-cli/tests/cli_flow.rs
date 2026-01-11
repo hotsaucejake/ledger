@@ -425,7 +425,7 @@ fn test_cli_missing_config_message() {
     assert!(!list.status.success());
     let stderr = String::from_utf8_lossy(&list.stderr);
     let expected_path = config_home.join("ledger").join("config.toml");
-    assert!(stderr.contains("No ledger found at"));
+    assert!(stderr.contains("Config file not found"));
     assert!(stderr.contains(&*expected_path.to_string_lossy()));
     assert!(stderr.contains("ledger init"));
 }
@@ -449,7 +449,7 @@ fn test_cli_missing_config_message_uses_env_override() {
 
     assert!(!list.status.success());
     let stderr = String::from_utf8_lossy(&list.stderr);
-    assert!(stderr.contains("No ledger found at"));
+    assert!(stderr.contains("Config file not found"));
     assert!(stderr.contains(&*override_path.to_string_lossy()));
     assert!(stderr.contains("ledger init"));
 }
@@ -469,7 +469,7 @@ fn test_cli_missing_ledger_message() {
 
     assert!(!list.status.success());
     let stderr = String::from_utf8_lossy(&list.stderr);
-    assert!(stderr.contains("No ledger found at"));
+    assert!(stderr.contains("Ledger file not found"));
     assert!(stderr.contains(&*missing.to_string_lossy()));
 }
 

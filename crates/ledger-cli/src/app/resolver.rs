@@ -34,7 +34,7 @@ pub fn resolve_ledger_path(cli: &Cli) -> anyhow::Result<String> {
 /// Error message when ledger file is missing.
 pub fn missing_ledger_message(path: &Path) -> String {
     format!(
-        "No ledger found at {}\n\nRun:\n  ledger init\n\nOr specify a ledger path:\n  LEDGER_PATH=/path/to/my.ledger ledger init",
+        "Ledger file not found: {}\n\nRun:\n  ledger init\n\nOr specify a different path:\n  ledger --ledger /path/to/my.ledger init",
         path.display()
     )
 }
@@ -42,7 +42,7 @@ pub fn missing_ledger_message(path: &Path) -> String {
 /// Error message when config file is missing.
 pub fn missing_config_message(config_path: &Path) -> String {
     format!(
-        "No ledger found at {}\n\nRun:\n  ledger init\n\nOr specify a ledger path:\n  LEDGER_PATH=/path/to/my.ledger ledger init",
+        "Config file not found: {}\n\nRun:\n  ledger init\n\nOr set LEDGER_CONFIG to specify a different config location.",
         config_path.display()
     )
 }

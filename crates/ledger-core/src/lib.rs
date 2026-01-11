@@ -24,6 +24,7 @@
 
 pub mod crypto;
 pub mod error;
+pub mod fs;
 pub mod storage;
 
 pub use error::{LedgerError, Result};

@@ -290,9 +290,9 @@ fn decrypt_keyfile_with_retry(
 }
 
 fn is_incorrect_passphrase_error(err: &ledger_core::error::LedgerError) -> bool {
-    err.to_string().contains("Incorrect passphrase")
+    matches!(err, ledger_core::error::LedgerError::IncorrectPassphrase)
 }
 
 fn is_missing_ledger_error(err: &ledger_core::error::LedgerError) -> bool {
-    matches!(err, ledger_core::error::LedgerError::Storage(message) if message == "Ledger file not found")
+    matches!(err, ledger_core::error::LedgerError::LedgerNotFound)
 }
