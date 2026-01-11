@@ -9,6 +9,7 @@ use ledger_core::StorageEngine;
 use crate::cache::{cache_clear, cache_config, cache_get, cache_store, ledger_hash, CacheConfig};
 use crate::cli::Cli;
 use crate::config::SecurityTier;
+use crate::errors::CliError;
 use crate::helpers::prompt_passphrase;
 use crate::security::{
     key_bytes_to_passphrase, keychain_clear, keychain_get, keychain_set, read_keyfile_encrypted,
@@ -162,8 +163,7 @@ fn open_with_passphrase_and_cache(
             Ok((storage, passphrase.to_string()))
         }
         Err(err) if is_incorrect_passphrase_error(&err) => {
-            eprintln!("Error: Incorrect passphrase.");
-            std::process::exit(5);
+            CliError::auth_failed("Incorrect passphrase.").exit()
         }
         Err(err) if is_missing_ledger_error(&err) => {
             Err(anyhow::anyhow!(missing_ledger_message(path)))
@@ -224,12 +224,11 @@ fn open_with_retry_prompt(
             Err(err) if is_incorrect_passphrase_error(&err) => {
                 let remaining = max_attempts.saturating_sub(attempts);
                 if remaining == 0 {
-                    eprintln!("Error: Too many failed passphrase attempts.");
-                    eprintln!(
-                        "Hint: If you forgot your passphrase, the ledger cannot be recovered."
-                    );
-                    eprintln!("      Backups use the same passphrase.");
-                    std::process::exit(5);
+                    CliError::auth_failed_with_hint(
+                        "Too many failed passphrase attempts.",
+                        "Hint: If you forgot your passphrase, the ledger cannot be recovered.\n      Backups use the same passphrase.",
+                    )
+                    .exit()
                 }
                 eprintln!(
                     "Incorrect passphrase. {} attempt{} remaining.",
@@ -255,8 +254,7 @@ fn decrypt_keyfile_with_retry(
         return match read_keyfile_encrypted(path, passphrase) {
             Ok(bytes) => Ok(bytes),
             Err(err) if err.to_string().contains("Incorrect passphrase") => {
-                eprintln!("Error: Incorrect passphrase.");
-                std::process::exit(5);
+                CliError::auth_failed("Incorrect passphrase.").exit()
             }
             Err(err) => Err(err),
         };
@@ -273,12 +271,11 @@ fn decrypt_keyfile_with_retry(
             Err(err) if err.to_string().contains("Incorrect passphrase") => {
                 let remaining = max_attempts.saturating_sub(attempts);
                 if remaining == 0 {
-                    eprintln!("Error: Too many failed passphrase attempts.");
-                    eprintln!(
-                        "Hint: If you forgot your passphrase, the ledger cannot be recovered."
-                    );
-                    eprintln!("      Backups use the same passphrase.");
-                    std::process::exit(5);
+                    CliError::auth_failed_with_hint(
+                        "Too many failed passphrase attempts.",
+                        "Hint: If you forgot your passphrase, the ledger cannot be recovered.\n      Backups use the same passphrase.",
+                    )
+                    .exit()
                 }
                 eprintln!(
                     "Incorrect passphrase. {} attempt{} remaining.",

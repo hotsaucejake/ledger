@@ -8,6 +8,8 @@ mod cache;
 mod cli;
 mod commands;
 mod config;
+mod constants;
+mod errors;
 mod helpers;
 mod output;
 mod security;

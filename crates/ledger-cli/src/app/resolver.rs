@@ -4,6 +4,7 @@ use std::path::{Path, PathBuf};
 
 use crate::cli::Cli;
 use crate::config::{default_config_path, read_config};
+use crate::errors::CliError;
 
 /// Resolve the config file path, checking LEDGER_CONFIG env var first.
 pub fn resolve_config_path() -> anyhow::Result<PathBuf> {
@@ -46,9 +47,10 @@ pub fn missing_config_message(config_path: &Path) -> String {
     )
 }
 
-/// Exit with error code 3 for not found errors.
+/// Exit with error code for not found errors.
+///
+/// This function prints the error and exits immediately.
+/// Use `CliError::not_found` if you need to return an error instead.
 pub fn exit_not_found_with_hint(message: &str, hint: &str) -> ! {
-    eprintln!("Error: {}", message);
-    eprintln!("{}", hint);
-    std::process::exit(3);
+    CliError::not_found(message, hint).exit()
 }
