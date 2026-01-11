@@ -1,3 +1,4 @@
+
 # Milestone 5: Compositions & Templates (Phase 0.2)
 
 **Status**: Draft  
@@ -69,6 +70,22 @@
 - [ ] `ledger attach/detach`
 - [ ] `ledger add` uses template-first prompting
 - [ ] `--template`, `--compose`, `--no-compose` behavior aligned with specs
+
+### 3.1 Composition Semantics (Theme Associations)
+
+Compositions are thematic groupings that can span entry types:
+
+- **Entry type association**: link an entry type to a composition so new entries of that type
+  are automatically included (via default composition or template defaults).
+- **Per-entry association**: attach any individual entry to one or more compositions.
+
+Example:
+
+- Entry type: `research-paper` (notes, drafts)
+- Composition: `research-paper` (thematic container)
+- A single `bookmark` entry can be attached to the same composition without changing its type.
+
+This keeps tagging light while allowing deeper thematic grouping across multiple entry types.
 
 ### 4. UX & Prompting Rules
 
