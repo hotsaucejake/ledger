@@ -5,6 +5,7 @@ use std::process::Command;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use dialoguer::Password;
+use ledger_core::crypto::validate_passphrase;
 
 /// Prompt for passphrase, or read from LEDGER_PASSPHRASE env var.
 pub fn prompt_passphrase(interactive: bool) -> anyhow::Result<String> {
@@ -28,14 +29,23 @@ pub fn prompt_passphrase(interactive: bool) -> anyhow::Result<String> {
 pub fn prompt_init_passphrase() -> anyhow::Result<String> {
     if let Ok(value) = std::env::var("LEDGER_PASSPHRASE") {
         if !value.trim().is_empty() {
+            validate_passphrase(&value)
+                .map_err(|e| anyhow::anyhow!("Passphrase does not meet requirements: {}", e))?;
             return Ok(value);
         }
     }
-    Password::new()
-        .with_prompt("Enter passphrase")
-        .with_confirmation("Confirm passphrase", "Passphrases do not match")
-        .interact()
-        .map_err(|e| anyhow::anyhow!("Failed to read passphrase: {}", e))
+    loop {
+        let passphrase = Password::new()
+            .with_prompt("Enter passphrase")
+            .with_confirmation("Confirm passphrase", "Passphrases do not match")
+            .interact()
+            .map_err(|e| anyhow::anyhow!("Failed to read passphrase: {}", e))?;
+        if let Err(err) = validate_passphrase(&passphrase) {
+            eprintln!("Passphrase does not meet requirements: {}", err);
+            continue;
+        }
+        return Ok(passphrase);
+    }
 }
 
 /// Read entry body from --body flag, stdin, or $EDITOR.
