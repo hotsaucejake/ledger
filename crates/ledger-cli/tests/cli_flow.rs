@@ -1,3 +1,4 @@
+use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::ptr::NonNull;
@@ -105,6 +106,34 @@ fn open_sqlite_from_file(path: &PathBuf, passphrase: &str) -> Connection {
 
 fn create_ledger_with_passphrase(path: &Path, passphrase: &str) {
     let _ = AgeSqliteStorage::create(path, passphrase).expect("create ledger");
+}
+
+fn cache_socket_path(data_home: &Path) -> PathBuf {
+    data_home
+        .parent()
+        .unwrap()
+        .join("runtime")
+        .join("ledger")
+        .join("cache.sock")
+}
+
+fn ledger_hash(path: &Path) -> String {
+    let canonical = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
+    let hash = blake3::hash(canonical.to_string_lossy().as_bytes());
+    hash.to_hex()[..16].to_string()
+}
+
+fn cache_store_raw(socket_path: &Path, key: &str, passphrase: &str) {
+    use std::net::Shutdown;
+    use std::os::unix::net::UnixStream;
+    let mut stream = UnixStream::connect(socket_path).expect("connect cache");
+    let encoded = STANDARD.encode(passphrase.as_bytes());
+    let payload = format!("STORE {} {}\n", key, encoded);
+    stream.write_all(payload.as_bytes()).expect("write cache");
+    stream.shutdown(Shutdown::Write).expect("shutdown write");
+    let mut response = String::new();
+    stream.read_to_string(&mut response).expect("read cache");
+    assert!(response.contains("OK"));
 }
 
 #[test]
@@ -981,4 +1010,69 @@ fn test_cli_cache_expires_after_ttl() {
     let list_expired = list_expired.output().expect("run list expired");
 
     assert!(!list_expired.status.success());
+}
+
+#[test]
+fn test_cli_cache_disabled_when_ttl_zero() {
+    let ledger_path = temp_ledger_path("ledger_cli_cache_disabled");
+    let passphrase = "test-passphrase-secure-123";
+    let (config_home, data_home) = temp_xdg_dirs("ledger_cli_cache_disabled");
+
+    create_ledger_with_passphrase(&ledger_path, passphrase);
+    write_config_file(&config_home, &ledger_path, "passphrase", "none", None, 0);
+
+    let mut list = Command::new(bin());
+    list.arg("list")
+        .arg("--ledger")
+        .arg(&ledger_path)
+        .env("LEDGER_PASSPHRASE", passphrase);
+    apply_xdg_env(&mut list, &config_home, &data_home);
+    let list = list.output().expect("run list");
+    assert!(list.status.success());
+
+    let mut list_no_env = Command::new(bin());
+    list_no_env.arg("list").arg("--ledger").arg(&ledger_path);
+    apply_xdg_env(&mut list_no_env, &config_home, &data_home);
+    let list_no_env = list_no_env.output().expect("run list no env");
+
+    assert!(!list_no_env.status.success());
+}
+
+#[test]
+fn test_cli_cache_clears_on_incorrect_passphrase() {
+    let ledger_path = temp_ledger_path("ledger_cli_cache_bad");
+    let passphrase = "test-passphrase-secure-123";
+    let (config_home, data_home) = temp_xdg_dirs("ledger_cli_cache_bad");
+
+    create_ledger_with_passphrase(&ledger_path, passphrase);
+    write_config_file(&config_home, &ledger_path, "passphrase", "none", None, 300);
+
+    let mut list = Command::new(bin());
+    list.arg("list")
+        .arg("--ledger")
+        .arg(&ledger_path)
+        .env("LEDGER_PASSPHRASE", passphrase);
+    apply_xdg_env(&mut list, &config_home, &data_home);
+    let list = list.output().expect("run list");
+    assert!(list.status.success());
+
+    let key = ledger_hash(&ledger_path);
+    let socket_path = cache_socket_path(&data_home);
+    cache_store_raw(&socket_path, &key, "wrong-passphrase");
+
+    let mut list_cached = Command::new(bin());
+    list_cached.arg("list").arg("--ledger").arg(&ledger_path);
+    apply_xdg_env(&mut list_cached, &config_home, &data_home);
+    let list_cached = list_cached.output().expect("run list cached");
+    assert!(!list_cached.status.success());
+
+    let mut list_after = Command::new(bin());
+    list_after
+        .arg("list")
+        .arg("--ledger")
+        .arg(&ledger_path)
+        .env("LEDGER_PASSPHRASE", passphrase);
+    apply_xdg_env(&mut list_after, &config_home, &data_home);
+    let list_after = list_after.output().expect("run list after");
+    assert!(list_after.status.success());
 }
