@@ -5,6 +5,10 @@ use std::collections::HashMap;
 use ledger_core::storage::{AgeSqliteStorage, Entry, StorageEngine};
 use uuid::Uuid;
 
+use crate::helpers::OutputFormat;
+
+const TABLE_SUMMARY_MAX: usize = 80;
+
 /// Build a map of entry type ID -> name for display.
 pub fn entry_type_name_map(storage: &AgeSqliteStorage) -> anyhow::Result<HashMap<Uuid, String>> {
     let types = storage.list_entry_types()?;
@@ -90,5 +94,53 @@ pub fn print_entry(storage: &AgeSqliteStorage, entry: &Entry, quiet: bool) -> an
         println!();
     }
     println!("{}", body);
+    Ok(())
+}
+
+/// Print a list of entries in the requested format.
+///
+/// This consolidates the common output logic used by list and search commands.
+/// Supports JSON output and table/plain text formats.
+pub fn print_entry_list(
+    storage: &AgeSqliteStorage,
+    entries: &[Entry],
+    json: bool,
+    format: Option<OutputFormat>,
+    quiet: bool,
+) -> anyhow::Result<()> {
+    if json {
+        if format.is_some() {
+            return Err(anyhow::anyhow!("--format cannot be used with --json"));
+        }
+        let name_map = entry_type_name_map(storage)?;
+        let output = serde_json::to_string_pretty(&entries_json(entries, &name_map))?;
+        println!("{}", output);
+        return Ok(());
+    }
+
+    if entries.is_empty() {
+        if !quiet {
+            println!("No entries found.");
+        }
+        return Ok(());
+    }
+
+    match format.unwrap_or(OutputFormat::Table) {
+        OutputFormat::Table => {
+            if !quiet {
+                println!("ID | CREATED_AT | SUMMARY");
+            }
+            for entry in entries {
+                let summary = entry_table_summary(entry, TABLE_SUMMARY_MAX);
+                println!("{} | {} | {}", entry.id, entry.created_at, summary);
+            }
+        }
+        OutputFormat::Plain => {
+            for entry in entries {
+                let summary = entry_summary(entry);
+                println!("{} {} {}", entry.id, entry.created_at, summary);
+            }
+        }
+    }
     Ok(())
 }

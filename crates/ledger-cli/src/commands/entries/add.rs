@@ -1,21 +1,12 @@
 use ledger_core::storage::{NewEntry, StorageEngine};
 
-use crate::app::{exit_not_found_with_hint, AppContext};
+use crate::app::AppContext;
 use crate::cli::AddArgs;
-use crate::helpers::{ensure_journal_type_name, parse_datetime, read_entry_body};
+use crate::helpers::{parse_datetime, read_entry_body, require_entry_type};
 
 pub fn handle_add(ctx: &AppContext, args: &AddArgs) -> anyhow::Result<()> {
-    ensure_journal_type_name(&args.entry_type)?;
-
     let (mut storage, passphrase) = ctx.open_storage(args.no_input)?;
-    let entry_type_record = storage
-        .get_entry_type(&args.entry_type)?
-        .unwrap_or_else(|| {
-            exit_not_found_with_hint(
-                &format!("Entry type \"{}\" not found", args.entry_type),
-                "Hint: Only \"journal\" is available in Phase 0.1.",
-            )
-        });
+    let entry_type_record = require_entry_type(&storage, &args.entry_type)?;
 
     let editor_override = ctx.editor()?;
     let body = read_entry_body(args.no_input, args.body.clone(), editor_override, None)?;

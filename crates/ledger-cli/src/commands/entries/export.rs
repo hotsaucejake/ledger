@@ -1,8 +1,8 @@
 use ledger_core::storage::{EntryFilter, StorageEngine};
 
-use crate::app::{exit_not_found_with_hint, AppContext};
+use crate::app::AppContext;
 use crate::cli::ExportArgs;
-use crate::helpers::{ensure_journal_type_name, parse_datetime};
+use crate::helpers::{parse_datetime, require_entry_type};
 use crate::output::{entries_json, entry_type_name_map};
 
 pub fn handle_export(ctx: &AppContext, args: &ExportArgs) -> anyhow::Result<()> {
@@ -10,13 +10,7 @@ pub fn handle_export(ctx: &AppContext, args: &ExportArgs) -> anyhow::Result<()> 
 
     let mut filter = EntryFilter::new();
     if let Some(ref t) = args.entry_type {
-        ensure_journal_type_name(t)?;
-        let entry_type_record = storage.get_entry_type(t)?.unwrap_or_else(|| {
-            exit_not_found_with_hint(
-                &format!("Entry type \"{}\" not found", t),
-                "Hint: Only \"journal\" is available in Phase 0.1.",
-            )
-        });
+        let entry_type_record = require_entry_type(&storage, t)?;
         filter = filter.entry_type(entry_type_record.id);
     }
     if let Some(ref s) = args.since {
