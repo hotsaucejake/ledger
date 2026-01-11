@@ -8,11 +8,16 @@ use chrono::{DateTime, Duration, NaiveDate, Utc};
 use dialoguer::Password;
 
 /// Prompt for passphrase, or read from LEDGER_PASSPHRASE env var.
-pub fn prompt_passphrase() -> anyhow::Result<String> {
+pub fn prompt_passphrase(interactive: bool) -> anyhow::Result<String> {
     if let Ok(value) = std::env::var("LEDGER_PASSPHRASE") {
         if !value.trim().is_empty() {
             return Ok(value);
         }
+    }
+    if !interactive {
+        return Err(anyhow::anyhow!(
+            "No passphrase provided and no TTY available. Set LEDGER_PASSPHRASE."
+        ));
     }
     Password::new()
         .with_prompt("Passphrase")
@@ -106,7 +111,7 @@ pub fn parse_output_format(value: Option<&str>) -> anyhow::Result<Option<OutputF
 pub fn ensure_journal_type_name(entry_type: &str) -> anyhow::Result<()> {
     if entry_type != "journal" {
         return Err(anyhow::anyhow!(
-            "Entry type \"{}\" is not supported in the CLI yet. Only \"journal\" is available.",
+            "Entry type \"{}\" is not supported in the CLI yet. Only \"journal\" is available.\nHint: Use `ledger add journal` or `ledger list journal` for Phase 0.1.",
             entry_type
         ));
     }
@@ -114,7 +119,12 @@ pub fn ensure_journal_type_name(entry_type: &str) -> anyhow::Result<()> {
 }
 
 /// Read entry body from --body flag, stdin, or $EDITOR.
-pub fn read_entry_body(no_input: bool, body: Option<String>) -> anyhow::Result<String> {
+pub fn read_entry_body(
+    no_input: bool,
+    body: Option<String>,
+    editor_override: Option<&str>,
+    initial_body: Option<&str>,
+) -> anyhow::Result<String> {
     if let Some(value) = body {
         if value.trim().is_empty() {
             return Err(anyhow::anyhow!("--body cannot be empty"));
@@ -129,6 +139,12 @@ pub fn read_entry_body(no_input: bool, body: Option<String>) -> anyhow::Result<S
             .map_err(|e| anyhow::anyhow!("Failed to read stdin: {}", e))?;
         let trimmed = buffer.trim_end().to_string();
         if trimmed.is_empty() {
+            if no_input {
+                return Err(anyhow::anyhow!("No input provided on stdin"));
+            }
+            if editor_override.is_some() {
+                return read_body_from_editor(editor_override, initial_body);
+            }
             return Err(anyhow::anyhow!("No input provided on stdin"));
         }
         return Ok(trimmed);
@@ -138,13 +154,20 @@ pub fn read_entry_body(no_input: bool, body: Option<String>) -> anyhow::Result<S
         return Err(anyhow::anyhow!("--no-input requires content from stdin"));
     }
 
-    read_body_from_editor()
+    read_body_from_editor(editor_override, initial_body)
 }
 
 /// Open $EDITOR to compose entry body.
-fn read_body_from_editor() -> anyhow::Result<String> {
-    let editor = std::env::var("EDITOR")
-        .map_err(|_| anyhow::anyhow!("$EDITOR is not set; use --body or pipe content via stdin"))?;
+fn read_body_from_editor(
+    editor_override: Option<&str>,
+    initial_body: Option<&str>,
+) -> anyhow::Result<String> {
+    let editor = editor_override
+        .map(|value| value.to_string())
+        .or_else(|| std::env::var("EDITOR").ok())
+        .ok_or_else(|| {
+            anyhow::anyhow!("$EDITOR is not set; use --body or pipe content via stdin")
+        })?;
 
     let nanos = SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -153,7 +176,9 @@ fn read_body_from_editor() -> anyhow::Result<String> {
     let filename = format!("ledger_entry_{}_{}.md", std::process::id(), nanos);
     let path = std::env::temp_dir().join(filename);
 
-    std::fs::write(&path, "").map_err(|e| anyhow::anyhow!("Failed to create temp file: {}", e))?;
+    let initial = initial_body.unwrap_or("");
+    std::fs::write(&path, initial)
+        .map_err(|e| anyhow::anyhow!("Failed to create temp file: {}", e))?;
 
     let status = Command::new(editor)
         .arg(&path)

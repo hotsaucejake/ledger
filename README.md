@@ -33,21 +33,25 @@ The encrypted storage and CLI flows are now functional for Phase 0.1 journaling:
 
 ```bash
 ledger init                  # Initialize encrypted ledger
+ledger init --advanced       # Advanced init wizard (editor, timezone, cache, keyfile)
 ledger add <type>            # Add entry
 ledger add journal --body "" # Add inline entry
 ledger list [type]           # List entries
 ledger list --json           # List entries as JSON
 ledger list --last 7d        # List recent entries
 ledger list --format plain   # Plain list output
+ledger list --history        # Include superseded revisions
 ledger search <query>        # Full-text search
 ledger search --type journal # Filter by entry type
 ledger search --json         # Search as JSON
 ledger search --format plain # Plain search output
+ledger search --history      # Include superseded revisions
 ledger show <id>             # Show entry by ID
 ledger show <id> --json      # Show entry as JSON
-ledger export                # Export data
+ledger export                # Export data (portable, you own your data)
 ledger check                 # Integrity check
 ledger backup <dest>         # Backup ledger
+ledger lock                  # Clear passphrase cache
 ledger completions bash      # Generate shell completions
 ```
 
@@ -56,6 +60,7 @@ Environment variables:
 ```bash
 LEDGER_PATH=/path/to/ledger.ledger
 LEDGER_PASSPHRASE="your passphrase"
+LEDGER_CONFIG=/path/to/config.toml
 ```
 
 ## Building
@@ -79,6 +84,16 @@ cargo install --path crates/ledger-cli
 
 - Minimum length: **12 characters**
 - Must not be empty or whitespace-only
+
+## Config Overview
+
+Ledger writes a config at `~/.config/ledger/config.toml` by default. It includes:
+
+- Ledger path (`[ledger].path`)
+- Security tier selection (`[security].tier`)
+- Passphrase cache TTL (`[security].passphrase_cache_ttl_seconds`)
+- Keychain/keyfile settings
+- Optional UI defaults (`[ui].editor`, `[ui].timezone`)
 
 ## Development Roadmap
 

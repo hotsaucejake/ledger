@@ -14,6 +14,12 @@ On Linux, config lives at:
 
 This file is optional. If missing, Ledger will prompt to initialize a ledger.
 
+You can override the config location with:
+
+```
+LEDGER_CONFIG=/path/to/config.toml
+```
+
 ## 2. File Format (TOML)
 
 ```toml
@@ -30,6 +36,10 @@ enabled = false
 [keyfile]
 mode = "none"
 path = "/home/user/.config/ledger/ledger.key"
+
+[ui]
+timezone = "auto"
+editor = "vim"
 ```
 
 ## 3. Fields
@@ -63,6 +73,13 @@ path = "/home/user/.config/ledger/ledger.key"
 - `path` (string, optional):
   - Used for `passphrase_keyfile` and `device_keyfile`.
 
+### 3.5 [ui] (optional)
+
+- `timezone` (string, optional):
+  - `auto` (default) uses system timezone detection.
+- `editor` (string, optional):
+  - Default editor for interactive entry input.
+
 ## 4. Security Modes
 
 1. **passphrase**  
@@ -90,4 +107,4 @@ If your device is compromised, your ledger can be decrypted without a passphrase
 - `passphrase_cache_ttl_seconds = 0`
 - `keychain.enabled = false`
 - `keyfile.mode = "none"`
-
+- `ui.timezone = "auto"`

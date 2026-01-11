@@ -112,6 +112,9 @@ pub trait StorageEngine: Send + Sync {
     /// Returns entries ordered by relevance, then recency.
     fn search_entries(&self, query: &str) -> Result<Vec<Entry>>;
 
+    /// List entry IDs that have been superseded by newer revisions.
+    fn superseded_entry_ids(&self) -> Result<std::collections::HashSet<Uuid>>;
+
     // --- Entry type operations ---
 
     /// Get an entry type by name.

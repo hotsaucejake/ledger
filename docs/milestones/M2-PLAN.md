@@ -18,82 +18,82 @@ A first-time user should:
 
 ## Exit Criteria
 
-- [ ] `ledger init` wizard with safe defaults
-- [ ] XDG config support with default ledger path (`~/.local/share/ledger/ledger.ledger`)
-- [ ] Friendly "no ledger found" message for all commands
-- [ ] `ledger` with no args shows quickstart
-- [ ] Passphrase retries (3 attempts, then exit with code 5)
-- [ ] Optional session cache (in-memory) with TTL (see `docs/design/session-cache.md`)
-- [ ] Security tiers selectable during init (all 4 tiers)
-- [ ] OS keychain support (Linux: libsecret, macOS: Keychain)
-- [ ] `ledger add journal` is smooth (editor + stdin + `--body`)
-- [ ] `ledger list` defaults to recent entries (N)
-- [ ] `ledger show` is readable by default
-- [ ] `ledger check` prints clear diagnostics
-- [ ] `ledger backup` confirms output path
-- [ ] `ledger export` help text clarifies portability
+- [x] `ledger init` wizard with safe defaults
+- [x] XDG config support with default ledger path (`~/.local/share/ledger/ledger.ledger`)
+- [x] Friendly "no ledger found" message for all commands
+- [x] `ledger` with no args shows quickstart
+- [x] Passphrase retries (3 attempts, then exit with code 5)
+- [x] Optional session cache (in-memory) with TTL (see `docs/design/session-cache.md`)
+- [x] Security tiers selectable during init (all 4 tiers)
+- [x] OS keychain support (Linux: libsecret, macOS: Keychain)
+- [x] `ledger add journal` is smooth (editor + stdin + `--body`)
+- [x] `ledger list` defaults to recent entries (N)
+- [x] `ledger show` is readable by default
+- [x] `ledger check` prints clear diagnostics
+- [x] `ledger backup` confirms output path
+- [x] `ledger export` help text clarifies portability
 
 ## Implementation Steps
 
 ### 1. First-Run UX
 
-- [ ] Init wizard (default flow + `--advanced`)
-- [ ] Config file generated at `~/.config/ledger/config.toml`
-- [ ] Config file format matches `docs/design/config-spec.md`
-- [ ] XDG config path detection + creation
-- [ ] Default ledger path: `~/.local/share/ledger/ledger.ledger`
-- [ ] Clear error when ledger is missing (see RFC-003 §15)
-- [ ] Quickstart output for `ledger` (no args)
-- [ ] Passphrase retry loop (3 attempts, show remaining)
-- [ ] After 3 failures: exit with code 5 (encryption/auth error per RFC-003 §14.2)
-- [ ] Wizard copy matches `docs/design/init-wizard.md`
-- [ ] `--quiet` flag suppresses wizard output (for scripting)
-- [ ] `--no-input` errors if required values missing
+- [x] Init wizard (default flow + `--advanced`)
+- [x] Config file generated at `~/.config/ledger/config.toml`
+- [x] Config file format matches `docs/design/config-spec.md`
+- [x] XDG config path detection + creation
+- [x] Default ledger path: `~/.local/share/ledger/ledger.ledger`
+- [x] Clear error when ledger is missing (see RFC-003 §15)
+- [x] Quickstart output for `ledger` (no args)
+- [x] Passphrase retry loop (3 attempts, show remaining)
+- [x] After 3 failures: exit with code 5 (encryption/auth error per RFC-003 §14.2)
+- [x] Wizard copy matches `docs/design/init-wizard.md`
+- [x] `--quiet` flag suppresses wizard output (for scripting)
+- [x] `--no-input` errors if required values missing
 
 ### 2. Daily UX Consistency
 
-- [ ] Standard prompt rules (flags win, defaults in brackets)
-- [ ] Output rules (stable human output, stable JSON output)
-- [ ] Exit code consistency
-- [ ] Clear errors with next steps
-- [ ] Session cache for passphrase (in-memory only, TTL)
+- [x] Standard prompt rules (flags win, defaults in brackets)
+- [x] Output rules (stable human output, stable JSON output)
+- [x] Exit code consistency
+- [x] Clear errors with next steps
+- [x] Session cache for passphrase (in-memory only, TTL)
 
 ### 3. Trust & Safety UX
 
-- [ ] `ledger check` actionable output (see RFC-003 §13.2)
-- [ ] `ledger backup` safe defaults (confirm destination, atomic copy)
-- [ ] Export wording emphasizes data ownership
-- [ ] Security tier selection + explicit warnings (per `init-wizard.md` §2)
+- [x] `ledger check` actionable output (see RFC-003 §13.2)
+- [x] `ledger backup` safe defaults (confirm destination, atomic copy)
+- [x] Export wording emphasizes data ownership
+- [x] Security tier selection + explicit warnings (per `init-wizard.md` §2)
 
 ### 4. Security Tier Implementation
 
-- [ ] Tier 1: Passphrase only (default)
-- [ ] Tier 2: Passphrase + OS keychain
-  - [ ] Linux: libsecret/Secret Service D-Bus API
-  - [ ] macOS: Security.framework / Keychain Services
-- [ ] Tier 3: Passphrase + encrypted keyfile
-  - [ ] Key generation (random 32 bytes)
-  - [ ] Keyfile encrypted with passphrase-derived key
-  - [ ] Default path: `~/.config/ledger/ledger.key`
-- [ ] Tier 4: Device keyfile only (unencrypted)
-  - [ ] Display explicit security warning (per `config-spec.md` §5)
-  - [ ] Require confirmation before proceeding
+- [x] Tier 1: Passphrase only (default)
+- [x] Tier 2: Passphrase + OS keychain
+  - [x] Linux: libsecret/Secret Service D-Bus API
+  - [x] macOS: Security.framework / Keychain Services
+- [x] Tier 3: Passphrase + encrypted keyfile
+  - [x] Key generation (random 32 bytes)
+  - [x] Keyfile encrypted with passphrase-derived key
+  - [x] Default path: `~/.config/ledger/ledger.key`
+- [x] Tier 4: Device keyfile only (unencrypted)
+  - [x] Display explicit security warning (per `config-spec.md` §5)
+  - [x] Require confirmation before proceeding
 
 ### 5. Session Cache Implementation
 
 See `docs/design/session-cache.md` for design details.
 
-- [ ] In-memory passphrase cache with TTL
-- [ ] Cache mechanism: Unix domain socket (Linux/macOS)
-- [ ] Automatic cache expiry
-- [ ] `ledger lock` command to clear cache immediately
-- [ ] Cache disabled by default (`passphrase_cache_ttl_seconds = 0`)
+- [x] In-memory passphrase cache with TTL
+- [x] Cache mechanism: Unix domain socket (Linux/macOS)
+- [x] Automatic cache expiry
+- [x] `ledger lock` command to clear cache immediately
+- [x] Cache disabled by default (`passphrase_cache_ttl_seconds = 0`)
 
 ### 6. Optional (Still M2-safe)
 
-- [ ] `ledger edit <id>` implemented as revision (supersedes)
-- [ ] Basic templates for journal (no schema expansion)
-- [ ] `ledger doctor` onboarding diagnostics (add to RFC-003 if implemented)
+- [x] `ledger edit <id>` implemented as revision (supersedes)
+- [ ] Basic templates for journal (defer to Phase 0.2; avoid new data model entities)
+- [x] `ledger doctor` onboarding diagnostics (add to RFC-003 if implemented)
 
 ## Non-Goals
 
@@ -106,43 +106,43 @@ See `docs/design/session-cache.md` for design details.
 
 ### Unit Tests
 
-- [ ] Config parsing matches `config-spec.md` format
-- [ ] Passphrase validation (min 12 chars, not whitespace-only)
-- [ ] Security tier configuration validation
-- [ ] XDG path resolution on Linux
+- [x] Config parsing matches `config-spec.md` format
+- [x] Passphrase validation (min 12 chars, not whitespace-only)
+- [x] Security tier configuration validation
+- [x] XDG path resolution on Linux
 
 ### Integration Tests
 
-- [ ] Init wizard creates valid config at `~/.config/ledger/config.toml`
-- [ ] Init wizard creates ledger at `~/.local/share/ledger/ledger.ledger`
-- [ ] Init wizard respects `--no-input` flag (errors on missing required values)
-- [ ] Init wizard respects `--quiet` flag
-- [ ] Prompts skipped when flags provided
-- [ ] Passphrase retry shows attempts remaining
-- [ ] After 3 failed attempts, exits with code 5
-- [ ] `ledger` (no args) shows quickstart help
-- [ ] "No ledger found" message is clear and actionable
-- [ ] Config file matches `config-spec.md` format exactly
+- [x] Init wizard creates valid config at `~/.config/ledger/config.toml`
+- [x] Init wizard creates ledger at `~/.local/share/ledger/ledger.ledger`
+- [x] Init wizard respects `--no-input` flag (errors on missing required values)
+- [x] Init wizard respects `--quiet` flag
+- [x] Prompts skipped when flags provided
+- [x] Passphrase retry shows attempts remaining
+- [x] After 3 failed attempts, exits with code 5
+- [x] `ledger` (no args) shows quickstart help
+- [x] "No ledger found" message is clear and actionable
+- [x] Config file matches `config-spec.md` format exactly
 
 ### Security Tier Tests
 
-- [ ] Tier 1: Passphrase round-trip works
-- [ ] Tier 2: Keychain storage/retrieval works (platform-specific)
-- [ ] Tier 3: Encrypted keyfile round-trip works
-- [ ] Tier 4: Unencrypted keyfile works + warning displayed
-- [ ] Wrong passphrase fails gracefully (code 5)
+- [x] Tier 1: Passphrase round-trip works
+- [x] Tier 2: Keychain storage/retrieval works (platform-specific)
+- [x] Tier 3: Encrypted keyfile round-trip works
+- [x] Tier 4: Unencrypted keyfile works + warning displayed
+- [x] Wrong passphrase fails gracefully (code 5)
 
 ### Session Cache Tests
 
-- [ ] Cache stores passphrase after successful unlock
-- [ ] Cache expires after TTL
-- [ ] `ledger lock` clears cache immediately
-- [ ] Cache disabled when TTL = 0
+- [x] Cache stores passphrase after successful unlock
+- [x] Cache expires after TTL
+- [x] `ledger lock` clears cache immediately
+- [x] Cache disabled when TTL = 0
 
 ### Error UX Tests
 
-- [ ] Error messages include actionable next steps (per RFC-003 §15)
-- [ ] Exit codes match RFC-003 §14.2
+- [x] Error messages include actionable next steps (per RFC-003 §15)
+- [x] Exit codes match RFC-003 §14.2
 
 ## Definition of Done
 
