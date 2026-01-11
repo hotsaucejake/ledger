@@ -13,7 +13,7 @@ use clap::{CommandFactory, Parser, Subcommand};
 use clap_complete::{generate, Shell};
 use dialoguer::{Confirm, Input, Select};
 use std::io::IsTerminal;
-use std::time::Duration;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use chrono::Utc;
 use ledger_core::storage::{AgeSqliteStorage, EntryFilter, NewEntry, NewEntryType, StorageEngine};
@@ -191,7 +191,7 @@ enum Commands {
         json: bool,
     },
 
-    /// Export entries
+    /// Export entries (portable JSON/JSONL)
     Export {
         /// Filter by entry type
         #[arg(value_name = "TYPE")]
@@ -484,7 +484,7 @@ fn main() -> anyhow::Result<()> {
                 }
                 other => {
                     return Err(anyhow::anyhow!(
-                        "Unsupported export format: {} (use json or jsonl)",
+                        "Unsupported export format: {} (use json or jsonl for portable exports)",
                         other
                     ));
                 }
@@ -516,14 +516,16 @@ fn main() -> anyhow::Result<()> {
             if !source_path.exists() {
                 return Err(anyhow::anyhow!(missing_ledger_message(source_path)));
             }
-            let count = std::fs::copy(&source, destination).map_err(|e| {
-                anyhow::anyhow!(
-                    "Failed to copy ledger from {} to {}: {}",
-                    source,
-                    destination,
-                    e
-                )
-            })?;
+            if std::io::stdin().is_terminal() && !cli.quiet {
+                let proceed = Confirm::new()
+                    .with_prompt(format!("Back up ledger to {}?", destination))
+                    .default(true)
+                    .interact()?;
+                if !proceed {
+                    return Err(anyhow::anyhow!("Backup cancelled"));
+                }
+            }
+            let count = backup_atomic_copy(source_path, std::path::Path::new(&destination))?;
             if count == 0 {
                 return Err(anyhow::anyhow!("Backup failed: zero bytes written"));
             }
@@ -1118,6 +1120,47 @@ fn resolve_config_path() -> anyhow::Result<std::path::PathBuf> {
 
 fn device_keyfile_warning() -> &'static str {
     "WARNING: You selected device_keyfile. This stores an unencrypted key on disk.\nIf your device is compromised, your ledger can be decrypted without a passphrase.\nContinue?"
+}
+
+fn backup_atomic_copy(
+    source: &std::path::Path,
+    destination: &std::path::Path,
+) -> anyhow::Result<u64> {
+    let parent = destination
+        .parent()
+        .ok_or_else(|| anyhow::anyhow!("Backup destination has no parent directory"))?;
+    std::fs::create_dir_all(parent).map_err(|e| {
+        anyhow::anyhow!(
+            "Failed to create backup directory {}: {}",
+            parent.display(),
+            e
+        )
+    })?;
+
+    let nanos = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_err(|e| anyhow::anyhow!("System time error: {}", e))?
+        .as_nanos();
+    let temp_path = parent.join(format!(".ledger-backup-{}.tmp", nanos));
+
+    let bytes = std::fs::copy(source, &temp_path).map_err(|e| {
+        anyhow::anyhow!(
+            "Failed to copy ledger from {} to {}: {}",
+            source.display(),
+            destination.display(),
+            e
+        )
+    })?;
+
+    if let Err(err) = std::fs::rename(&temp_path, destination) {
+        let _ = std::fs::remove_file(destination);
+        std::fs::rename(&temp_path, destination).map_err(|e| {
+            let _ = std::fs::remove_file(&temp_path);
+            anyhow::anyhow!("Atomic rename failed ({}): {}", err, e)
+        })?;
+    }
+
+    Ok(bytes)
 }
 
 #[cfg(test)]

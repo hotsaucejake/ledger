@@ -30,8 +30,8 @@ A first-time user should:
 - [x] `ledger list` defaults to recent entries (N)
 - [ ] `ledger show` is readable by default
 - [ ] `ledger check` prints clear diagnostics
-- [ ] `ledger backup` confirms output path
-- [ ] `ledger export` help text clarifies portability
+- [x] `ledger backup` confirms output path
+- [x] `ledger export` help text clarifies portability
 
 ## Implementation Steps
 
