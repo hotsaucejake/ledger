@@ -4,7 +4,10 @@ use std::ptr::NonNull;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use ledger_core::storage::encryption::decrypt;
-use ledger_core::storage::{AgeSqliteStorage, EntryFilter, NewEntry, NewEntryType, StorageEngine};
+use ledger_core::storage::{
+    AgeSqliteStorage, CompositionFilter, EntryFilter, NewComposition, NewEntry, NewEntryType,
+    NewTemplate, StorageEngine,
+};
 use rusqlite::serialize::OwnedData;
 use rusqlite::{Connection, DatabaseName};
 use uuid::Uuid;
@@ -750,6 +753,956 @@ fn test_last_modified_updates_on_entry_type_create() {
 
     assert!(after >= before);
     assert!(after > before);
+
+    storage.close(passphrase).expect("close should succeed");
+}
+
+// ============================================================================
+// Composition Tests
+// ============================================================================
+
+#[test]
+fn test_create_and_get_composition() {
+    let temp = TempFile::new("ledger_composition_basic");
+    let passphrase = "test-passphrase-secure-123";
+
+    AgeSqliteStorage::create(&temp.path, passphrase).expect("create should succeed");
+    let mut storage = AgeSqliteStorage::open(&temp.path, passphrase).expect("open should succeed");
+
+    let device_id = Uuid::new_v4();
+    let new_comp = NewComposition::new("project_x", device_id)
+        .with_description("My research project")
+        .with_metadata(serde_json::json!({"priority": "high"}));
+
+    let comp_id = storage
+        .create_composition(&new_comp)
+        .expect("create_composition should succeed");
+    assert!(!comp_id.is_nil());
+
+    let retrieved = storage
+        .get_composition("project_x")
+        .expect("get_composition should succeed");
+    assert!(retrieved.is_some());
+
+    let comp = retrieved.unwrap();
+    assert_eq!(comp.name, "project_x");
+    assert_eq!(comp.description, Some("My research project".to_string()));
+    assert_eq!(comp.id, comp_id);
+    assert_eq!(comp.metadata, Some(serde_json::json!({"priority": "high"})));
+
+    storage.close(passphrase).expect("close should succeed");
+}
+
+#[test]
+fn test_get_composition_by_id() {
+    let temp = TempFile::new("ledger_composition_by_id");
+    let passphrase = "test-passphrase-secure-123";
+
+    AgeSqliteStorage::create(&temp.path, passphrase).expect("create should succeed");
+    let mut storage = AgeSqliteStorage::open(&temp.path, passphrase).expect("open should succeed");
+
+    let device_id = Uuid::new_v4();
+    let comp_id = storage
+        .create_composition(&NewComposition::new("test_comp", device_id))
+        .expect("create should succeed");
+
+    let by_id = storage
+        .get_composition_by_id(&comp_id)
+        .expect("get_by_id should succeed");
+    assert!(by_id.is_some());
+    assert_eq!(by_id.unwrap().name, "test_comp");
+
+    let nonexistent = storage
+        .get_composition_by_id(&Uuid::new_v4())
+        .expect("get_by_id should succeed");
+    assert!(nonexistent.is_none());
+
+    storage.close(passphrase).expect("close should succeed");
+}
+
+#[test]
+fn test_composition_duplicate_name_fails() {
+    let temp = TempFile::new("ledger_composition_dup");
+    let passphrase = "test-passphrase-secure-123";
+
+    AgeSqliteStorage::create(&temp.path, passphrase).expect("create should succeed");
+    let mut storage = AgeSqliteStorage::open(&temp.path, passphrase).expect("open should succeed");
+
+    let device_id = Uuid::new_v4();
+    storage
+        .create_composition(&NewComposition::new("project_x", device_id))
+        .expect("first create should succeed");
+
+    let result = storage.create_composition(&NewComposition::new("project_x", device_id));
+    assert!(result.is_err());
+
+    storage.close(passphrase).expect("close should succeed");
+}
+
+#[test]
+fn test_list_compositions() {
+    let temp = TempFile::new("ledger_composition_list");
+    let passphrase = "test-passphrase-secure-123";
+
+    AgeSqliteStorage::create(&temp.path, passphrase).expect("create should succeed");
+    let mut storage = AgeSqliteStorage::open(&temp.path, passphrase).expect("open should succeed");
+
+    let device_id = Uuid::new_v4();
+    storage
+        .create_composition(&NewComposition::new("alpha", device_id))
+        .expect("create alpha should succeed");
+    storage
+        .create_composition(&NewComposition::new("beta", device_id))
+        .expect("create beta should succeed");
+    storage
+        .create_composition(&NewComposition::new("gamma", device_id))
+        .expect("create gamma should succeed");
+
+    let all = storage
+        .list_compositions(&CompositionFilter::new())
+        .expect("list should succeed");
+    assert_eq!(all.len(), 3);
+
+    // Should be ordered by name
+    assert_eq!(all[0].name, "alpha");
+    assert_eq!(all[1].name, "beta");
+    assert_eq!(all[2].name, "gamma");
+
+    // Test limit
+    let limited = storage
+        .list_compositions(&CompositionFilter::new().limit(2))
+        .expect("list should succeed");
+    assert_eq!(limited.len(), 2);
+
+    storage.close(passphrase).expect("close should succeed");
+}
+
+#[test]
+fn test_rename_composition() {
+    let temp = TempFile::new("ledger_composition_rename");
+    let passphrase = "test-passphrase-secure-123";
+
+    AgeSqliteStorage::create(&temp.path, passphrase).expect("create should succeed");
+    let mut storage = AgeSqliteStorage::open(&temp.path, passphrase).expect("open should succeed");
+
+    let device_id = Uuid::new_v4();
+    let comp_id = storage
+        .create_composition(&NewComposition::new("old_name", device_id))
+        .expect("create should succeed");
+
+    storage
+        .rename_composition(&comp_id, "new_name")
+        .expect("rename should succeed");
+
+    let old = storage
+        .get_composition("old_name")
+        .expect("get old should succeed");
+    assert!(old.is_none());
+
+    let new = storage
+        .get_composition("new_name")
+        .expect("get new should succeed");
+    assert!(new.is_some());
+    assert_eq!(new.unwrap().id, comp_id);
+
+    storage.close(passphrase).expect("close should succeed");
+}
+
+#[test]
+fn test_rename_composition_to_existing_fails() {
+    let temp = TempFile::new("ledger_composition_rename_dup");
+    let passphrase = "test-passphrase-secure-123";
+
+    AgeSqliteStorage::create(&temp.path, passphrase).expect("create should succeed");
+    let mut storage = AgeSqliteStorage::open(&temp.path, passphrase).expect("open should succeed");
+
+    let device_id = Uuid::new_v4();
+    let comp_id = storage
+        .create_composition(&NewComposition::new("first", device_id))
+        .expect("create first should succeed");
+    storage
+        .create_composition(&NewComposition::new("second", device_id))
+        .expect("create second should succeed");
+
+    let result = storage.rename_composition(&comp_id, "second");
+    assert!(result.is_err());
+
+    storage.close(passphrase).expect("close should succeed");
+}
+
+#[test]
+fn test_delete_composition() {
+    let temp = TempFile::new("ledger_composition_delete");
+    let passphrase = "test-passphrase-secure-123";
+
+    AgeSqliteStorage::create(&temp.path, passphrase).expect("create should succeed");
+    let mut storage = AgeSqliteStorage::open(&temp.path, passphrase).expect("open should succeed");
+
+    let device_id = Uuid::new_v4();
+    let comp_id = storage
+        .create_composition(&NewComposition::new("to_delete", device_id))
+        .expect("create should succeed");
+
+    storage
+        .delete_composition(&comp_id)
+        .expect("delete should succeed");
+
+    let deleted = storage
+        .get_composition("to_delete")
+        .expect("get should succeed");
+    assert!(deleted.is_none());
+
+    storage.close(passphrase).expect("close should succeed");
+}
+
+#[test]
+fn test_attach_detach_entry_to_composition() {
+    let temp = TempFile::new("ledger_composition_attach");
+    let passphrase = "test-passphrase-secure-123";
+
+    AgeSqliteStorage::create(&temp.path, passphrase).expect("create should succeed");
+    let mut storage = AgeSqliteStorage::open(&temp.path, passphrase).expect("open should succeed");
+
+    let device_id = Uuid::new_v4();
+    let entry_type_id = create_basic_entry_type(&mut storage);
+    let comp_id = storage
+        .create_composition(&NewComposition::new("project", device_id))
+        .expect("create comp should succeed");
+
+    let entry_id = storage
+        .insert_entry(&NewEntry::new(
+            entry_type_id,
+            1,
+            serde_json::json!({"body": "test"}),
+            device_id,
+        ))
+        .expect("insert entry should succeed");
+
+    // Attach entry to composition
+    storage
+        .attach_entry_to_composition(&entry_id, &comp_id)
+        .expect("attach should succeed");
+
+    // Verify entry is in composition
+    let comps = storage
+        .get_entry_compositions(&entry_id)
+        .expect("get entry comps should succeed");
+    assert_eq!(comps.len(), 1);
+    assert_eq!(comps[0].id, comp_id);
+
+    // Verify composition has entry
+    let entries = storage
+        .get_composition_entries(&comp_id)
+        .expect("get comp entries should succeed");
+    assert_eq!(entries.len(), 1);
+    assert_eq!(entries[0].entry_id, entry_id);
+
+    // Detach entry
+    storage
+        .detach_entry_from_composition(&entry_id, &comp_id)
+        .expect("detach should succeed");
+
+    let comps_after = storage
+        .get_entry_compositions(&entry_id)
+        .expect("get entry comps should succeed");
+    assert!(comps_after.is_empty());
+
+    storage.close(passphrase).expect("close should succeed");
+}
+
+#[test]
+fn test_attach_idempotent() {
+    let temp = TempFile::new("ledger_composition_attach_idem");
+    let passphrase = "test-passphrase-secure-123";
+
+    AgeSqliteStorage::create(&temp.path, passphrase).expect("create should succeed");
+    let mut storage = AgeSqliteStorage::open(&temp.path, passphrase).expect("open should succeed");
+
+    let device_id = Uuid::new_v4();
+    let entry_type_id = create_basic_entry_type(&mut storage);
+    let comp_id = storage
+        .create_composition(&NewComposition::new("project", device_id))
+        .expect("create comp should succeed");
+
+    let entry_id = storage
+        .insert_entry(&NewEntry::new(
+            entry_type_id,
+            1,
+            serde_json::json!({"body": "test"}),
+            device_id,
+        ))
+        .expect("insert entry should succeed");
+
+    // Attach twice should be idempotent
+    storage
+        .attach_entry_to_composition(&entry_id, &comp_id)
+        .expect("first attach should succeed");
+    storage
+        .attach_entry_to_composition(&entry_id, &comp_id)
+        .expect("second attach should succeed");
+
+    let comps = storage
+        .get_entry_compositions(&entry_id)
+        .expect("get entry comps should succeed");
+    assert_eq!(comps.len(), 1);
+
+    storage.close(passphrase).expect("close should succeed");
+}
+
+#[test]
+fn test_delete_composition_removes_associations() {
+    let temp = TempFile::new("ledger_composition_delete_assoc");
+    let passphrase = "test-passphrase-secure-123";
+
+    AgeSqliteStorage::create(&temp.path, passphrase).expect("create should succeed");
+    let mut storage = AgeSqliteStorage::open(&temp.path, passphrase).expect("open should succeed");
+
+    let device_id = Uuid::new_v4();
+    let entry_type_id = create_basic_entry_type(&mut storage);
+    let comp_id = storage
+        .create_composition(&NewComposition::new("project", device_id))
+        .expect("create comp should succeed");
+
+    let entry_id = storage
+        .insert_entry(&NewEntry::new(
+            entry_type_id,
+            1,
+            serde_json::json!({"body": "test"}),
+            device_id,
+        ))
+        .expect("insert entry should succeed");
+
+    storage
+        .attach_entry_to_composition(&entry_id, &comp_id)
+        .expect("attach should succeed");
+
+    // Delete composition
+    storage
+        .delete_composition(&comp_id)
+        .expect("delete should succeed");
+
+    // Entry should still exist
+    let entry = storage
+        .get_entry(&entry_id)
+        .expect("get entry should succeed");
+    assert!(entry.is_some());
+
+    // But have no compositions
+    let comps = storage
+        .get_entry_compositions(&entry_id)
+        .expect("get entry comps should succeed");
+    assert!(comps.is_empty());
+
+    storage.close(passphrase).expect("close should succeed");
+}
+
+#[test]
+fn test_list_entries_with_composition_filter() {
+    let temp = TempFile::new("ledger_entries_comp_filter");
+    let passphrase = "test-passphrase-secure-123";
+
+    AgeSqliteStorage::create(&temp.path, passphrase).expect("create should succeed");
+    let mut storage = AgeSqliteStorage::open(&temp.path, passphrase).expect("open should succeed");
+
+    let device_id = Uuid::new_v4();
+    let entry_type_id = create_basic_entry_type(&mut storage);
+    let comp_id = storage
+        .create_composition(&NewComposition::new("project", device_id))
+        .expect("create comp should succeed");
+
+    // Create two entries, attach only one to composition
+    let entry1_id = storage
+        .insert_entry(&NewEntry::new(
+            entry_type_id,
+            1,
+            serde_json::json!({"body": "in project"}),
+            device_id,
+        ))
+        .expect("insert should succeed");
+
+    let _entry2_id = storage
+        .insert_entry(&NewEntry::new(
+            entry_type_id,
+            1,
+            serde_json::json!({"body": "not in project"}),
+            device_id,
+        ))
+        .expect("insert should succeed");
+
+    storage
+        .attach_entry_to_composition(&entry1_id, &comp_id)
+        .expect("attach should succeed");
+
+    // List all entries
+    let all = storage
+        .list_entries(&EntryFilter::new())
+        .expect("list should succeed");
+    assert_eq!(all.len(), 2);
+
+    // List only entries in composition
+    let filtered = storage
+        .list_entries(&EntryFilter::new().composition(comp_id))
+        .expect("list should succeed");
+    assert_eq!(filtered.len(), 1);
+    assert_eq!(filtered[0].id, entry1_id);
+
+    storage.close(passphrase).expect("close should succeed");
+}
+
+// ============================================================================
+// Template Tests
+// ============================================================================
+
+#[test]
+fn test_create_and_get_template() {
+    let temp = TempFile::new("ledger_template_basic");
+    let passphrase = "test-passphrase-secure-123";
+
+    AgeSqliteStorage::create(&temp.path, passphrase).expect("create should succeed");
+    let mut storage = AgeSqliteStorage::open(&temp.path, passphrase).expect("open should succeed");
+
+    let entry_type_id = create_basic_entry_type(&mut storage);
+    let device_id = Uuid::new_v4();
+    let template_json = serde_json::json!({
+        "defaults": {"body": "Default text"},
+        "default_tags": ["daily"]
+    });
+
+    let new_template = NewTemplate::new(
+        "daily_journal",
+        entry_type_id,
+        template_json.clone(),
+        device_id,
+    )
+    .with_description("Template for daily journal entries");
+
+    let template_id = storage
+        .create_template(&new_template)
+        .expect("create_template should succeed");
+    assert!(!template_id.is_nil());
+
+    let retrieved = storage
+        .get_template("daily_journal")
+        .expect("get_template should succeed");
+    assert!(retrieved.is_some());
+
+    let template = retrieved.unwrap();
+    assert_eq!(template.name, "daily_journal");
+    assert_eq!(template.entry_type_id, entry_type_id);
+    assert_eq!(template.version, 1);
+    assert_eq!(
+        template.description,
+        Some("Template for daily journal entries".to_string())
+    );
+    assert_eq!(template.template_json, template_json);
+
+    storage.close(passphrase).expect("close should succeed");
+}
+
+#[test]
+fn test_get_template_by_id() {
+    let temp = TempFile::new("ledger_template_by_id");
+    let passphrase = "test-passphrase-secure-123";
+
+    AgeSqliteStorage::create(&temp.path, passphrase).expect("create should succeed");
+    let mut storage = AgeSqliteStorage::open(&temp.path, passphrase).expect("open should succeed");
+
+    let entry_type_id = create_basic_entry_type(&mut storage);
+    let device_id = Uuid::new_v4();
+    let template_id = storage
+        .create_template(&NewTemplate::new(
+            "test_template",
+            entry_type_id,
+            serde_json::json!({}),
+            device_id,
+        ))
+        .expect("create should succeed");
+
+    let by_id = storage
+        .get_template_by_id(&template_id)
+        .expect("get_by_id should succeed");
+    assert!(by_id.is_some());
+    assert_eq!(by_id.unwrap().name, "test_template");
+
+    let nonexistent = storage
+        .get_template_by_id(&Uuid::new_v4())
+        .expect("get_by_id should succeed");
+    assert!(nonexistent.is_none());
+
+    storage.close(passphrase).expect("close should succeed");
+}
+
+#[test]
+fn test_template_duplicate_name_fails() {
+    let temp = TempFile::new("ledger_template_dup");
+    let passphrase = "test-passphrase-secure-123";
+
+    AgeSqliteStorage::create(&temp.path, passphrase).expect("create should succeed");
+    let mut storage = AgeSqliteStorage::open(&temp.path, passphrase).expect("open should succeed");
+
+    let entry_type_id = create_basic_entry_type(&mut storage);
+    let device_id = Uuid::new_v4();
+
+    storage
+        .create_template(&NewTemplate::new(
+            "my_template",
+            entry_type_id,
+            serde_json::json!({}),
+            device_id,
+        ))
+        .expect("first create should succeed");
+
+    let result = storage.create_template(&NewTemplate::new(
+        "my_template",
+        entry_type_id,
+        serde_json::json!({}),
+        device_id,
+    ));
+    assert!(result.is_err());
+
+    storage.close(passphrase).expect("close should succeed");
+}
+
+#[test]
+fn test_template_invalid_entry_type_fails() {
+    let temp = TempFile::new("ledger_template_invalid_type");
+    let passphrase = "test-passphrase-secure-123";
+
+    AgeSqliteStorage::create(&temp.path, passphrase).expect("create should succeed");
+    let mut storage = AgeSqliteStorage::open(&temp.path, passphrase).expect("open should succeed");
+
+    let device_id = Uuid::new_v4();
+    let fake_type_id = Uuid::new_v4();
+
+    let result = storage.create_template(&NewTemplate::new(
+        "bad_template",
+        fake_type_id,
+        serde_json::json!({}),
+        device_id,
+    ));
+    assert!(result.is_err());
+
+    storage.close(passphrase).expect("close should succeed");
+}
+
+#[test]
+fn test_list_templates() {
+    let temp = TempFile::new("ledger_template_list");
+    let passphrase = "test-passphrase-secure-123";
+
+    AgeSqliteStorage::create(&temp.path, passphrase).expect("create should succeed");
+    let mut storage = AgeSqliteStorage::open(&temp.path, passphrase).expect("open should succeed");
+
+    let entry_type_id = create_basic_entry_type(&mut storage);
+    let device_id = Uuid::new_v4();
+
+    storage
+        .create_template(&NewTemplate::new(
+            "alpha",
+            entry_type_id,
+            serde_json::json!({}),
+            device_id,
+        ))
+        .expect("create alpha should succeed");
+    storage
+        .create_template(&NewTemplate::new(
+            "beta",
+            entry_type_id,
+            serde_json::json!({}),
+            device_id,
+        ))
+        .expect("create beta should succeed");
+
+    let templates = storage.list_templates().expect("list should succeed");
+    assert_eq!(templates.len(), 2);
+
+    let names: Vec<_> = templates.iter().map(|t| t.name.as_str()).collect();
+    assert!(names.contains(&"alpha"));
+    assert!(names.contains(&"beta"));
+
+    storage.close(passphrase).expect("close should succeed");
+}
+
+#[test]
+fn test_update_template_creates_new_version() {
+    let temp = TempFile::new("ledger_template_update");
+    let passphrase = "test-passphrase-secure-123";
+
+    AgeSqliteStorage::create(&temp.path, passphrase).expect("create should succeed");
+    let mut storage = AgeSqliteStorage::open(&temp.path, passphrase).expect("open should succeed");
+
+    let entry_type_id = create_basic_entry_type(&mut storage);
+    let device_id = Uuid::new_v4();
+
+    let template_id = storage
+        .create_template(&NewTemplate::new(
+            "evolving",
+            entry_type_id,
+            serde_json::json!({"defaults": {"body": "v1"}}),
+            device_id,
+        ))
+        .expect("create should succeed");
+
+    let v1 = storage
+        .get_template("evolving")
+        .expect("get should succeed")
+        .unwrap();
+    assert_eq!(v1.version, 1);
+    assert_eq!(v1.template_json["defaults"]["body"], "v1");
+
+    // Update template
+    let new_version = storage
+        .update_template(
+            &template_id,
+            serde_json::json!({"defaults": {"body": "v2"}}),
+        )
+        .expect("update should succeed");
+    assert_eq!(new_version, 2);
+
+    let v2 = storage
+        .get_template("evolving")
+        .expect("get should succeed")
+        .unwrap();
+    assert_eq!(v2.version, 2);
+    assert_eq!(v2.template_json["defaults"]["body"], "v2");
+
+    storage.close(passphrase).expect("close should succeed");
+}
+
+#[test]
+fn test_delete_template() {
+    let temp = TempFile::new("ledger_template_delete");
+    let passphrase = "test-passphrase-secure-123";
+
+    AgeSqliteStorage::create(&temp.path, passphrase).expect("create should succeed");
+    let mut storage = AgeSqliteStorage::open(&temp.path, passphrase).expect("open should succeed");
+
+    let entry_type_id = create_basic_entry_type(&mut storage);
+    let device_id = Uuid::new_v4();
+
+    let template_id = storage
+        .create_template(&NewTemplate::new(
+            "to_delete",
+            entry_type_id,
+            serde_json::json!({}),
+            device_id,
+        ))
+        .expect("create should succeed");
+
+    storage
+        .delete_template(&template_id)
+        .expect("delete should succeed");
+
+    let deleted = storage
+        .get_template("to_delete")
+        .expect("get should succeed");
+    assert!(deleted.is_none());
+
+    storage.close(passphrase).expect("close should succeed");
+}
+
+#[test]
+fn test_set_and_get_default_template() {
+    let temp = TempFile::new("ledger_template_default");
+    let passphrase = "test-passphrase-secure-123";
+
+    AgeSqliteStorage::create(&temp.path, passphrase).expect("create should succeed");
+    let mut storage = AgeSqliteStorage::open(&temp.path, passphrase).expect("open should succeed");
+
+    let entry_type_id = create_basic_entry_type(&mut storage);
+    let device_id = Uuid::new_v4();
+
+    let template_id = storage
+        .create_template(&NewTemplate::new(
+            "default_tmpl",
+            entry_type_id,
+            serde_json::json!({"defaults": {"body": "default body"}}),
+            device_id,
+        ))
+        .expect("create should succeed");
+
+    // No default initially
+    let no_default = storage
+        .get_default_template(&entry_type_id)
+        .expect("get default should succeed");
+    assert!(no_default.is_none());
+
+    // Set default
+    storage
+        .set_default_template(&entry_type_id, &template_id)
+        .expect("set default should succeed");
+
+    let default = storage
+        .get_default_template(&entry_type_id)
+        .expect("get default should succeed");
+    assert!(default.is_some());
+    assert_eq!(default.unwrap().id, template_id);
+
+    storage.close(passphrase).expect("close should succeed");
+}
+
+#[test]
+fn test_set_default_template_replaces_existing() {
+    let temp = TempFile::new("ledger_template_default_replace");
+    let passphrase = "test-passphrase-secure-123";
+
+    AgeSqliteStorage::create(&temp.path, passphrase).expect("create should succeed");
+    let mut storage = AgeSqliteStorage::open(&temp.path, passphrase).expect("open should succeed");
+
+    let entry_type_id = create_basic_entry_type(&mut storage);
+    let device_id = Uuid::new_v4();
+
+    let template1_id = storage
+        .create_template(&NewTemplate::new(
+            "first",
+            entry_type_id,
+            serde_json::json!({}),
+            device_id,
+        ))
+        .expect("create should succeed");
+    let template2_id = storage
+        .create_template(&NewTemplate::new(
+            "second",
+            entry_type_id,
+            serde_json::json!({}),
+            device_id,
+        ))
+        .expect("create should succeed");
+
+    storage
+        .set_default_template(&entry_type_id, &template1_id)
+        .expect("set first should succeed");
+    storage
+        .set_default_template(&entry_type_id, &template2_id)
+        .expect("set second should succeed");
+
+    let default = storage
+        .get_default_template(&entry_type_id)
+        .expect("get default should succeed");
+    assert!(default.is_some());
+    assert_eq!(default.unwrap().id, template2_id);
+
+    storage.close(passphrase).expect("close should succeed");
+}
+
+#[test]
+fn test_set_default_template_wrong_entry_type_fails() {
+    let temp = TempFile::new("ledger_template_default_wrong_type");
+    let passphrase = "test-passphrase-secure-123";
+
+    AgeSqliteStorage::create(&temp.path, passphrase).expect("create should succeed");
+    let mut storage = AgeSqliteStorage::open(&temp.path, passphrase).expect("open should succeed");
+
+    let journal_type_id = create_basic_entry_type(&mut storage);
+    let device_id = Uuid::new_v4();
+
+    // Create another entry type
+    let weight_type_id = storage
+        .create_entry_type(&NewEntryType::new(
+            "weight",
+            serde_json::json!({"fields": [{"name": "kg", "type": "number", "required": true}]}),
+            device_id,
+        ))
+        .expect("create weight type should succeed");
+
+    // Create template for journal
+    let template_id = storage
+        .create_template(&NewTemplate::new(
+            "journal_tmpl",
+            journal_type_id,
+            serde_json::json!({}),
+            device_id,
+        ))
+        .expect("create should succeed");
+
+    // Try to set it as default for weight (should fail)
+    let result = storage.set_default_template(&weight_type_id, &template_id);
+    assert!(result.is_err());
+
+    storage.close(passphrase).expect("close should succeed");
+}
+
+#[test]
+fn test_clear_default_template() {
+    let temp = TempFile::new("ledger_template_clear_default");
+    let passphrase = "test-passphrase-secure-123";
+
+    AgeSqliteStorage::create(&temp.path, passphrase).expect("create should succeed");
+    let mut storage = AgeSqliteStorage::open(&temp.path, passphrase).expect("open should succeed");
+
+    let entry_type_id = create_basic_entry_type(&mut storage);
+    let device_id = Uuid::new_v4();
+
+    let template_id = storage
+        .create_template(&NewTemplate::new(
+            "default_tmpl",
+            entry_type_id,
+            serde_json::json!({}),
+            device_id,
+        ))
+        .expect("create should succeed");
+
+    storage
+        .set_default_template(&entry_type_id, &template_id)
+        .expect("set should succeed");
+
+    storage
+        .clear_default_template(&entry_type_id)
+        .expect("clear should succeed");
+
+    let default = storage
+        .get_default_template(&entry_type_id)
+        .expect("get default should succeed");
+    assert!(default.is_none());
+
+    storage.close(passphrase).expect("close should succeed");
+}
+
+#[test]
+fn test_delete_template_removes_default_mapping() {
+    let temp = TempFile::new("ledger_template_delete_default");
+    let passphrase = "test-passphrase-secure-123";
+
+    AgeSqliteStorage::create(&temp.path, passphrase).expect("create should succeed");
+    let mut storage = AgeSqliteStorage::open(&temp.path, passphrase).expect("open should succeed");
+
+    let entry_type_id = create_basic_entry_type(&mut storage);
+    let device_id = Uuid::new_v4();
+
+    let template_id = storage
+        .create_template(&NewTemplate::new(
+            "default_tmpl",
+            entry_type_id,
+            serde_json::json!({}),
+            device_id,
+        ))
+        .expect("create should succeed");
+
+    storage
+        .set_default_template(&entry_type_id, &template_id)
+        .expect("set should succeed");
+
+    storage
+        .delete_template(&template_id)
+        .expect("delete should succeed");
+
+    let default = storage
+        .get_default_template(&entry_type_id)
+        .expect("get default should succeed");
+    assert!(default.is_none());
+
+    storage.close(passphrase).expect("close should succeed");
+}
+
+#[test]
+fn test_template_persistence() {
+    let temp = TempFile::new("ledger_template_persist");
+    let passphrase = "test-passphrase-secure-123";
+
+    AgeSqliteStorage::create(&temp.path, passphrase).expect("create should succeed");
+
+    {
+        let mut storage =
+            AgeSqliteStorage::open(&temp.path, passphrase).expect("open should succeed");
+
+        let entry_type_id = create_basic_entry_type(&mut storage);
+        let device_id = Uuid::new_v4();
+
+        let template_id = storage
+            .create_template(&NewTemplate::new(
+                "persistent",
+                entry_type_id,
+                serde_json::json!({"defaults": {"body": "hello"}}),
+                device_id,
+            ))
+            .expect("create should succeed");
+
+        storage
+            .set_default_template(&entry_type_id, &template_id)
+            .expect("set default should succeed");
+
+        storage.close(passphrase).expect("close should succeed");
+    }
+
+    // Reopen and verify persistence
+    let storage = AgeSqliteStorage::open(&temp.path, passphrase).expect("reopen should succeed");
+
+    let template = storage
+        .get_template("persistent")
+        .expect("get should succeed");
+    assert!(template.is_some());
+    assert_eq!(template.unwrap().template_json["defaults"]["body"], "hello");
+
+    let entry_type = storage
+        .get_entry_type("journal")
+        .expect("get type should succeed")
+        .expect("type should exist");
+
+    let default = storage
+        .get_default_template(&entry_type.id)
+        .expect("get default should succeed");
+    assert!(default.is_some());
+    assert_eq!(default.unwrap().name, "persistent");
+
+    storage.close(passphrase).expect("close should succeed");
+}
+
+#[test]
+fn test_composition_persistence() {
+    let temp = TempFile::new("ledger_composition_persist");
+    let passphrase = "test-passphrase-secure-123";
+
+    let comp_id: Uuid;
+    let entry_id: Uuid;
+
+    AgeSqliteStorage::create(&temp.path, passphrase).expect("create should succeed");
+
+    {
+        let mut storage =
+            AgeSqliteStorage::open(&temp.path, passphrase).expect("open should succeed");
+
+        let device_id = Uuid::new_v4();
+        let entry_type_id = create_basic_entry_type(&mut storage);
+
+        comp_id = storage
+            .create_composition(
+                &NewComposition::new("persistent_comp", device_id)
+                    .with_description("Persisted composition"),
+            )
+            .expect("create comp should succeed");
+
+        entry_id = storage
+            .insert_entry(&NewEntry::new(
+                entry_type_id,
+                1,
+                serde_json::json!({"body": "test"}),
+                device_id,
+            ))
+            .expect("insert should succeed");
+
+        storage
+            .attach_entry_to_composition(&entry_id, &comp_id)
+            .expect("attach should succeed");
+
+        storage.close(passphrase).expect("close should succeed");
+    }
+
+    // Reopen and verify persistence
+    let storage = AgeSqliteStorage::open(&temp.path, passphrase).expect("reopen should succeed");
+
+    let comp = storage
+        .get_composition("persistent_comp")
+        .expect("get should succeed");
+    assert!(comp.is_some());
+    let comp = comp.unwrap();
+    assert_eq!(comp.id, comp_id);
+    assert_eq!(comp.description, Some("Persisted composition".to_string()));
+
+    let comps = storage
+        .get_entry_compositions(&entry_id)
+        .expect("get comps should succeed");
+    assert_eq!(comps.len(), 1);
+    assert_eq!(comps[0].id, comp_id);
 
     storage.close(passphrase).expect("close should succeed");
 }

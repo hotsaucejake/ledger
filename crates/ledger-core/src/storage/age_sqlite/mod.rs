@@ -25,7 +25,8 @@ use crate::error::{LedgerError, Result};
 use crate::storage::encryption::{decrypt, encrypt};
 use crate::storage::traits::StorageEngine;
 use crate::storage::types::{
-    Entry, EntryFilter, EntryType, LedgerMetadata, NewEntry, NewEntryType,
+    Composition, CompositionFilter, Entry, EntryComposition, EntryFilter, EntryType,
+    LedgerMetadata, NewComposition, NewEntry, NewEntryType, NewTemplate, Template,
 };
 
 use row::EntryRow;
@@ -179,6 +180,68 @@ impl StorageEngine for AgeSqliteStorage {
                 content,
                 tokenize = 'porter'
             );
+
+            -- Compositions: semantic grouping of entries
+            CREATE TABLE compositions (
+                id TEXT PRIMARY KEY,
+                name TEXT NOT NULL UNIQUE,
+                description TEXT,
+                created_at TEXT NOT NULL,
+                device_id TEXT NOT NULL,
+                metadata_json TEXT
+            );
+
+            -- Entry-Composition join table (many-to-many)
+            CREATE TABLE entry_compositions (
+                entry_id TEXT NOT NULL,
+                composition_id TEXT NOT NULL,
+                added_at TEXT NOT NULL,
+
+                PRIMARY KEY (entry_id, composition_id),
+                FOREIGN KEY (entry_id) REFERENCES entries(id),
+                FOREIGN KEY (composition_id) REFERENCES compositions(id)
+            );
+
+            -- Templates: reusable defaults for entry creation
+            CREATE TABLE templates (
+                id TEXT PRIMARY KEY,
+                name TEXT NOT NULL UNIQUE,
+                entry_type_id TEXT NOT NULL,
+                description TEXT,
+                created_at TEXT NOT NULL,
+                device_id TEXT NOT NULL,
+
+                FOREIGN KEY (entry_type_id) REFERENCES entry_types(id)
+            );
+
+            -- Template versions (append-only)
+            CREATE TABLE template_versions (
+                id TEXT PRIMARY KEY,
+                template_id TEXT NOT NULL,
+                version INTEGER NOT NULL,
+                template_json TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                active INTEGER NOT NULL DEFAULT 1,
+
+                UNIQUE(template_id, version),
+                FOREIGN KEY (template_id) REFERENCES templates(id)
+            );
+
+            -- Entry type to default template mapping
+            CREATE TABLE entry_type_templates (
+                entry_type_id TEXT NOT NULL,
+                template_id TEXT NOT NULL,
+                active INTEGER NOT NULL DEFAULT 1,
+
+                PRIMARY KEY (entry_type_id, template_id),
+                FOREIGN KEY (entry_type_id) REFERENCES entry_types(id),
+                FOREIGN KEY (template_id) REFERENCES templates(id)
+            );
+
+            -- Ensure only one active default template per entry type
+            CREATE UNIQUE INDEX entry_type_templates_active
+            ON entry_type_templates (entry_type_id)
+            WHERE active = 1;
             "#,
         )?;
 
@@ -447,7 +510,7 @@ impl StorageEngine for AgeSqliteStorage {
         let mut params: Vec<Box<dyn rusqlite::ToSql>> = Vec::new();
 
         if let Some(entry_type_id) = filter.entry_type_id {
-            conditions.push("entry_type_id = ?".to_string());
+            conditions.push("e.entry_type_id = ?".to_string());
             params.push(Box::new(entry_type_id.to_string()));
         }
 
@@ -458,30 +521,38 @@ impl StorageEngine for AgeSqliteStorage {
                 .ok_or_else(|| LedgerError::Validation("Invalid tag filter".to_string()))?
                 .clone();
             conditions.push(
-                "tags_json IS NOT NULL AND EXISTS (SELECT 1 FROM json_each(tags_json) WHERE value = ?)"
+                "e.tags_json IS NOT NULL AND EXISTS (SELECT 1 FROM json_each(e.tags_json) WHERE value = ?)"
                     .to_string(),
             );
             params.push(Box::new(normalized_tag));
         }
 
         if let Some(since) = filter.since {
-            conditions.push("created_at >= ?".to_string());
+            conditions.push("e.created_at >= ?".to_string());
             params.push(Box::new(since.to_rfc3339()));
         }
 
         if let Some(until) = filter.until {
-            conditions.push("created_at <= ?".to_string());
+            conditions.push("e.created_at <= ?".to_string());
             params.push(Box::new(until.to_rfc3339()));
         }
 
+        if let Some(composition_id) = filter.composition_id {
+            conditions.push(
+                "EXISTS (SELECT 1 FROM entry_compositions ec WHERE ec.entry_id = e.id AND ec.composition_id = ?)"
+                    .to_string(),
+            );
+            params.push(Box::new(composition_id.to_string()));
+        }
+
         let mut query = String::from(
-            "SELECT id, entry_type_id, schema_version, data_json, tags_json, created_at, device_id, supersedes FROM entries",
+            "SELECT e.id, e.entry_type_id, e.schema_version, e.data_json, e.tags_json, e.created_at, e.device_id, e.supersedes FROM entries e",
         );
         if !conditions.is_empty() {
             query.push_str(" WHERE ");
             query.push_str(&conditions.join(" AND "));
         }
-        query.push_str(" ORDER BY created_at DESC");
+        query.push_str(" ORDER BY e.created_at DESC");
 
         if let Some(limit) = filter.limit {
             query.push_str(" LIMIT ?");
@@ -853,5 +924,1044 @@ impl StorageEngine for AgeSqliteStorage {
         }
 
         Ok(())
+    }
+
+    // --- Composition operations ---
+
+    fn create_composition(&mut self, composition: &NewComposition) -> Result<Uuid> {
+        let mut conn = self.lock_conn()?;
+        let tx = conn.transaction()?;
+
+        // Check if composition with this name already exists
+        let exists: Option<String> = tx
+            .query_row(
+                "SELECT id FROM compositions WHERE name = ?",
+                [&composition.name],
+                |row| row.get(0),
+            )
+            .optional()?;
+
+        if exists.is_some() {
+            return Err(LedgerError::Validation(format!(
+                "Composition '{}' already exists",
+                composition.name
+            )));
+        }
+
+        let id = Uuid::new_v4();
+        let created_at = Utc::now().to_rfc3339();
+        let metadata_json = composition
+            .metadata
+            .as_ref()
+            .map(serde_json::to_string)
+            .transpose()
+            .map_err(|e| LedgerError::Storage(format!("Failed to serialize metadata: {}", e)))?;
+
+        tx.execute(
+            r#"
+            INSERT INTO compositions (id, name, description, created_at, device_id, metadata_json)
+            VALUES (?, ?, ?, ?, ?, ?)
+            "#,
+            (
+                id.to_string(),
+                &composition.name,
+                &composition.description,
+                &created_at,
+                composition.device_id.to_string(),
+                metadata_json,
+            ),
+        )?;
+
+        tx.execute(
+            "UPDATE meta SET value = ? WHERE key = 'last_modified'",
+            [&created_at],
+        )?;
+
+        tx.commit()?;
+        Ok(id)
+    }
+
+    fn get_composition(&self, name: &str) -> Result<Option<Composition>> {
+        let conn = self.lock_conn()?;
+
+        let result = conn.query_row(
+            r#"
+            SELECT id, name, description, created_at, device_id, metadata_json
+            FROM compositions
+            WHERE name = ?
+            "#,
+            [name],
+            |row| {
+                Ok((
+                    row.get::<_, String>(0)?,
+                    row.get::<_, String>(1)?,
+                    row.get::<_, Option<String>>(2)?,
+                    row.get::<_, String>(3)?,
+                    row.get::<_, String>(4)?,
+                    row.get::<_, Option<String>>(5)?,
+                ))
+            },
+        );
+
+        match result {
+            Ok((id, name, description, created_at, device_id, metadata_json)) => {
+                let id = Uuid::parse_str(&id)
+                    .map_err(|e| LedgerError::Storage(format!("Invalid UUID: {}", e)))?;
+                let device_id = Uuid::parse_str(&device_id)
+                    .map_err(|e| LedgerError::Storage(format!("Invalid device_id: {}", e)))?;
+                let created_at = DateTime::parse_from_rfc3339(&created_at)
+                    .map_err(|e| LedgerError::Storage(format!("Invalid timestamp: {}", e)))?
+                    .with_timezone(&Utc);
+                let metadata = metadata_json
+                    .map(|s| serde_json::from_str(&s))
+                    .transpose()
+                    .map_err(|e| LedgerError::Storage(format!("Invalid metadata JSON: {}", e)))?;
+
+                Ok(Some(Composition {
+                    id,
+                    name,
+                    description,
+                    created_at,
+                    device_id,
+                    metadata,
+                }))
+            }
+            Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
+            Err(e) => Err(e.into()),
+        }
+    }
+
+    fn get_composition_by_id(&self, id: &Uuid) -> Result<Option<Composition>> {
+        let conn = self.lock_conn()?;
+
+        let result = conn.query_row(
+            r#"
+            SELECT id, name, description, created_at, device_id, metadata_json
+            FROM compositions
+            WHERE id = ?
+            "#,
+            [id.to_string()],
+            |row| {
+                Ok((
+                    row.get::<_, String>(0)?,
+                    row.get::<_, String>(1)?,
+                    row.get::<_, Option<String>>(2)?,
+                    row.get::<_, String>(3)?,
+                    row.get::<_, String>(4)?,
+                    row.get::<_, Option<String>>(5)?,
+                ))
+            },
+        );
+
+        match result {
+            Ok((id_str, name, description, created_at, device_id, metadata_json)) => {
+                let id = Uuid::parse_str(&id_str)
+                    .map_err(|e| LedgerError::Storage(format!("Invalid UUID: {}", e)))?;
+                let device_id = Uuid::parse_str(&device_id)
+                    .map_err(|e| LedgerError::Storage(format!("Invalid device_id: {}", e)))?;
+                let created_at = DateTime::parse_from_rfc3339(&created_at)
+                    .map_err(|e| LedgerError::Storage(format!("Invalid timestamp: {}", e)))?
+                    .with_timezone(&Utc);
+                let metadata = metadata_json
+                    .map(|s| serde_json::from_str(&s))
+                    .transpose()
+                    .map_err(|e| LedgerError::Storage(format!("Invalid metadata JSON: {}", e)))?;
+
+                Ok(Some(Composition {
+                    id,
+                    name,
+                    description,
+                    created_at,
+                    device_id,
+                    metadata,
+                }))
+            }
+            Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
+            Err(e) => Err(e.into()),
+        }
+    }
+
+    fn list_compositions(&self, filter: &CompositionFilter) -> Result<Vec<Composition>> {
+        let conn = self.lock_conn()?;
+
+        let mut query =
+            String::from("SELECT id, name, description, created_at, device_id, metadata_json FROM compositions ORDER BY name");
+
+        if let Some(limit) = filter.limit {
+            query.push_str(&format!(" LIMIT {}", limit));
+        }
+
+        let mut stmt = conn.prepare(&query)?;
+        let rows = stmt.query_map([], |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, Option<String>>(2)?,
+                row.get::<_, String>(3)?,
+                row.get::<_, String>(4)?,
+                row.get::<_, Option<String>>(5)?,
+            ))
+        })?;
+
+        let mut compositions = Vec::new();
+        for row in rows {
+            let (id_str, name, description, created_at, device_id, metadata_json) = row?;
+            let id = Uuid::parse_str(&id_str)
+                .map_err(|e| LedgerError::Storage(format!("Invalid UUID: {}", e)))?;
+            let device_id = Uuid::parse_str(&device_id)
+                .map_err(|e| LedgerError::Storage(format!("Invalid device_id: {}", e)))?;
+            let created_at = DateTime::parse_from_rfc3339(&created_at)
+                .map_err(|e| LedgerError::Storage(format!("Invalid timestamp: {}", e)))?
+                .with_timezone(&Utc);
+            let metadata = metadata_json
+                .map(|s| serde_json::from_str(&s))
+                .transpose()
+                .map_err(|e| LedgerError::Storage(format!("Invalid metadata JSON: {}", e)))?;
+
+            compositions.push(Composition {
+                id,
+                name,
+                description,
+                created_at,
+                device_id,
+                metadata,
+            });
+        }
+
+        Ok(compositions)
+    }
+
+    fn rename_composition(&mut self, id: &Uuid, new_name: &str) -> Result<()> {
+        let mut conn = self.lock_conn()?;
+        let tx = conn.transaction()?;
+
+        // Check composition exists
+        let exists: Option<String> = tx
+            .query_row(
+                "SELECT id FROM compositions WHERE id = ?",
+                [id.to_string()],
+                |row| row.get(0),
+            )
+            .optional()?;
+
+        if exists.is_none() {
+            return Err(LedgerError::NotFound(format!(
+                "Composition {} not found",
+                id
+            )));
+        }
+
+        // Check new name doesn't exist (for a different composition)
+        let name_exists: Option<String> = tx
+            .query_row(
+                "SELECT id FROM compositions WHERE name = ? AND id != ?",
+                (new_name, id.to_string()),
+                |row| row.get(0),
+            )
+            .optional()?;
+
+        if name_exists.is_some() {
+            return Err(LedgerError::Validation(format!(
+                "Composition '{}' already exists",
+                new_name
+            )));
+        }
+
+        let last_modified = Utc::now().to_rfc3339();
+
+        tx.execute(
+            "UPDATE compositions SET name = ? WHERE id = ?",
+            (new_name, id.to_string()),
+        )?;
+
+        tx.execute(
+            "UPDATE meta SET value = ? WHERE key = 'last_modified'",
+            [&last_modified],
+        )?;
+
+        tx.commit()?;
+        Ok(())
+    }
+
+    fn delete_composition(&mut self, id: &Uuid) -> Result<()> {
+        let mut conn = self.lock_conn()?;
+        let tx = conn.transaction()?;
+
+        // Check composition exists
+        let exists: Option<String> = tx
+            .query_row(
+                "SELECT id FROM compositions WHERE id = ?",
+                [id.to_string()],
+                |row| row.get(0),
+            )
+            .optional()?;
+
+        if exists.is_none() {
+            return Err(LedgerError::NotFound(format!(
+                "Composition {} not found",
+                id
+            )));
+        }
+
+        let last_modified = Utc::now().to_rfc3339();
+
+        // Remove all entry associations
+        tx.execute(
+            "DELETE FROM entry_compositions WHERE composition_id = ?",
+            [id.to_string()],
+        )?;
+
+        // Delete the composition
+        tx.execute("DELETE FROM compositions WHERE id = ?", [id.to_string()])?;
+
+        tx.execute(
+            "UPDATE meta SET value = ? WHERE key = 'last_modified'",
+            [&last_modified],
+        )?;
+
+        tx.commit()?;
+        Ok(())
+    }
+
+    fn attach_entry_to_composition(
+        &mut self,
+        entry_id: &Uuid,
+        composition_id: &Uuid,
+    ) -> Result<()> {
+        let mut conn = self.lock_conn()?;
+        let tx = conn.transaction()?;
+
+        // Check entry exists
+        let entry_exists: Option<String> = tx
+            .query_row(
+                "SELECT id FROM entries WHERE id = ?",
+                [entry_id.to_string()],
+                |row| row.get(0),
+            )
+            .optional()?;
+
+        if entry_exists.is_none() {
+            return Err(LedgerError::NotFound(format!(
+                "Entry {} not found",
+                entry_id
+            )));
+        }
+
+        // Check composition exists
+        let comp_exists: Option<String> = tx
+            .query_row(
+                "SELECT id FROM compositions WHERE id = ?",
+                [composition_id.to_string()],
+                |row| row.get(0),
+            )
+            .optional()?;
+
+        if comp_exists.is_none() {
+            return Err(LedgerError::NotFound(format!(
+                "Composition {} not found",
+                composition_id
+            )));
+        }
+
+        // Check if already attached
+        let already_attached: Option<String> = tx
+            .query_row(
+                "SELECT entry_id FROM entry_compositions WHERE entry_id = ? AND composition_id = ?",
+                (entry_id.to_string(), composition_id.to_string()),
+                |row| row.get(0),
+            )
+            .optional()?;
+
+        if already_attached.is_some() {
+            // Already attached, no-op
+            return Ok(());
+        }
+
+        let added_at = Utc::now().to_rfc3339();
+
+        tx.execute(
+            "INSERT INTO entry_compositions (entry_id, composition_id, added_at) VALUES (?, ?, ?)",
+            (entry_id.to_string(), composition_id.to_string(), &added_at),
+        )?;
+
+        tx.execute(
+            "UPDATE meta SET value = ? WHERE key = 'last_modified'",
+            [&added_at],
+        )?;
+
+        tx.commit()?;
+        Ok(())
+    }
+
+    fn detach_entry_from_composition(
+        &mut self,
+        entry_id: &Uuid,
+        composition_id: &Uuid,
+    ) -> Result<()> {
+        let mut conn = self.lock_conn()?;
+        let tx = conn.transaction()?;
+
+        let deleted = tx.execute(
+            "DELETE FROM entry_compositions WHERE entry_id = ? AND composition_id = ?",
+            (entry_id.to_string(), composition_id.to_string()),
+        )?;
+
+        if deleted == 0 {
+            return Err(LedgerError::NotFound(format!(
+                "Entry {} is not attached to composition {}",
+                entry_id, composition_id
+            )));
+        }
+
+        let last_modified = Utc::now().to_rfc3339();
+        tx.execute(
+            "UPDATE meta SET value = ? WHERE key = 'last_modified'",
+            [&last_modified],
+        )?;
+
+        tx.commit()?;
+        Ok(())
+    }
+
+    fn get_entry_compositions(&self, entry_id: &Uuid) -> Result<Vec<Composition>> {
+        let conn = self.lock_conn()?;
+
+        let mut stmt = conn.prepare(
+            r#"
+            SELECT c.id, c.name, c.description, c.created_at, c.device_id, c.metadata_json
+            FROM compositions c
+            JOIN entry_compositions ec ON c.id = ec.composition_id
+            WHERE ec.entry_id = ?
+            ORDER BY c.name
+            "#,
+        )?;
+
+        let rows = stmt.query_map([entry_id.to_string()], |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, Option<String>>(2)?,
+                row.get::<_, String>(3)?,
+                row.get::<_, String>(4)?,
+                row.get::<_, Option<String>>(5)?,
+            ))
+        })?;
+
+        let mut compositions = Vec::new();
+        for row in rows {
+            let (id_str, name, description, created_at, device_id, metadata_json) = row?;
+            let id = Uuid::parse_str(&id_str)
+                .map_err(|e| LedgerError::Storage(format!("Invalid UUID: {}", e)))?;
+            let device_id = Uuid::parse_str(&device_id)
+                .map_err(|e| LedgerError::Storage(format!("Invalid device_id: {}", e)))?;
+            let created_at = DateTime::parse_from_rfc3339(&created_at)
+                .map_err(|e| LedgerError::Storage(format!("Invalid timestamp: {}", e)))?
+                .with_timezone(&Utc);
+            let metadata = metadata_json
+                .map(|s| serde_json::from_str(&s))
+                .transpose()
+                .map_err(|e| LedgerError::Storage(format!("Invalid metadata JSON: {}", e)))?;
+
+            compositions.push(Composition {
+                id,
+                name,
+                description,
+                created_at,
+                device_id,
+                metadata,
+            });
+        }
+
+        Ok(compositions)
+    }
+
+    fn get_composition_entries(&self, composition_id: &Uuid) -> Result<Vec<EntryComposition>> {
+        let conn = self.lock_conn()?;
+
+        let mut stmt = conn.prepare(
+            r#"
+            SELECT entry_id, composition_id, added_at
+            FROM entry_compositions
+            WHERE composition_id = ?
+            ORDER BY added_at DESC
+            "#,
+        )?;
+
+        let rows = stmt.query_map([composition_id.to_string()], |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, String>(2)?,
+            ))
+        })?;
+
+        let mut entry_compositions = Vec::new();
+        for row in rows {
+            let (entry_id, comp_id, added_at) = row?;
+            let entry_id = Uuid::parse_str(&entry_id)
+                .map_err(|e| LedgerError::Storage(format!("Invalid entry UUID: {}", e)))?;
+            let composition_id = Uuid::parse_str(&comp_id)
+                .map_err(|e| LedgerError::Storage(format!("Invalid composition UUID: {}", e)))?;
+            let added_at = DateTime::parse_from_rfc3339(&added_at)
+                .map_err(|e| LedgerError::Storage(format!("Invalid timestamp: {}", e)))?
+                .with_timezone(&Utc);
+
+            entry_compositions.push(EntryComposition {
+                entry_id,
+                composition_id,
+                added_at,
+            });
+        }
+
+        Ok(entry_compositions)
+    }
+
+    // --- Template operations ---
+
+    fn create_template(&mut self, template: &NewTemplate) -> Result<Uuid> {
+        let mut conn = self.lock_conn()?;
+        let tx = conn.transaction()?;
+
+        // Check if template with this name already exists
+        let exists: Option<String> = tx
+            .query_row(
+                "SELECT id FROM templates WHERE name = ?",
+                [&template.name],
+                |row| row.get(0),
+            )
+            .optional()?;
+
+        if exists.is_some() {
+            return Err(LedgerError::Validation(format!(
+                "Template '{}' already exists",
+                template.name
+            )));
+        }
+
+        // Check entry type exists
+        let entry_type_exists: Option<String> = tx
+            .query_row(
+                "SELECT id FROM entry_types WHERE id = ?",
+                [template.entry_type_id.to_string()],
+                |row| row.get(0),
+            )
+            .optional()?;
+
+        if entry_type_exists.is_none() {
+            return Err(LedgerError::Validation(format!(
+                "Entry type {} does not exist",
+                template.entry_type_id
+            )));
+        }
+
+        let id = Uuid::new_v4();
+        let created_at = Utc::now().to_rfc3339();
+
+        // Create base template record
+        tx.execute(
+            r#"
+            INSERT INTO templates (id, name, entry_type_id, description, created_at, device_id)
+            VALUES (?, ?, ?, ?, ?, ?)
+            "#,
+            (
+                id.to_string(),
+                &template.name,
+                template.entry_type_id.to_string(),
+                &template.description,
+                &created_at,
+                template.device_id.to_string(),
+            ),
+        )?;
+
+        // Create first version
+        let version_id = Uuid::new_v4();
+        let template_json_str = serde_json::to_string(&template.template_json)
+            .map_err(|e| LedgerError::Storage(format!("Failed to serialize template: {}", e)))?;
+
+        tx.execute(
+            r#"
+            INSERT INTO template_versions (id, template_id, version, template_json, created_at, active)
+            VALUES (?, ?, 1, ?, ?, 1)
+            "#,
+            (version_id.to_string(), id.to_string(), template_json_str, &created_at),
+        )?;
+
+        tx.execute(
+            "UPDATE meta SET value = ? WHERE key = 'last_modified'",
+            [&created_at],
+        )?;
+
+        tx.commit()?;
+        Ok(id)
+    }
+
+    fn get_template(&self, name: &str) -> Result<Option<Template>> {
+        let conn = self.lock_conn()?;
+
+        let result = conn.query_row(
+            r#"
+            SELECT t.id, t.name, t.entry_type_id, tv.version, tv.created_at, t.device_id, t.description, tv.template_json
+            FROM template_versions tv
+            JOIN templates t ON t.id = tv.template_id
+            WHERE t.name = ? AND tv.active = 1
+            ORDER BY tv.version DESC
+            LIMIT 1
+            "#,
+            [name],
+            |row| {
+                Ok((
+                    row.get::<_, String>(0)?,
+                    row.get::<_, String>(1)?,
+                    row.get::<_, String>(2)?,
+                    row.get::<_, i32>(3)?,
+                    row.get::<_, String>(4)?,
+                    row.get::<_, String>(5)?,
+                    row.get::<_, Option<String>>(6)?,
+                    row.get::<_, String>(7)?,
+                ))
+            },
+        );
+
+        match result {
+            Ok((
+                id,
+                name,
+                entry_type_id,
+                version,
+                created_at,
+                device_id,
+                description,
+                template_json,
+            )) => {
+                let id = Uuid::parse_str(&id)
+                    .map_err(|e| LedgerError::Storage(format!("Invalid UUID: {}", e)))?;
+                let entry_type_id = Uuid::parse_str(&entry_type_id)
+                    .map_err(|e| LedgerError::Storage(format!("Invalid entry_type_id: {}", e)))?;
+                let device_id = Uuid::parse_str(&device_id)
+                    .map_err(|e| LedgerError::Storage(format!("Invalid device_id: {}", e)))?;
+                let created_at = DateTime::parse_from_rfc3339(&created_at)
+                    .map_err(|e| LedgerError::Storage(format!("Invalid timestamp: {}", e)))?
+                    .with_timezone(&Utc);
+                let template_json: serde_json::Value = serde_json::from_str(&template_json)
+                    .map_err(|e| LedgerError::Storage(format!("Invalid template JSON: {}", e)))?;
+
+                Ok(Some(Template {
+                    id,
+                    name,
+                    entry_type_id,
+                    version,
+                    created_at,
+                    device_id,
+                    description,
+                    template_json,
+                }))
+            }
+            Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
+            Err(e) => Err(e.into()),
+        }
+    }
+
+    fn get_template_by_id(&self, id: &Uuid) -> Result<Option<Template>> {
+        let conn = self.lock_conn()?;
+
+        let result = conn.query_row(
+            r#"
+            SELECT t.id, t.name, t.entry_type_id, tv.version, tv.created_at, t.device_id, t.description, tv.template_json
+            FROM template_versions tv
+            JOIN templates t ON t.id = tv.template_id
+            WHERE t.id = ? AND tv.active = 1
+            ORDER BY tv.version DESC
+            LIMIT 1
+            "#,
+            [id.to_string()],
+            |row| {
+                Ok((
+                    row.get::<_, String>(0)?,
+                    row.get::<_, String>(1)?,
+                    row.get::<_, String>(2)?,
+                    row.get::<_, i32>(3)?,
+                    row.get::<_, String>(4)?,
+                    row.get::<_, String>(5)?,
+                    row.get::<_, Option<String>>(6)?,
+                    row.get::<_, String>(7)?,
+                ))
+            },
+        );
+
+        match result {
+            Ok((
+                id_str,
+                name,
+                entry_type_id,
+                version,
+                created_at,
+                device_id,
+                description,
+                template_json,
+            )) => {
+                let id = Uuid::parse_str(&id_str)
+                    .map_err(|e| LedgerError::Storage(format!("Invalid UUID: {}", e)))?;
+                let entry_type_id = Uuid::parse_str(&entry_type_id)
+                    .map_err(|e| LedgerError::Storage(format!("Invalid entry_type_id: {}", e)))?;
+                let device_id = Uuid::parse_str(&device_id)
+                    .map_err(|e| LedgerError::Storage(format!("Invalid device_id: {}", e)))?;
+                let created_at = DateTime::parse_from_rfc3339(&created_at)
+                    .map_err(|e| LedgerError::Storage(format!("Invalid timestamp: {}", e)))?
+                    .with_timezone(&Utc);
+                let template_json: serde_json::Value = serde_json::from_str(&template_json)
+                    .map_err(|e| LedgerError::Storage(format!("Invalid template JSON: {}", e)))?;
+
+                Ok(Some(Template {
+                    id,
+                    name,
+                    entry_type_id,
+                    version,
+                    created_at,
+                    device_id,
+                    description,
+                    template_json,
+                }))
+            }
+            Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
+            Err(e) => Err(e.into()),
+        }
+    }
+
+    fn list_templates(&self) -> Result<Vec<Template>> {
+        let conn = self.lock_conn()?;
+
+        let mut stmt = conn.prepare(
+            r#"
+            SELECT t.id, t.name, t.entry_type_id, tv.version, tv.created_at, t.device_id, t.description, tv.template_json
+            FROM template_versions tv
+            JOIN templates t ON t.id = tv.template_id
+            WHERE tv.active = 1 AND tv.version = (
+                SELECT MAX(version)
+                FROM template_versions
+                WHERE template_id = tv.template_id AND active = 1
+            )
+            ORDER BY t.name
+            "#,
+        )?;
+
+        let rows = stmt.query_map([], |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, String>(2)?,
+                row.get::<_, i32>(3)?,
+                row.get::<_, String>(4)?,
+                row.get::<_, String>(5)?,
+                row.get::<_, Option<String>>(6)?,
+                row.get::<_, String>(7)?,
+            ))
+        })?;
+
+        let mut templates = Vec::new();
+        for row in rows {
+            let (
+                id_str,
+                name,
+                entry_type_id,
+                version,
+                created_at,
+                device_id,
+                description,
+                template_json,
+            ) = row?;
+
+            let id = Uuid::parse_str(&id_str)
+                .map_err(|e| LedgerError::Storage(format!("Invalid UUID: {}", e)))?;
+            let entry_type_id = Uuid::parse_str(&entry_type_id)
+                .map_err(|e| LedgerError::Storage(format!("Invalid entry_type_id: {}", e)))?;
+            let device_id = Uuid::parse_str(&device_id)
+                .map_err(|e| LedgerError::Storage(format!("Invalid device_id: {}", e)))?;
+            let created_at = DateTime::parse_from_rfc3339(&created_at)
+                .map_err(|e| LedgerError::Storage(format!("Invalid timestamp: {}", e)))?
+                .with_timezone(&Utc);
+            let template_json: serde_json::Value = serde_json::from_str(&template_json)
+                .map_err(|e| LedgerError::Storage(format!("Invalid template JSON: {}", e)))?;
+
+            templates.push(Template {
+                id,
+                name,
+                entry_type_id,
+                version,
+                created_at,
+                device_id,
+                description,
+                template_json,
+            });
+        }
+
+        Ok(templates)
+    }
+
+    fn update_template(&mut self, id: &Uuid, template_json: serde_json::Value) -> Result<i32> {
+        let mut conn = self.lock_conn()?;
+        let tx = conn.transaction()?;
+
+        // Check template exists and get max version
+        let max_version: Option<i32> = tx
+            .query_row(
+                "SELECT MAX(version) FROM template_versions WHERE template_id = ?",
+                [id.to_string()],
+                |row| row.get(0),
+            )
+            .optional()?
+            .flatten();
+
+        let max_version = max_version
+            .ok_or_else(|| LedgerError::NotFound(format!("Template {} not found", id)))?;
+
+        let new_version = max_version + 1;
+        let created_at = Utc::now().to_rfc3339();
+        let version_id = Uuid::new_v4();
+
+        // Deactivate old versions
+        tx.execute(
+            "UPDATE template_versions SET active = 0 WHERE template_id = ? AND active = 1",
+            [id.to_string()],
+        )?;
+
+        // Create new version
+        let template_json_str = serde_json::to_string(&template_json)
+            .map_err(|e| LedgerError::Storage(format!("Failed to serialize template: {}", e)))?;
+
+        tx.execute(
+            r#"
+            INSERT INTO template_versions (id, template_id, version, template_json, created_at, active)
+            VALUES (?, ?, ?, ?, ?, 1)
+            "#,
+            (
+                version_id.to_string(),
+                id.to_string(),
+                new_version,
+                template_json_str,
+                &created_at,
+            ),
+        )?;
+
+        tx.execute(
+            "UPDATE meta SET value = ? WHERE key = 'last_modified'",
+            [&created_at],
+        )?;
+
+        tx.commit()?;
+        Ok(new_version)
+    }
+
+    fn delete_template(&mut self, id: &Uuid) -> Result<()> {
+        let mut conn = self.lock_conn()?;
+        let tx = conn.transaction()?;
+
+        // Check template exists
+        let exists: Option<String> = tx
+            .query_row(
+                "SELECT id FROM templates WHERE id = ?",
+                [id.to_string()],
+                |row| row.get(0),
+            )
+            .optional()?;
+
+        if exists.is_none() {
+            return Err(LedgerError::NotFound(format!("Template {} not found", id)));
+        }
+
+        let last_modified = Utc::now().to_rfc3339();
+
+        // Remove default template mappings
+        tx.execute(
+            "DELETE FROM entry_type_templates WHERE template_id = ?",
+            [id.to_string()],
+        )?;
+
+        // Remove all versions
+        tx.execute(
+            "DELETE FROM template_versions WHERE template_id = ?",
+            [id.to_string()],
+        )?;
+
+        // Delete the template
+        tx.execute("DELETE FROM templates WHERE id = ?", [id.to_string()])?;
+
+        tx.execute(
+            "UPDATE meta SET value = ? WHERE key = 'last_modified'",
+            [&last_modified],
+        )?;
+
+        tx.commit()?;
+        Ok(())
+    }
+
+    fn set_default_template(&mut self, entry_type_id: &Uuid, template_id: &Uuid) -> Result<()> {
+        let mut conn = self.lock_conn()?;
+        let tx = conn.transaction()?;
+
+        // Check entry type exists
+        let entry_type_exists: Option<String> = tx
+            .query_row(
+                "SELECT id FROM entry_types WHERE id = ?",
+                [entry_type_id.to_string()],
+                |row| row.get(0),
+            )
+            .optional()?;
+
+        if entry_type_exists.is_none() {
+            return Err(LedgerError::NotFound(format!(
+                "Entry type {} not found",
+                entry_type_id
+            )));
+        }
+
+        // Check template exists and is for this entry type
+        let template_entry_type_id: Option<String> = tx
+            .query_row(
+                "SELECT entry_type_id FROM templates WHERE id = ?",
+                [template_id.to_string()],
+                |row| row.get(0),
+            )
+            .optional()?;
+
+        let template_entry_type_id = template_entry_type_id
+            .ok_or_else(|| LedgerError::NotFound(format!("Template {} not found", template_id)))?;
+
+        if template_entry_type_id != entry_type_id.to_string() {
+            return Err(LedgerError::Validation(format!(
+                "Template {} is not for entry type {}",
+                template_id, entry_type_id
+            )));
+        }
+
+        let last_modified = Utc::now().to_rfc3339();
+
+        // Deactivate existing default for this entry type
+        tx.execute(
+            "UPDATE entry_type_templates SET active = 0 WHERE entry_type_id = ? AND active = 1",
+            [entry_type_id.to_string()],
+        )?;
+
+        // Insert or update the mapping
+        tx.execute(
+            r#"
+            INSERT INTO entry_type_templates (entry_type_id, template_id, active)
+            VALUES (?, ?, 1)
+            ON CONFLICT(entry_type_id, template_id) DO UPDATE SET active = 1
+            "#,
+            (entry_type_id.to_string(), template_id.to_string()),
+        )?;
+
+        tx.execute(
+            "UPDATE meta SET value = ? WHERE key = 'last_modified'",
+            [&last_modified],
+        )?;
+
+        tx.commit()?;
+        Ok(())
+    }
+
+    fn clear_default_template(&mut self, entry_type_id: &Uuid) -> Result<()> {
+        let mut conn = self.lock_conn()?;
+        let tx = conn.transaction()?;
+
+        // Check entry type exists
+        let entry_type_exists: Option<String> = tx
+            .query_row(
+                "SELECT id FROM entry_types WHERE id = ?",
+                [entry_type_id.to_string()],
+                |row| row.get(0),
+            )
+            .optional()?;
+
+        if entry_type_exists.is_none() {
+            return Err(LedgerError::NotFound(format!(
+                "Entry type {} not found",
+                entry_type_id
+            )));
+        }
+
+        let last_modified = Utc::now().to_rfc3339();
+
+        tx.execute(
+            "UPDATE entry_type_templates SET active = 0 WHERE entry_type_id = ? AND active = 1",
+            [entry_type_id.to_string()],
+        )?;
+
+        tx.execute(
+            "UPDATE meta SET value = ? WHERE key = 'last_modified'",
+            [&last_modified],
+        )?;
+
+        tx.commit()?;
+        Ok(())
+    }
+
+    fn get_default_template(&self, entry_type_id: &Uuid) -> Result<Option<Template>> {
+        let conn = self.lock_conn()?;
+
+        // Join through entry_type_templates to get the default template directly
+        // This avoids a second lock acquisition from calling get_template_by_id
+        let result = conn.query_row(
+            r#"
+            SELECT t.id, t.name, t.entry_type_id, tv.version, tv.created_at, t.device_id, t.description, tv.template_json
+            FROM entry_type_templates ett
+            JOIN templates t ON t.id = ett.template_id
+            JOIN template_versions tv ON tv.template_id = t.id AND tv.active = 1
+            WHERE ett.entry_type_id = ? AND ett.active = 1
+            ORDER BY tv.version DESC
+            LIMIT 1
+            "#,
+            [entry_type_id.to_string()],
+            |row| {
+                Ok((
+                    row.get::<_, String>(0)?,
+                    row.get::<_, String>(1)?,
+                    row.get::<_, String>(2)?,
+                    row.get::<_, i32>(3)?,
+                    row.get::<_, String>(4)?,
+                    row.get::<_, String>(5)?,
+                    row.get::<_, Option<String>>(6)?,
+                    row.get::<_, String>(7)?,
+                ))
+            },
+        );
+
+        match result {
+            Ok((
+                id_str,
+                name,
+                entry_type_id_str,
+                version,
+                created_at,
+                device_id,
+                description,
+                template_json,
+            )) => {
+                let id = Uuid::parse_str(&id_str)
+                    .map_err(|e| LedgerError::Storage(format!("Invalid UUID: {}", e)))?;
+                let entry_type_id = Uuid::parse_str(&entry_type_id_str)
+                    .map_err(|e| LedgerError::Storage(format!("Invalid entry_type_id: {}", e)))?;
+                let device_id = Uuid::parse_str(&device_id)
+                    .map_err(|e| LedgerError::Storage(format!("Invalid device_id: {}", e)))?;
+                let created_at = DateTime::parse_from_rfc3339(&created_at)
+                    .map_err(|e| LedgerError::Storage(format!("Invalid timestamp: {}", e)))?
+                    .with_timezone(&Utc);
+                let template_json: serde_json::Value = serde_json::from_str(&template_json)
+                    .map_err(|e| LedgerError::Storage(format!("Invalid template JSON: {}", e)))?;
+
+                Ok(Some(Template {
+                    id,
+                    name,
+                    entry_type_id,
+                    version,
+                    created_at,
+                    device_id,
+                    description,
+                    template_json,
+                }))
+            }
+            Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
+            Err(e) => Err(LedgerError::Storage(format!("Database error: {}", e))),
+        }
     }
 }

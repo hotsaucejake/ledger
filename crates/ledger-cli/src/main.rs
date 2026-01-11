@@ -18,8 +18,8 @@ use clap::Parser;
 use ledger_core::VERSION;
 
 use crate::app::AppContext;
-use crate::cli::{Cli, Commands};
-use crate::commands::{entries, init, maintenance, misc};
+use crate::cli::{Cli, Commands, CompositionsSubcommand, TemplatesSubcommand};
+use crate::commands::{associations, compositions, entries, init, maintenance, misc, templates};
 
 fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
@@ -64,6 +64,52 @@ fn main() -> anyhow::Result<()> {
         }
         Some(Commands::InternalCacheDaemon(args)) => {
             maintenance::handle_internal_cache_daemon(args)?;
+        }
+        Some(Commands::Compositions(args)) => match &args.command {
+            CompositionsSubcommand::Create(create_args) => {
+                compositions::handle_create(&ctx, create_args)?;
+            }
+            CompositionsSubcommand::List(list_args) => {
+                compositions::handle_list(&ctx, list_args)?;
+            }
+            CompositionsSubcommand::Show(show_args) => {
+                compositions::handle_show(&ctx, show_args)?;
+            }
+            CompositionsSubcommand::Rename(rename_args) => {
+                compositions::handle_rename(&ctx, rename_args)?;
+            }
+            CompositionsSubcommand::Delete(delete_args) => {
+                compositions::handle_delete(&ctx, delete_args)?;
+            }
+        },
+        Some(Commands::Templates(args)) => match &args.command {
+            TemplatesSubcommand::Create(create_args) => {
+                templates::handle_create(&ctx, create_args)?;
+            }
+            TemplatesSubcommand::List(list_args) => {
+                templates::handle_list(&ctx, list_args)?;
+            }
+            TemplatesSubcommand::Show(show_args) => {
+                templates::handle_show(&ctx, show_args)?;
+            }
+            TemplatesSubcommand::Update(update_args) => {
+                templates::handle_update(&ctx, update_args)?;
+            }
+            TemplatesSubcommand::Delete(delete_args) => {
+                templates::handle_delete(&ctx, delete_args)?;
+            }
+            TemplatesSubcommand::SetDefault(set_default_args) => {
+                templates::handle_set_default(&ctx, set_default_args)?;
+            }
+            TemplatesSubcommand::ClearDefault(clear_default_args) => {
+                templates::handle_clear_default(&ctx, clear_default_args)?;
+            }
+        },
+        Some(Commands::Attach(args)) => {
+            associations::handle_attach(&ctx, args)?;
+        }
+        Some(Commands::Detach(args)) => {
+            associations::handle_detach(&ctx, args)?;
         }
         None => {
             println!("Ledger v{}", VERSION);
