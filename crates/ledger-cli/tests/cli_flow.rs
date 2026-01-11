@@ -1299,3 +1299,21 @@ fn test_cli_passphrase_retry_exits_after_three_failures() {
     assert_eq!(list.status.code(), Some(5));
     assert!(stderr.contains("Too many failed passphrase attempts"));
 }
+
+#[test]
+fn test_cli_invalid_args_exit_code() {
+    let output = Command::new(bin()).arg("add").output().expect("run add");
+    assert_eq!(output.status.code(), Some(2));
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("Usage:") || stderr.contains("error:"));
+}
+
+#[test]
+fn test_cli_missing_ledger_exit_code() {
+    let (config_home, data_home) = temp_xdg_dirs("ledger_cli_exit_code_missing");
+    let mut list = Command::new(bin());
+    list.arg("list");
+    apply_xdg_env(&mut list, &config_home, &data_home);
+    let list = list.output().expect("run list");
+    assert_eq!(list.status.code(), Some(1));
+}

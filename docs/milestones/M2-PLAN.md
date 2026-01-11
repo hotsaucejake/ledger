@@ -142,7 +142,7 @@ See `docs/design/session-cache.md` for design details.
 ### Error UX Tests
 
 - [x] Error messages include actionable next steps (per RFC-003 §15)
-- [ ] Exit codes match RFC-003 §14.2
+- [x] Exit codes match RFC-003 §14.2
 
 ## Definition of Done
 
