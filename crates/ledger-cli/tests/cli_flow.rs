@@ -43,9 +43,12 @@ fn temp_xdg_dirs(prefix: &str) -> (PathBuf, PathBuf) {
 }
 
 fn apply_xdg_env(cmd: &mut Command, config: &PathBuf, data: &PathBuf) {
+    let runtime = data.parent().unwrap().join("runtime");
     cmd.env("XDG_CONFIG_HOME", config)
         .env("XDG_DATA_HOME", data)
-        .env("XDG_RUNTIME_DIR", data.parent().unwrap().join("runtime"));
+        .env("XDG_RUNTIME_DIR", &runtime)
+        // macOS uses TMPDIR for cache socket path instead of XDG_RUNTIME_DIR
+        .env("TMPDIR", &runtime);
 }
 
 fn write_config_file(
@@ -113,12 +116,17 @@ fn create_ledger_with_passphrase(path: &Path, passphrase: &str) {
 }
 
 fn cache_socket_path(data_home: &Path) -> PathBuf {
-    data_home
-        .parent()
-        .unwrap()
-        .join("runtime")
-        .join("ledger")
-        .join("cache.sock")
+    let runtime = data_home.parent().unwrap().join("runtime");
+    #[cfg(target_os = "macos")]
+    {
+        // macOS uses TMPDIR/ledger-cache.sock (we set TMPDIR to runtime dir)
+        runtime.join("ledger-cache.sock")
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        // Linux uses XDG_RUNTIME_DIR/ledger/cache.sock
+        runtime.join("ledger").join("cache.sock")
+    }
 }
 
 fn ledger_hash(path: &Path) -> String {
