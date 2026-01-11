@@ -38,7 +38,7 @@ pub fn open_storage_with_retry(
                 Err(err) if is_incorrect_passphrase_error(&err) => {
                     let _ = cache_clear(&config.socket_path);
                 }
-                Err(err) => return Err(anyhow::anyhow!("{}", err)),
+                Err(err) => return Err(err.into()),
             }
         }
     }
@@ -168,7 +168,7 @@ fn open_with_passphrase_and_cache(
         Err(err) if is_missing_ledger_error(&err) => {
             Err(anyhow::anyhow!(missing_ledger_message(path)))
         }
-        Err(err) => Err(anyhow::anyhow!("{}", err)),
+        Err(err) => Err(err.into()),
     }
 }
 
@@ -240,7 +240,7 @@ fn open_with_retry_prompt(
             Err(err) if is_missing_ledger_error(&err) => {
                 return Err(anyhow::anyhow!(missing_ledger_message(path)));
             }
-            Err(err) => return Err(anyhow::anyhow!("{}", err)),
+            Err(err) => return Err(err.into()),
         }
     }
 }

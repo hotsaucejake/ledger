@@ -184,18 +184,18 @@ impl AgeSqliteStorage {
                 .and_then(|value| value.as_bool())
                 .unwrap_or(false);
 
-            let value = data_obj.get(name);
-            if value.is_none() {
-                if required {
-                    return Err(LedgerError::Validation(format!(
-                        "Missing required field: {}",
-                        name
-                    )));
+            let value = match data_obj.get(name) {
+                Some(v) => v,
+                None => {
+                    if required {
+                        return Err(LedgerError::Validation(format!(
+                            "Missing required field: {}",
+                            name
+                        )));
+                    }
+                    continue;
                 }
-                continue;
-            }
-
-            let value = value.unwrap();
+            };
             if value.is_null() {
                 if !nullable {
                     return Err(LedgerError::Validation(format!(
