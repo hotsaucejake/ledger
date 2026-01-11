@@ -1392,3 +1392,40 @@ fn test_cli_missing_ledger_exit_code() {
     let list = list.output().expect("run list");
     assert_eq!(list.status.code(), Some(1));
 }
+
+#[test]
+fn test_cli_doctor_missing_config() {
+    let (config_home, data_home) = temp_xdg_dirs("ledger_cli_doctor_missing");
+    let mut doctor = Command::new(bin());
+    doctor.arg("doctor");
+    apply_xdg_env(&mut doctor, &config_home, &data_home);
+    let doctor = doctor.output().expect("run doctor");
+
+    assert!(!doctor.status.success());
+    let stderr = String::from_utf8_lossy(&doctor.stderr);
+    assert!(stderr.contains("ledger init"));
+}
+
+#[test]
+fn test_cli_doctor_ok() {
+    let ledger_path = temp_ledger_path("ledger_cli_doctor_ok");
+    let passphrase = "test-passphrase-secure-123";
+    let (config_home, data_home) = temp_xdg_dirs("ledger_cli_doctor_ok");
+
+    let mut init = Command::new(bin());
+    init.arg("init")
+        .arg(&ledger_path)
+        .env("LEDGER_PASSPHRASE", passphrase);
+    apply_xdg_env(&mut init, &config_home, &data_home);
+    let init = init.output().expect("run init");
+    assert!(init.status.success());
+
+    let mut doctor = Command::new(bin());
+    doctor.arg("doctor").env("LEDGER_PASSPHRASE", passphrase);
+    apply_xdg_env(&mut doctor, &config_home, &data_home);
+    let doctor = doctor.output().expect("run doctor");
+
+    assert!(doctor.status.success());
+    let stdout = String::from_utf8_lossy(&doctor.stdout);
+    assert!(stdout.contains("Doctor: OK"));
+}

@@ -246,6 +246,13 @@ enum Commands {
     /// Clear cached passphrase (if enabled)
     Lock,
 
+    /// Run onboarding diagnostics
+    Doctor {
+        /// Disable interactive prompts
+        #[arg(long)]
+        no_input: bool,
+    },
+
     /// Generate shell completions
     Completions {
         /// Shell to generate completions for
@@ -639,6 +646,9 @@ fn main() -> anyhow::Result<()> {
             if !cli.quiet {
                 println!("Passphrase cache cleared.");
             }
+        }
+        Some(Commands::Doctor { no_input }) => {
+            run_doctor(&cli, *no_input)?;
         }
         Some(Commands::Completions { shell }) => {
             let mut cmd = Cli::command();
@@ -1306,6 +1316,45 @@ fn backup_atomic_copy(
     }
 
     Ok(bytes)
+}
+
+fn run_doctor(cli: &Cli, no_input: bool) -> anyhow::Result<()> {
+    let config_path = resolve_config_path()?;
+    if !config_path.exists() {
+        eprintln!("{}", missing_config_message(&config_path));
+        return Err(anyhow::anyhow!("Ledger is not initialized"));
+    }
+
+    let config = read_config(&config_path).map_err(|e| anyhow::anyhow!("Config error: {}", e))?;
+    let ledger_path = std::path::PathBuf::from(config.ledger.path);
+    if !ledger_path.exists() {
+        eprintln!("{}", missing_ledger_message(&ledger_path));
+        return Err(anyhow::anyhow!("Ledger file missing"));
+    }
+
+    let (storage, _passphrase) = open_storage_with_retry(cli, no_input).map_err(|e| {
+        anyhow::anyhow!(
+            "Failed to open ledger for diagnostics: {}\nHint: Set LEDGER_PASSPHRASE or run in a TTY.",
+            e
+        )
+    })?;
+
+    if let Err(err) = storage.check_integrity() {
+        eprintln!("Doctor: FAILED");
+        eprintln!("- integrity check: FAILED");
+        eprintln!("- error: {}", err);
+        eprintln!("Hint: Restore from a backup or export data before retrying.");
+        return Err(anyhow::anyhow!("Doctor failed"));
+    }
+
+    if !cli.quiet {
+        println!("Doctor: OK");
+        println!("- config: OK ({})", config_path.display());
+        println!("- ledger: OK ({})", ledger_path.display());
+        println!("- integrity: OK");
+    }
+
+    Ok(())
 }
 
 #[cfg(test)]

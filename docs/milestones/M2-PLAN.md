@@ -92,8 +92,8 @@ See `docs/design/session-cache.md` for design details.
 ### 6. Optional (Still M2-safe)
 
 - [x] `ledger edit <id>` implemented as revision (supersedes)
-- [ ] Basic templates for journal (no schema expansion)
-- [ ] `ledger doctor` onboarding diagnostics (add to RFC-003 if implemented)
+- [ ] Basic templates for journal (defer to Phase 0.2; avoid new data model entities)
+- [x] `ledger doctor` onboarding diagnostics (add to RFC-003 if implemented)
 
 ## Non-Goals
 
