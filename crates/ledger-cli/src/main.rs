@@ -15,47 +15,47 @@ mod security;
 use clap::Parser;
 use ledger_core::VERSION;
 
+use crate::app::AppContext;
 use crate::cli::{Cli, Commands};
 use crate::commands::{entries, init, maintenance, misc};
 
 fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
+    let ctx = AppContext::new(&cli);
 
     match &cli.command {
         Some(Commands::Init(args)) => {
-            init::handle_init(&cli, args)?;
+            init::handle_init(&ctx, args)?;
         }
         Some(Commands::Add(args)) => {
-            let editor_override = app::load_security_config(&cli)?.editor;
-            entries::handle_add(&cli, args, editor_override.as_deref())?;
+            entries::handle_add(&ctx, args)?;
         }
         Some(Commands::Edit(args)) => {
-            let editor_override = app::load_security_config(&cli)?.editor;
-            entries::handle_edit(&cli, args, editor_override.as_deref())?;
+            entries::handle_edit(&ctx, args)?;
         }
         Some(Commands::List(args)) => {
-            entries::handle_list(&cli, args)?;
+            entries::handle_list(&ctx, args)?;
         }
         Some(Commands::Search(args)) => {
-            entries::handle_search(&cli, args)?;
+            entries::handle_search(&ctx, args)?;
         }
         Some(Commands::Show(args)) => {
-            entries::handle_show(&cli, args)?;
+            entries::handle_show(&ctx, args)?;
         }
         Some(Commands::Export(args)) => {
-            entries::handle_export(&cli, args)?;
+            entries::handle_export(&ctx, args)?;
         }
         Some(Commands::Check) => {
-            maintenance::handle_check(&cli)?;
+            maintenance::handle_check(&ctx)?;
         }
         Some(Commands::Backup(args)) => {
-            maintenance::handle_backup(&cli, args)?;
+            maintenance::handle_backup(&ctx, args)?;
         }
         Some(Commands::Lock) => {
-            maintenance::handle_lock(&cli)?;
+            maintenance::handle_lock(&ctx)?;
         }
         Some(Commands::Doctor(args)) => {
-            maintenance::handle_doctor(&cli, args)?;
+            maintenance::handle_doctor(&ctx, args)?;
         }
         Some(Commands::Completions(args)) => {
             misc::handle_completions(args)?;

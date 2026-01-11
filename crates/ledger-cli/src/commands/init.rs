@@ -4,9 +4,9 @@ use dialoguer::{Confirm, Input, Select};
 use ledger_core::storage::{AgeSqliteStorage, NewEntryType, StorageEngine};
 use uuid::Uuid;
 
-use crate::app::{device_keyfile_warning, resolve_config_path};
+use crate::app::{device_keyfile_warning, resolve_config_path, AppContext};
 use crate::cache::ledger_hash;
-use crate::cli::{Cli, InitArgs};
+use crate::cli::InitArgs;
 use crate::config::{
     default_keyfile_path, default_ledger_path, write_config, KeyfileMode, LedgerConfig,
     SecurityTier,
@@ -17,16 +17,16 @@ use crate::security::{
     write_keyfile_plain,
 };
 
-pub fn handle_init(cli: &Cli, args: &InitArgs) -> anyhow::Result<()> {
+pub fn handle_init(ctx: &AppContext, args: &InitArgs) -> anyhow::Result<()> {
     let interactive = std::io::stdin().is_terminal();
     let effective_no_input = args.no_input || !interactive;
 
-    if !cli.quiet && !effective_no_input {
+    if !ctx.quiet() && !effective_no_input {
         println!("Welcome to Ledger.\n");
     }
 
     let default_ledger = default_ledger_path()?;
-    let ledger_path = match args.path.clone().or_else(|| cli.ledger.clone()) {
+    let ledger_path = match args.path.clone().or_else(|| ctx.cli().ledger.clone()) {
         Some(value) => std::path::PathBuf::from(value),
         None => {
             if effective_no_input {
@@ -217,7 +217,7 @@ pub fn handle_init(cli: &Cli, args: &InitArgs) -> anyhow::Result<()> {
         let _ = keychain_set(&account, &passphrase);
     }
 
-    if !cli.quiet {
+    if !ctx.quiet() {
         println!("Ledger created at {}", ledger_path.to_string_lossy());
         println!("Config written to {}", config_path.to_string_lossy());
         if passphrase_cache_ttl_seconds > 0 {

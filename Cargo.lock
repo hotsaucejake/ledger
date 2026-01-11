@@ -1357,6 +1357,7 @@ dependencies = [
  "keyring",
  "ledger-core",
  "libc",
+ "once_cell",
  "rusqlite",
  "serde",
  "serde_json",

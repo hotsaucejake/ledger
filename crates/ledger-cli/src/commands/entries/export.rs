@@ -1,12 +1,12 @@
 use ledger_core::storage::{EntryFilter, StorageEngine};
 
-use crate::app::{exit_not_found_with_hint, open_storage_with_retry};
-use crate::cli::{Cli, ExportArgs};
+use crate::app::{exit_not_found_with_hint, AppContext};
+use crate::cli::ExportArgs;
 use crate::helpers::{ensure_journal_type_name, parse_datetime};
 use crate::output::{entries_json, entry_type_name_map};
 
-pub fn handle_export(cli: &Cli, args: &ExportArgs) -> anyhow::Result<()> {
-    let (storage, _passphrase) = open_storage_with_retry(cli, false)?;
+pub fn handle_export(ctx: &AppContext, args: &ExportArgs) -> anyhow::Result<()> {
+    let (storage, _passphrase) = ctx.open_storage(false)?;
 
     let mut filter = EntryFilter::new();
     if let Some(ref t) = args.entry_type {

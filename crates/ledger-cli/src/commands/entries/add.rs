@@ -1,13 +1,13 @@
 use ledger_core::storage::{NewEntry, StorageEngine};
 
-use crate::app::{exit_not_found_with_hint, open_storage_with_retry};
-use crate::cli::{AddArgs, Cli};
+use crate::app::{exit_not_found_with_hint, AppContext};
+use crate::cli::AddArgs;
 use crate::helpers::{ensure_journal_type_name, parse_datetime, read_entry_body};
 
-pub fn handle_add(cli: &Cli, args: &AddArgs, editor_override: Option<&str>) -> anyhow::Result<()> {
+pub fn handle_add(ctx: &AppContext, args: &AddArgs) -> anyhow::Result<()> {
     ensure_journal_type_name(&args.entry_type)?;
 
-    let (mut storage, passphrase) = open_storage_with_retry(cli, args.no_input)?;
+    let (mut storage, passphrase) = ctx.open_storage(args.no_input)?;
     let entry_type_record = storage
         .get_entry_type(&args.entry_type)?
         .unwrap_or_else(|| {
@@ -17,6 +17,7 @@ pub fn handle_add(cli: &Cli, args: &AddArgs, editor_override: Option<&str>) -> a
             )
         });
 
+    let editor_override = ctx.editor()?;
     let body = read_entry_body(args.no_input, args.body.clone(), editor_override, None)?;
     let data = serde_json::json!({ "body": body });
     let metadata = storage.metadata()?;
@@ -35,7 +36,7 @@ pub fn handle_add(cli: &Cli, args: &AddArgs, editor_override: Option<&str>) -> a
     let entry_id = storage.insert_entry(&new_entry)?;
     storage.close(&passphrase)?;
 
-    if !cli.quiet {
+    if !ctx.quiet() {
         println!("Added entry {}", entry_id);
     }
     Ok(())

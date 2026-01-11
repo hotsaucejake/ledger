@@ -2,17 +2,13 @@ use uuid::Uuid;
 
 use ledger_core::storage::{NewEntry, StorageEngine};
 
-use crate::app::{exit_not_found_with_hint, open_storage_with_retry};
-use crate::cli::{Cli, EditArgs};
+use crate::app::{exit_not_found_with_hint, AppContext};
+use crate::cli::EditArgs;
 use crate::helpers::{ensure_journal_type_name, read_entry_body};
 use crate::output::entry_type_name_map;
 
-pub fn handle_edit(
-    cli: &Cli,
-    args: &EditArgs,
-    editor_override: Option<&str>,
-) -> anyhow::Result<()> {
-    let (mut storage, passphrase) = open_storage_with_retry(cli, args.no_input)?;
+pub fn handle_edit(ctx: &AppContext, args: &EditArgs) -> anyhow::Result<()> {
+    let (mut storage, passphrase) = ctx.open_storage(args.no_input)?;
     let parsed =
         Uuid::parse_str(&args.id).map_err(|e| anyhow::anyhow!("Invalid entry ID: {}", e))?;
     let entry = storage.get_entry(&parsed)?.unwrap_or_else(|| {
@@ -33,6 +29,7 @@ pub fn handle_edit(
         .get("body")
         .and_then(|v| v.as_str())
         .unwrap_or("");
+    let editor_override = ctx.editor()?;
     let body = read_entry_body(
         args.no_input,
         args.body.clone(),
@@ -57,7 +54,7 @@ pub fn handle_edit(
     let entry_id = storage.insert_entry(&new_entry)?;
     storage.close(&passphrase)?;
 
-    if !cli.quiet {
+    if !ctx.quiet() {
         println!("Edited entry {}", entry_id);
     }
     Ok(())

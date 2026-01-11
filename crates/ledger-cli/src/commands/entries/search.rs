@@ -1,15 +1,15 @@
 use chrono::Utc;
 use ledger_core::StorageEngine;
 
-use crate::app::{exit_not_found_with_hint, open_storage_with_retry};
-use crate::cli::{Cli, SearchArgs};
+use crate::app::{exit_not_found_with_hint, AppContext};
+use crate::cli::SearchArgs;
 use crate::helpers::{ensure_journal_type_name, parse_duration, parse_output_format, OutputFormat};
 use crate::output::{entries_json, entry_summary, entry_table_summary, entry_type_name_map};
 
 const TABLE_SUMMARY_MAX: usize = 80;
 
-pub fn handle_search(cli: &Cli, args: &SearchArgs) -> anyhow::Result<()> {
-    let (storage, _passphrase) = open_storage_with_retry(cli, false)?;
+pub fn handle_search(ctx: &AppContext, args: &SearchArgs) -> anyhow::Result<()> {
+    let (storage, _passphrase) = ctx.open_storage(false)?;
 
     let mut entries = storage.search_entries(&args.query)?;
     if let Some(ref t) = args.r#type {
@@ -45,14 +45,14 @@ pub fn handle_search(cli: &Cli, args: &SearchArgs) -> anyhow::Result<()> {
         println!("{}", output);
     } else {
         if entries.is_empty() {
-            if !cli.quiet {
+            if !ctx.quiet() {
                 println!("No entries found.");
             }
             return Ok(());
         }
         match format.unwrap_or(OutputFormat::Table) {
             OutputFormat::Table => {
-                if !cli.quiet {
+                if !ctx.quiet() {
                     println!("ID | CREATED_AT | SUMMARY");
                 }
                 for entry in entries {

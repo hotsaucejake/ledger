@@ -2,16 +2,16 @@ use std::io::IsTerminal;
 use std::path::Path;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use crate::app::{missing_ledger_message, resolve_ledger_path};
-use crate::cli::{BackupArgs, Cli};
+use crate::app::{missing_ledger_message, resolve_ledger_path, AppContext};
+use crate::cli::BackupArgs;
 
-pub fn handle_backup(cli: &Cli, args: &BackupArgs) -> anyhow::Result<()> {
-    let source = resolve_ledger_path(cli)?;
+pub fn handle_backup(ctx: &AppContext, args: &BackupArgs) -> anyhow::Result<()> {
+    let source = resolve_ledger_path(ctx.cli())?;
     let source_path = Path::new(&source);
     if !source_path.exists() {
         return Err(anyhow::anyhow!(missing_ledger_message(source_path)));
     }
-    if std::io::stdin().is_terminal() && !cli.quiet {
+    if std::io::stdin().is_terminal() && !ctx.quiet() {
         let proceed = dialoguer::Confirm::new()
             .with_prompt(format!("Back up ledger to {}?", args.destination))
             .default(true)
@@ -24,7 +24,7 @@ pub fn handle_backup(cli: &Cli, args: &BackupArgs) -> anyhow::Result<()> {
     if count == 0 {
         return Err(anyhow::anyhow!("Backup failed: zero bytes written"));
     }
-    if !cli.quiet {
+    if !ctx.quiet() {
         println!("Backed up ledger to {}", args.destination);
     }
     Ok(())

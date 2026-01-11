@@ -1,13 +1,12 @@
 use ledger_core::StorageEngine;
 
-use crate::app::open_storage_with_retry;
-use crate::cli::Cli;
+use crate::app::AppContext;
 
-pub fn handle_check(cli: &Cli) -> anyhow::Result<()> {
-    let (storage, _passphrase) = open_storage_with_retry(cli, false)?;
+pub fn handle_check(ctx: &AppContext) -> anyhow::Result<()> {
+    let (storage, _passphrase) = ctx.open_storage(false)?;
     match storage.check_integrity() {
         Ok(()) => {
-            if !cli.quiet {
+            if !ctx.quiet() {
                 println!("Integrity check: OK");
                 println!("- foreign keys: OK");
                 println!("- entries FTS: OK");

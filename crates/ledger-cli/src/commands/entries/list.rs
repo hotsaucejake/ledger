@@ -2,16 +2,16 @@ use chrono::Utc;
 
 use ledger_core::storage::{EntryFilter, StorageEngine};
 
-use crate::app::{exit_not_found_with_hint, open_storage_with_retry};
-use crate::cli::{Cli, ListArgs};
+use crate::app::{exit_not_found_with_hint, AppContext};
+use crate::cli::ListArgs;
 use crate::helpers::{ensure_journal_type_name, parse_duration, parse_output_format, OutputFormat};
 use crate::output::{entries_json, entry_summary, entry_table_summary, entry_type_name_map};
 
 const DEFAULT_LIST_LIMIT: usize = 20;
 const TABLE_SUMMARY_MAX: usize = 80;
 
-pub fn handle_list(cli: &Cli, args: &ListArgs) -> anyhow::Result<()> {
-    let (storage, _passphrase) = open_storage_with_retry(cli, false)?;
+pub fn handle_list(ctx: &AppContext, args: &ListArgs) -> anyhow::Result<()> {
+    let (storage, _passphrase) = ctx.open_storage(false)?;
 
     let mut filter = EntryFilter::new();
     if let Some(ref t) = args.entry_type {
@@ -63,14 +63,14 @@ pub fn handle_list(cli: &Cli, args: &ListArgs) -> anyhow::Result<()> {
         println!("{}", output);
     } else {
         if entries.is_empty() {
-            if !cli.quiet {
+            if !ctx.quiet() {
                 println!("No entries found.");
             }
             return Ok(());
         }
         match format.unwrap_or(OutputFormat::Table) {
             OutputFormat::Table => {
-                if !cli.quiet {
+                if !ctx.quiet() {
                     println!("ID | CREATED_AT | SUMMARY");
                 }
                 for entry in entries {
