@@ -82,7 +82,7 @@ cargo install --path crates/ledger-cli
 
 ## Passphrase Requirements
 
-- Minimum length: **12 characters**
+- Minimum length: **8 characters**
 - Must not be empty or whitespace-only
 
 ## Config Overview

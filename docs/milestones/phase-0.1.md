@@ -105,7 +105,7 @@ Per format-spec.md §7:
 - Atomic writes with backup
 
 **Passphrase requirements:**
-- Minimum length: 12 characters
+- Minimum length: 8 characters
 - Must not be empty or whitespace-only
 
 ---

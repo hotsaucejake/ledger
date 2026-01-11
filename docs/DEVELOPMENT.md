@@ -666,7 +666,7 @@ echo "✅ All checks passed!"
 
 ### Passphrase Requirements
 
-- Minimum length: **12 characters**
+- Minimum length: **8 characters**
 - Must not be empty or whitespace-only
 - Enforced in `ledger-core::crypto::validate_passphrase`
 

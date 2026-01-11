@@ -107,7 +107,7 @@ See `docs/design/session-cache.md` for design details.
 ### Unit Tests
 
 - [x] Config parsing matches `config-spec.md` format
-- [x] Passphrase validation (min 12 chars, not whitespace-only)
+- [x] Passphrase validation (min 8 chars, not whitespace-only)
 - [x] Security tier configuration validation
 - [x] XDG path resolution on Linux
 
