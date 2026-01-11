@@ -921,7 +921,7 @@ fn open_with_retry_prompt(
     interactive: bool,
     cache_config: Option<&cache::CacheConfig>,
 ) -> anyhow::Result<(AgeSqliteStorage, String)> {
-    let test_attempts = if !interactive {
+    let test_attempts = if !interactive && cfg!(feature = "test-support") {
         std::env::var("LEDGER_TEST_PASSPHRASE_ATTEMPTS")
             .ok()
             .map(|value| {

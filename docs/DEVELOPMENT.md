@@ -65,6 +65,14 @@ Before making changes, read:
 - `LEDGER_PASSPHRASE`: non-interactive passphrase (useful for tests/scripts).
 - `LEDGER_CONFIG`: override config path.
 
+## Test Support Feature
+
+Some integration tests rely on test-only hooks. Run them with:
+
+```bash
+cargo test -p ledger-cli --features test-support
+```
+
 4. **Fail loudly, never silently**
    - Use `Result<T>` for all fallible operations
    - Rich error messages with context

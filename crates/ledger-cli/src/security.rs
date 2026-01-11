@@ -127,6 +127,9 @@ fn set_file_permissions(path: &Path) -> anyhow::Result<()> {
 }
 
 fn test_keychain_path() -> Option<PathBuf> {
+    if !cfg!(feature = "test-support") {
+        return None;
+    }
     std::env::var("LEDGER_TEST_KEYCHAIN_PATH")
         .ok()
         .filter(|value| !value.trim().is_empty())

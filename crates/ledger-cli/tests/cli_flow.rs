@@ -1052,6 +1052,7 @@ fn test_cli_device_keyfile_flow() {
     assert!(list.status.success());
 }
 
+#[cfg(feature = "test-support")]
 #[test]
 fn test_cli_keychain_flow_uses_cached_passphrase() {
     let ledger_path = temp_ledger_path("ledger_cli_keychain");
@@ -1353,6 +1354,7 @@ fn test_cli_show_not_found_exit_code() {
     assert!(stderr.contains("Hint:"));
 }
 
+#[cfg(feature = "test-support")]
 #[test]
 fn test_cli_passphrase_retry_exits_after_three_failures() {
     let ledger_path = temp_ledger_path("ledger_cli_retry_exit");
