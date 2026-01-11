@@ -106,11 +106,13 @@ Ledger writes a config at `~/.config/ledger/config.toml` by default. It includes
 
 Exit criteria: Can create, search, and export encrypted journal entries.
 
-### Phase 0.2 — Structured Schemas
+### Phase 0.2 — Structured Schemas, Templates, Compositions
 
 - User-defined entry types
 - Schema creation with guardrails
 - Compositions (semantic grouping)
+- Templates stored in the ledger (reusable defaults)
+- Enum fields (single/multi-select)
 
 ### Phase 0.3 — Query & Analysis
 
@@ -148,6 +150,7 @@ ledger/
 - [RFC-005](docs/RFC/RFC-005.md) — Implementation plan
 - [RFC-006](docs/RFC/RFC-006.md) — Compositions
 - [Format Spec](docs/design/format-spec.md) — File format specification
+- [Templates Spec](docs/design/templates.md) — Template storage and behavior
 
 ## For Developers
 

@@ -1,6 +1,6 @@
 # Milestone 2: UX Polish & First-Run Experience
 
-**Status**: In Progress (core UX complete; verification + templates remaining)
+**Status**: Complete
 **Target**: Improve onboarding and daily UX without expanding the data model.
 
 > **Note**: This milestone focuses on "product-ready" UX. The technical milestones
@@ -92,7 +92,7 @@ See `docs/design/session-cache.md` for design details.
 ### 6. Optional (Still M2-safe)
 
 - [x] `ledger edit <id>` implemented as revision (supersedes)
-- [ ] Basic templates for journal (defer to Phase 0.2; avoid new data model entities)
+- [ ] Basic templates for journal (defer to Phase 0.2; stored in ledger as data model entity)
 - [x] `ledger doctor` onboarding diagnostics (add to RFC-003 if implemented)
 
 ## Non-Goals
@@ -148,8 +148,8 @@ See `docs/design/session-cache.md` for design details.
 
 M2 is complete when:
 
-- [ ] All tests pass (`cargo test`)
-- [ ] No clippy warnings (`cargo clippy -- -D warnings`)
+- [x] All tests pass (`cargo test`)
+- [x] No clippy warnings (`cargo clippy -- -D warnings`)
 - [x] `ledger init` completes successfully with wizard
 - [x] `ledger init --advanced` exposes all options
 - [x] `ledger` (no args) shows quickstart
@@ -157,9 +157,9 @@ M2 is complete when:
 - [x] Ledger created at `~/.local/share/ledger/ledger.ledger`
 - [x] All 4 security tiers functional
 - [x] Session cache works with configurable TTL
-- [ ] First-time user can complete init in < 60 seconds (manual test)
-- [ ] CI passes on Linux + macOS
-- [ ] Documentation updated (README, DEVELOPMENT.md if needed)
+- [x] First-time user can complete init in < 60 seconds (manual test)
+- [x] CI passes on Linux + macOS
+- [x] Documentation updated (README, DEVELOPMENT.md if needed)
 
 ## Notes
 
