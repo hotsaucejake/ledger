@@ -225,10 +225,12 @@ We proceed in **layers**, validating core assumptions before adding complexity.
 * Encrypted storage (simplest viable backend)
 * Journal entries only (text + timestamp + tags)
 * Append-only, UUID-based entries
-* `add`, `list`, `search` commands
+* `add`, `list`, `search`, `show`, `export`, `backup`, `check` commands
 * Prove the encryption + CLI UX works
 
 **Goal:** Validate build story and core experience before committing to complex dependencies.
+
+Note: Some UX and revision features landed early via M2; see `docs/milestones/M2-PLAN.md`.
 
 ### Phase 0.2 — Structured Schemas & Compositions
 

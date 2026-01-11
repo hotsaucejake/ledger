@@ -5,7 +5,7 @@
 [![CI](https://github.com/hotsaucejake/ledger/actions/workflows/ci.yml/badge.svg)](https://github.com/hotsaucejake/ledger/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-MIT%2FApache--2.0-blue.svg)](LICENSE)
 
-> **Status**: Milestone 1 (Encrypted Storage) — Core functionality in progress
+> **Status**: Milestone 2 (UX Polish) — Core UX implemented, verification in progress
 
 ## Overview
 
@@ -19,7 +19,7 @@ Ledger combines strong encryption at rest, structured queryable data, user-defin
 - **Structure without rigidity**: Free-form writing, structured metrics, or hybrid
 - **Future-proof**: Versioned schemas, explicit migrations, documented format
 
-## Current Status: Milestone 1 (In Progress)
+## Current Status: Phase 0.1 (Journal Workflow)
 
 The encrypted storage and CLI flows are now functional for Phase 0.1 journaling:
 

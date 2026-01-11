@@ -1,6 +1,6 @@
 # Milestone 4: Revisions, History, and Trust
 
-**Status**: Draft  
+**Status**: In Progress  
 **Target**: Add revision workflows and safety tooling while preserving append-only semantics.
 
 ## Goals
@@ -11,9 +11,10 @@
 
 ## Exit Criteria
 
-- [ ] `ledger edit <id>` creates a revision (supersedes)
+- [x] `ledger edit <id>` creates a revision (supersedes)
 - [ ] `ledger show <id> --history` displays full chain
-- [ ] List/search default to latest revisions only
+- [x] List/search default to latest revisions only
+- [x] `ledger list/search --history` includes superseded revisions
 - [ ] `ledger check --verbose` provides actionable diagnostics
 - [ ] `ledger repair` can rebuild FTS and fix orphaned index rows
 - [ ] Revision chain tests pass
@@ -22,14 +23,14 @@
 
 ### 1. Revision Semantics
 
-- [ ] Implement edit as revision (new entry + supersedes)
+- [x] Implement edit as revision (new entry + supersedes)
 - [ ] Store/display revision chains
-- [ ] Define “current” vs “historical” behavior
+- [x] Define “current” vs “historical” behavior (list/search default latest)
 
 ### 2. CLI History UX
 
 - [ ] `ledger show --history`
-- [ ] `ledger list --all-revisions` (optional)
+- [x] `ledger list/search --history` (superseded revisions)
 - [ ] Clear messaging that edits preserve originals
 
 ### 3. Repair & Diagnostics

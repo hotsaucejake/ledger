@@ -1,6 +1,6 @@
 # Milestone 2: UX Polish & First-Run Experience
 
-**Status**: Draft
+**Status**: In Progress (core UX complete; verification + templates remaining)
 **Target**: Improve onboarding and daily UX without expanding the data model.
 
 > **Note**: This milestone focuses on "product-ready" UX. The technical milestones
@@ -150,13 +150,13 @@ M2 is complete when:
 
 - [ ] All tests pass (`cargo test`)
 - [ ] No clippy warnings (`cargo clippy -- -D warnings`)
-- [ ] `ledger init` completes successfully with wizard
-- [ ] `ledger init --advanced` exposes all options
-- [ ] `ledger` (no args) shows quickstart
-- [ ] Config written to `~/.config/ledger/config.toml`
-- [ ] Ledger created at `~/.local/share/ledger/ledger.ledger`
-- [ ] All 4 security tiers functional
-- [ ] Session cache works with configurable TTL
+- [x] `ledger init` completes successfully with wizard
+- [x] `ledger init --advanced` exposes all options
+- [x] `ledger` (no args) shows quickstart
+- [x] Config written to `~/.config/ledger/config.toml`
+- [x] Ledger created at `~/.local/share/ledger/ledger.ledger`
+- [x] All 4 security tiers functional
+- [x] Session cache works with configurable TTL
 - [ ] First-time user can complete init in < 60 seconds (manual test)
 - [ ] CI passes on Linux + macOS
 - [ ] Documentation updated (README, DEVELOPMENT.md if needed)
