@@ -30,9 +30,11 @@ fn temp_xdg_dirs(prefix: &str) -> (PathBuf, PathBuf) {
         .duration_since(UNIX_EPOCH)
         .expect("system time")
         .as_nanos();
-    let base = std::env::temp_dir().join(format!("{}_{}_{}", prefix, std::process::id(), nanos));
-    let config = base.join("config");
-    let data = base.join("data");
+    // Use short prefix to avoid Unix socket path length limit (SUN_LEN ~108 chars)
+    let short_prefix = &prefix[..prefix.len().min(8)];
+    let base = std::env::temp_dir().join(format!("l{}_{}", short_prefix, nanos % 1_000_000_000));
+    let config = base.join("c");
+    let data = base.join("d");
     std::fs::create_dir_all(&config).expect("create config dir");
     std::fs::create_dir_all(&data).expect("create data dir");
     (config, data)
