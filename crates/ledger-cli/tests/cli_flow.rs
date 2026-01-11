@@ -35,8 +35,10 @@ fn temp_xdg_dirs(prefix: &str) -> (PathBuf, PathBuf) {
     let base = std::env::temp_dir().join(format!("l{}_{}", short_prefix, nanos % 1_000_000_000));
     let config = base.join("c");
     let data = base.join("d");
+    let runtime = base.join("runtime");
     std::fs::create_dir_all(&config).expect("create config dir");
     std::fs::create_dir_all(&data).expect("create data dir");
+    std::fs::create_dir_all(&runtime).expect("create runtime dir");
     (config, data)
 }
 
@@ -128,7 +130,20 @@ fn ledger_hash(path: &Path) -> String {
 fn cache_store_raw(socket_path: &Path, key: &str, passphrase: &str) {
     use std::net::Shutdown;
     use std::os::unix::net::UnixStream;
-    let mut stream = UnixStream::connect(socket_path).expect("connect cache");
+
+    // Retry connection in case daemon is still starting up
+    let mut stream = None;
+    for _ in 0..20 {
+        match UnixStream::connect(socket_path) {
+            Ok(s) => {
+                stream = Some(s);
+                break;
+            }
+            Err(_) => sleep(Duration::from_millis(100)),
+        }
+    }
+    let mut stream = stream.expect("connect cache after retries");
+
     let encoded = STANDARD.encode(passphrase.as_bytes());
     let payload = format!("STORE {} {}\n", key, encoded);
     stream.write_all(payload.as_bytes()).expect("write cache");
@@ -1080,7 +1095,11 @@ fn test_cli_cache_lock_clears_cache() {
     assert!(lock.status.success());
 
     let mut list_cached = Command::new(bin());
-    list_cached.arg("list").arg("--ledger").arg(&ledger_path);
+    list_cached
+        .arg("list")
+        .arg("--ledger")
+        .arg(&ledger_path)
+        .env_remove("LEDGER_PASSPHRASE");
     apply_xdg_env(&mut list_cached, &config_home, &data_home);
     let list_cached = list_cached.output().expect("run list cached");
 
@@ -1108,7 +1127,11 @@ fn test_cli_cache_expires_after_ttl() {
 
     // Second list command without passphrase - should use cached passphrase
     let mut list_cached = Command::new(bin());
-    list_cached.arg("list").arg("--ledger").arg(&ledger_path);
+    list_cached
+        .arg("list")
+        .arg("--ledger")
+        .arg(&ledger_path)
+        .env_remove("LEDGER_PASSPHRASE");
     apply_xdg_env(&mut list_cached, &config_home, &data_home);
     let list_cached = list_cached.output().expect("run list cached");
     assert!(
@@ -1120,7 +1143,11 @@ fn test_cli_cache_expires_after_ttl() {
     sleep(Duration::from_secs(2));
 
     let mut list_expired = Command::new(bin());
-    list_expired.arg("list").arg("--ledger").arg(&ledger_path);
+    list_expired
+        .arg("list")
+        .arg("--ledger")
+        .arg(&ledger_path)
+        .env_remove("LEDGER_PASSPHRASE");
     apply_xdg_env(&mut list_expired, &config_home, &data_home);
     let list_expired = list_expired.output().expect("run list expired");
 
@@ -1146,7 +1173,11 @@ fn test_cli_cache_disabled_when_ttl_zero() {
     assert!(list.status.success());
 
     let mut list_no_env = Command::new(bin());
-    list_no_env.arg("list").arg("--ledger").arg(&ledger_path);
+    list_no_env
+        .arg("list")
+        .arg("--ledger")
+        .arg(&ledger_path)
+        .env_remove("LEDGER_PASSPHRASE");
     apply_xdg_env(&mut list_no_env, &config_home, &data_home);
     let list_no_env = list_no_env.output().expect("run list no env");
 
@@ -1176,7 +1207,11 @@ fn test_cli_cache_clears_on_incorrect_passphrase() {
     cache_store_raw(&socket_path, &key, "wrong-passphrase");
 
     let mut list_cached = Command::new(bin());
-    list_cached.arg("list").arg("--ledger").arg(&ledger_path);
+    list_cached
+        .arg("list")
+        .arg("--ledger")
+        .arg(&ledger_path)
+        .env_remove("LEDGER_PASSPHRASE");
     apply_xdg_env(&mut list_cached, &config_home, &data_home);
     let list_cached = list_cached.output().expect("run list cached");
     assert!(!list_cached.status.success());
