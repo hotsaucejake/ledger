@@ -749,6 +749,81 @@ fn test_cli_add_body_no_input_skips_prompt() {
 }
 
 #[test]
+fn test_cli_edit_creates_revision() {
+    let ledger_path = temp_ledger_path("ledger_cli_edit_revision");
+    let passphrase = "test-passphrase-secure-123";
+    let (config_home, data_home) = temp_xdg_dirs("ledger_cli_edit_revision");
+
+    let mut init = Command::new(bin());
+    init.arg("init")
+        .arg(&ledger_path)
+        .env("LEDGER_PASSPHRASE", passphrase);
+    apply_xdg_env(&mut init, &config_home, &data_home);
+    let init = init.output().expect("run init");
+    assert!(init.status.success());
+
+    let mut add = Command::new(bin());
+    add.arg("add")
+        .arg("journal")
+        .arg("--body")
+        .arg("Original body")
+        .arg("--ledger")
+        .arg(&ledger_path)
+        .env("LEDGER_PASSPHRASE", passphrase);
+    apply_xdg_env(&mut add, &config_home, &data_home);
+    let add = add.output().expect("run add");
+    assert!(add.status.success());
+
+    let mut list = Command::new(bin());
+    list.arg("list")
+        .arg("--json")
+        .arg("--ledger")
+        .arg(&ledger_path)
+        .env("LEDGER_PASSPHRASE", passphrase);
+    apply_xdg_env(&mut list, &config_home, &data_home);
+    let list = list.output().expect("run list");
+    assert!(list.status.success());
+    let value: serde_json::Value = serde_json::from_slice(&list.stdout).expect("parse list json");
+    let array = value.as_array().expect("list output array");
+    let original_id = array[0]
+        .get("id")
+        .and_then(|v| v.as_str())
+        .expect("original id");
+
+    let mut edit = Command::new(bin());
+    edit.arg("edit")
+        .arg(original_id)
+        .arg("--body")
+        .arg("Updated body")
+        .arg("--ledger")
+        .arg(&ledger_path)
+        .env("LEDGER_PASSPHRASE", passphrase);
+    apply_xdg_env(&mut edit, &config_home, &data_home);
+    let edit = edit.output().expect("run edit");
+    assert!(edit.status.success());
+
+    let mut list_after = Command::new(bin());
+    list_after
+        .arg("list")
+        .arg("--json")
+        .arg("--ledger")
+        .arg(&ledger_path)
+        .env("LEDGER_PASSPHRASE", passphrase);
+    apply_xdg_env(&mut list_after, &config_home, &data_home);
+    let list_after = list_after.output().expect("run list");
+    assert!(list_after.status.success());
+    let value: serde_json::Value =
+        serde_json::from_slice(&list_after.stdout).expect("parse list json");
+    let array = value.as_array().expect("list output array");
+    assert!(array.len() >= 2);
+    let supersedes = array[0]
+        .get("supersedes")
+        .and_then(|v| v.as_str())
+        .expect("supersedes");
+    assert_eq!(supersedes, original_id);
+}
+
+#[test]
 fn test_cli_editor_override_is_used() {
     let ledger_path = temp_ledger_path("ledger_cli_editor_override");
     let passphrase = "test-passphrase-secure-123";

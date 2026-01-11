@@ -130,6 +130,21 @@ enum Commands {
         no_input: bool,
     },
 
+    /// Edit an existing entry (creates a new revision)
+    Edit {
+        /// Entry ID (full UUID)
+        #[arg(value_name = "ID")]
+        id: String,
+
+        /// Entry body (overrides stdin/editor)
+        #[arg(long)]
+        body: Option<String>,
+
+        /// Disable interactive prompts
+        #[arg(long)]
+        no_input: bool,
+    },
+
     /// List entries
     List {
         /// Filter by entry type
@@ -293,7 +308,7 @@ fn main() -> anyhow::Result<()> {
             });
 
             let editor_override = load_security_config(&cli)?.editor;
-            let body = read_entry_body(*no_input, body.clone(), editor_override.as_deref())?;
+            let body = read_entry_body(*no_input, body.clone(), editor_override.as_deref(), None)?;
             let data = serde_json::json!({ "body": body });
             let metadata = storage.metadata()?;
             let mut new_entry = NewEntry::new(
@@ -313,6 +328,57 @@ fn main() -> anyhow::Result<()> {
 
             if !cli.quiet {
                 println!("Added entry {}", entry_id);
+            }
+        }
+        Some(Commands::Edit { id, body, no_input }) => {
+            let (mut storage, passphrase) = open_storage_with_retry(&cli, *no_input)?;
+            let parsed =
+                Uuid::parse_str(id).map_err(|e| anyhow::anyhow!("Invalid entry ID: {}", e))?;
+            let entry = storage.get_entry(&parsed)?.unwrap_or_else(|| {
+                exit_not_found_with_hint(
+                    "Entry not found",
+                    "Hint: Run `ledger list --last 7d` to find entry IDs.",
+                )
+            });
+
+            let entry_type_name = entry_type_name_map(&storage)?
+                .get(&entry.entry_type_id)
+                .cloned()
+                .unwrap_or_else(|| "unknown".to_string());
+            ensure_journal_type_name(&entry_type_name)?;
+
+            let existing_body = entry
+                .data
+                .get("body")
+                .and_then(|v| v.as_str())
+                .unwrap_or("");
+            let editor_override = load_security_config(&cli)?.editor;
+            let body = read_entry_body(
+                *no_input,
+                body.clone(),
+                editor_override.as_deref(),
+                Some(existing_body),
+            )?;
+            if body.trim().is_empty() {
+                return Err(anyhow::anyhow!("Entry body is empty"));
+            }
+
+            let data = serde_json::json!({ "body": body });
+            let metadata = storage.metadata()?;
+            let new_entry = NewEntry::new(
+                entry.entry_type_id,
+                entry.schema_version,
+                data,
+                metadata.device_id,
+            )
+            .with_tags(entry.tags.clone())
+            .with_supersedes(entry.id);
+
+            let entry_id = storage.insert_entry(&new_entry)?;
+            storage.close(&passphrase)?;
+
+            if !cli.quiet {
+                println!("Edited entry {}", entry_id);
             }
         }
         Some(Commands::List {

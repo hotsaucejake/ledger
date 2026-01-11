@@ -123,6 +123,7 @@ pub fn read_entry_body(
     no_input: bool,
     body: Option<String>,
     editor_override: Option<&str>,
+    initial_body: Option<&str>,
 ) -> anyhow::Result<String> {
     if let Some(value) = body {
         if value.trim().is_empty() {
@@ -142,7 +143,7 @@ pub fn read_entry_body(
                 return Err(anyhow::anyhow!("No input provided on stdin"));
             }
             if editor_override.is_some() {
-                return read_body_from_editor(editor_override);
+                return read_body_from_editor(editor_override, initial_body);
             }
             return Err(anyhow::anyhow!("No input provided on stdin"));
         }
@@ -153,11 +154,14 @@ pub fn read_entry_body(
         return Err(anyhow::anyhow!("--no-input requires content from stdin"));
     }
 
-    read_body_from_editor(editor_override)
+    read_body_from_editor(editor_override, initial_body)
 }
 
 /// Open $EDITOR to compose entry body.
-fn read_body_from_editor(editor_override: Option<&str>) -> anyhow::Result<String> {
+fn read_body_from_editor(
+    editor_override: Option<&str>,
+    initial_body: Option<&str>,
+) -> anyhow::Result<String> {
     let editor = editor_override
         .map(|value| value.to_string())
         .or_else(|| std::env::var("EDITOR").ok())
@@ -172,7 +176,9 @@ fn read_body_from_editor(editor_override: Option<&str>) -> anyhow::Result<String
     let filename = format!("ledger_entry_{}_{}.md", std::process::id(), nanos);
     let path = std::env::temp_dir().join(filename);
 
-    std::fs::write(&path, "").map_err(|e| anyhow::anyhow!("Failed to create temp file: {}", e))?;
+    let initial = initial_body.unwrap_or("");
+    std::fs::write(&path, initial)
+        .map_err(|e| anyhow::anyhow!("Failed to create temp file: {}", e))?;
 
     let status = Command::new(editor)
         .arg(&path)
