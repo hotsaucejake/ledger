@@ -203,7 +203,7 @@ enum Commands {
         json: bool,
     },
 
-    /// Export entries (portable JSON/JSONL)
+    /// Export entries (portable formats, you own your data)
     Export {
         /// Filter by entry type
         #[arg(value_name = "TYPE")]
@@ -286,7 +286,10 @@ fn main() -> anyhow::Result<()> {
 
             let (mut storage, passphrase) = open_storage_with_retry(&cli, *no_input)?;
             let entry_type_record = storage.get_entry_type(entry_type)?.unwrap_or_else(|| {
-                exit_not_found(&format!("Entry type \"{}\" not found", entry_type))
+                exit_not_found_with_hint(
+                    &format!("Entry type \"{}\" not found", entry_type),
+                    "Hint: Only \"journal\" is available in Phase 0.1.",
+                )
             });
 
             let editor_override = load_security_config(&cli)?.editor;
@@ -327,9 +330,12 @@ fn main() -> anyhow::Result<()> {
             let mut filter = EntryFilter::new();
             if let Some(t) = entry_type {
                 ensure_journal_type_name(t)?;
-                let entry_type_record = storage
-                    .get_entry_type(t)?
-                    .unwrap_or_else(|| exit_not_found(&format!("Entry type \"{}\" not found", t)));
+                let entry_type_record = storage.get_entry_type(t)?.unwrap_or_else(|| {
+                    exit_not_found_with_hint(
+                        &format!("Entry type \"{}\" not found", t),
+                        "Hint: Only \"journal\" is available in Phase 0.1.",
+                    )
+                });
                 filter = filter.entry_type(entry_type_record.id);
             }
             if let Some(t) = tag {
@@ -404,9 +410,12 @@ fn main() -> anyhow::Result<()> {
             let mut entries = storage.search_entries(query)?;
             if let Some(t) = r#type {
                 ensure_journal_type_name(t)?;
-                let entry_type_record = storage
-                    .get_entry_type(t)?
-                    .unwrap_or_else(|| exit_not_found(&format!("Entry type \"{}\" not found", t)));
+                let entry_type_record = storage.get_entry_type(t)?.unwrap_or_else(|| {
+                    exit_not_found_with_hint(
+                        &format!("Entry type \"{}\" not found", t),
+                        "Hint: Only \"journal\" is available in Phase 0.1.",
+                    )
+                });
                 entries.retain(|entry| entry.entry_type_id == entry_type_record.id);
             }
             if let Some(l) = last {
@@ -457,9 +466,12 @@ fn main() -> anyhow::Result<()> {
 
             let parsed =
                 Uuid::parse_str(id).map_err(|e| anyhow::anyhow!("Invalid entry ID: {}", e))?;
-            let entry = storage
-                .get_entry(&parsed)?
-                .unwrap_or_else(|| exit_not_found("Entry not found"));
+            let entry = storage.get_entry(&parsed)?.unwrap_or_else(|| {
+                exit_not_found_with_hint(
+                    "Entry not found",
+                    "Hint: Run `ledger list --last 7d` to find entry IDs.",
+                )
+            });
             if *json {
                 let name_map = entry_type_name_map(&storage)?;
                 let output = serde_json::to_string_pretty(&entry_json(&entry, &name_map))?;
@@ -478,9 +490,12 @@ fn main() -> anyhow::Result<()> {
             let mut filter = EntryFilter::new();
             if let Some(t) = entry_type {
                 ensure_journal_type_name(t)?;
-                let entry_type_record = storage
-                    .get_entry_type(t)?
-                    .unwrap_or_else(|| exit_not_found(&format!("Entry type \"{}\" not found", t)));
+                let entry_type_record = storage.get_entry_type(t)?.unwrap_or_else(|| {
+                    exit_not_found_with_hint(
+                        &format!("Entry type \"{}\" not found", t),
+                        "Hint: Only \"journal\" is available in Phase 0.1.",
+                    )
+                });
                 filter = filter.entry_type(entry_type_record.id);
             }
             if let Some(s) = since {
@@ -730,8 +745,9 @@ fn missing_config_message(config_path: &std::path::Path) -> String {
     )
 }
 
-fn exit_not_found(message: &str) -> ! {
+fn exit_not_found_with_hint(message: &str, hint: &str) -> ! {
     eprintln!("Error: {}", message);
+    eprintln!("{}", hint);
     std::process::exit(3);
 }
 

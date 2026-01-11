@@ -1266,6 +1266,8 @@ fn test_cli_show_not_found_exit_code() {
     let show = show.output().expect("run show");
 
     assert_eq!(show.status.code(), Some(3));
+    let stderr = String::from_utf8_lossy(&show.stderr);
+    assert!(stderr.contains("Hint:"));
 }
 
 #[test]

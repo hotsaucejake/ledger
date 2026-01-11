@@ -146,3 +146,62 @@ fn home_dir() -> anyhow::Result<PathBuf> {
         .map_err(|_| anyhow::anyhow!("HOME is not set; cannot resolve default paths"))?;
     Ok(PathBuf::from(home))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::Mutex;
+
+    static ENV_LOCK: Mutex<()> = Mutex::new(());
+
+    #[test]
+    fn test_parse_config_matches_spec() {
+        let toml = r#"
+            [ledger]
+            path = "/tmp/ledger.ledger"
+
+            [security]
+            tier = "passphrase"
+            passphrase_cache_ttl_seconds = 0
+
+            [keychain]
+            enabled = false
+
+            [keyfile]
+            mode = "none"
+            path = "/tmp/ledger.key"
+
+            [ui]
+            timezone = "UTC"
+            editor = "vim"
+        "#;
+        let config: LedgerConfig = toml::from_str(toml).expect("parse config");
+        assert_eq!(config.ledger.path, "/tmp/ledger.ledger");
+        assert!(matches!(config.security.tier, SecurityTier::Passphrase));
+        assert_eq!(config.security.passphrase_cache_ttl_seconds, 0);
+        assert!(!config.keychain.enabled);
+        assert!(matches!(config.keyfile.mode, KeyfileMode::None));
+        assert_eq!(config.keyfile.path.as_deref(), Some("/tmp/ledger.key"));
+        assert_eq!(config.ui.timezone.as_deref(), Some("UTC"));
+        assert_eq!(config.ui.editor.as_deref(), Some("vim"));
+    }
+
+    #[test]
+    fn test_xdg_paths_use_env() {
+        let _guard = ENV_LOCK.lock().expect("env lock");
+        std::env::set_var("XDG_CONFIG_HOME", "/tmp/ledger-config-test");
+        std::env::set_var("XDG_DATA_HOME", "/tmp/ledger-data-test");
+
+        let config_dir = xdg_config_dir().expect("config dir");
+        let data_dir = xdg_data_dir().expect("data dir");
+
+        assert_eq!(
+            config_dir,
+            PathBuf::from("/tmp/ledger-config-test").join("ledger")
+        );
+        assert_eq!(
+            data_dir,
+            PathBuf::from("/tmp/ledger-data-test").join("ledger")
+        );
+    }
+}

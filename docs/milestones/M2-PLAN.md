@@ -55,14 +55,14 @@ A first-time user should:
 - [x] Standard prompt rules (flags win, defaults in brackets)
 - [x] Output rules (stable human output, stable JSON output)
 - [x] Exit code consistency
-- [ ] Clear errors with next steps
+- [x] Clear errors with next steps
 - [x] Session cache for passphrase (in-memory only, TTL)
 
 ### 3. Trust & Safety UX
 
 - [x] `ledger check` actionable output (see RFC-003 §13.2)
 - [x] `ledger backup` safe defaults (confirm destination, atomic copy)
-- [ ] Export wording emphasizes data ownership
+- [x] Export wording emphasizes data ownership
 - [x] Security tier selection + explicit warnings (per `init-wizard.md` §2)
 
 ### 4. Security Tier Implementation
@@ -106,10 +106,10 @@ See `docs/design/session-cache.md` for design details.
 
 ### Unit Tests
 
-- [ ] Config parsing matches `config-spec.md` format
-- [ ] Passphrase validation (min 12 chars, not whitespace-only)
+- [x] Config parsing matches `config-spec.md` format
+- [x] Passphrase validation (min 12 chars, not whitespace-only)
 - [x] Security tier configuration validation
-- [ ] XDG path resolution on Linux
+- [x] XDG path resolution on Linux
 
 ### Integration Tests
 

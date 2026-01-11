@@ -46,7 +46,7 @@ ledger search --json         # Search as JSON
 ledger search --format plain # Plain search output
 ledger show <id>             # Show entry by ID
 ledger show <id> --json      # Show entry as JSON
-ledger export                # Export data
+ledger export                # Export data (portable, you own your data)
 ledger check                 # Integrity check
 ledger backup <dest>         # Backup ledger
 ledger lock                  # Clear passphrase cache

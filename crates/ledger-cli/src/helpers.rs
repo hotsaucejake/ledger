@@ -111,7 +111,7 @@ pub fn parse_output_format(value: Option<&str>) -> anyhow::Result<Option<OutputF
 pub fn ensure_journal_type_name(entry_type: &str) -> anyhow::Result<()> {
     if entry_type != "journal" {
         return Err(anyhow::anyhow!(
-            "Entry type \"{}\" is not supported in the CLI yet. Only \"journal\" is available.",
+            "Entry type \"{}\" is not supported in the CLI yet. Only \"journal\" is available.\nHint: Use `ledger add journal` or `ledger list journal` for Phase 0.1.",
             entry_type
         ));
     }
