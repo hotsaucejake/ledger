@@ -18,18 +18,18 @@ A first-time user should:
 
 ## Exit Criteria
 
-- [ ] `ledger init` wizard with safe defaults
-- [ ] XDG config support with default ledger path (`~/.local/share/ledger/ledger.ledger`)
+- [x] `ledger init` wizard with safe defaults
+- [x] XDG config support with default ledger path (`~/.local/share/ledger/ledger.ledger`)
 - [x] Friendly "no ledger found" message for all commands
 - [x] `ledger` with no args shows quickstart
 - [x] Passphrase retries (3 attempts, then exit with code 5)
 - [x] Optional session cache (in-memory) with TTL (see `docs/design/session-cache.md`)
 - [x] Security tiers selectable during init (all 4 tiers)
 - [x] OS keychain support (Linux: libsecret, macOS: Keychain)
-- [ ] `ledger add journal` is smooth (editor + stdin + `--body`)
+- [x] `ledger add journal` is smooth (editor + stdin + `--body`)
 - [x] `ledger list` defaults to recent entries (N)
-- [ ] `ledger show` is readable by default
-- [ ] `ledger check` prints clear diagnostics
+- [x] `ledger show` is readable by default
+- [x] `ledger check` prints clear diagnostics
 - [x] `ledger backup` confirms output path
 - [x] `ledger export` help text clarifies portability
 
@@ -38,14 +38,14 @@ A first-time user should:
 ### 1. First-Run UX
 
 - [x] Init wizard (default flow + `--advanced`)
-- [ ] Config file generated at `~/.config/ledger/config.toml`
+- [x] Config file generated at `~/.config/ledger/config.toml`
 - [ ] Config file format matches `docs/design/config-spec.md`
-- [ ] XDG config path detection + creation
-- [ ] Default ledger path: `~/.local/share/ledger/ledger.ledger`
+- [x] XDG config path detection + creation
+- [x] Default ledger path: `~/.local/share/ledger/ledger.ledger`
 - [x] Clear error when ledger is missing (see RFC-003 §15)
 - [x] Quickstart output for `ledger` (no args)
 - [x] Passphrase retry loop (3 attempts, show remaining)
-- [ ] After 3 failures: exit with code 5 (encryption/auth error per RFC-003 §14.2)
+- [x] After 3 failures: exit with code 5 (encryption/auth error per RFC-003 §14.2)
 - [x] Wizard copy matches `docs/design/init-wizard.md`
 - [x] `--quiet` flag suppresses wizard output (for scripting)
 - [x] `--no-input` errors if required values missing
@@ -60,34 +60,34 @@ A first-time user should:
 
 ### 3. Trust & Safety UX
 
-- [ ] `ledger check` actionable output (see RFC-003 §13.2)
-- [ ] `ledger backup` safe defaults (confirm destination, atomic copy)
+- [x] `ledger check` actionable output (see RFC-003 §13.2)
+- [x] `ledger backup` safe defaults (confirm destination, atomic copy)
 - [ ] Export wording emphasizes data ownership
-- [ ] Security tier selection + explicit warnings (per `init-wizard.md` §2)
+- [x] Security tier selection + explicit warnings (per `init-wizard.md` §2)
 
 ### 4. Security Tier Implementation
 
 - [x] Tier 1: Passphrase only (default)
 - [x] Tier 2: Passphrase + OS keychain
-  - [ ] Linux: libsecret/Secret Service D-Bus API
-  - [ ] macOS: Security.framework / Keychain Services
+  - [x] Linux: libsecret/Secret Service D-Bus API
+  - [x] macOS: Security.framework / Keychain Services
 - [x] Tier 3: Passphrase + encrypted keyfile
-  - [ ] Key generation (random 32 bytes)
-  - [ ] Keyfile encrypted with passphrase-derived key
-  - [ ] Default path: `~/.config/ledger/ledger.key`
+  - [x] Key generation (random 32 bytes)
+  - [x] Keyfile encrypted with passphrase-derived key
+  - [x] Default path: `~/.config/ledger/ledger.key`
 - [x] Tier 4: Device keyfile only (unencrypted)
-  - [ ] Display explicit security warning (per `config-spec.md` §5)
-  - [ ] Require confirmation before proceeding
+  - [x] Display explicit security warning (per `config-spec.md` §5)
+  - [x] Require confirmation before proceeding
 
 ### 5. Session Cache Implementation
 
 See `docs/design/session-cache.md` for design details.
 
 - [x] In-memory passphrase cache with TTL
-- [ ] Cache mechanism: Unix domain socket (Linux/macOS)
-- [ ] Automatic cache expiry
+- [x] Cache mechanism: Unix domain socket (Linux/macOS)
+- [x] Automatic cache expiry
 - [x] `ledger lock` command to clear cache immediately
-- [ ] Cache disabled by default (`passphrase_cache_ttl_seconds = 0`)
+- [x] Cache disabled by default (`passphrase_cache_ttl_seconds = 0`)
 
 ### 6. Optional (Still M2-safe)
 
@@ -113,24 +113,24 @@ See `docs/design/session-cache.md` for design details.
 
 ### Integration Tests
 
-- [ ] Init wizard creates valid config at `~/.config/ledger/config.toml`
-- [ ] Init wizard creates ledger at `~/.local/share/ledger/ledger.ledger`
-- [ ] Init wizard respects `--no-input` flag (errors on missing required values)
-- [ ] Init wizard respects `--quiet` flag
-- [ ] Prompts skipped when flags provided
+- [x] Init wizard creates valid config at `~/.config/ledger/config.toml`
+- [x] Init wizard creates ledger at `~/.local/share/ledger/ledger.ledger`
+- [x] Init wizard respects `--no-input` flag (errors on missing required values)
+- [x] Init wizard respects `--quiet` flag
+- [x] Prompts skipped when flags provided
 - [x] Passphrase retry shows attempts remaining
-- [ ] After 3 failed attempts, exits with code 5
-- [ ] `ledger` (no args) shows quickstart help
-- [ ] "No ledger found" message is clear and actionable
-- [ ] Config file matches `config-spec.md` format exactly
+- [x] After 3 failed attempts, exits with code 5
+- [x] `ledger` (no args) shows quickstart help
+- [x] "No ledger found" message is clear and actionable
+- [x] Config file matches `config-spec.md` format exactly
 
 ### Security Tier Tests
 
-- [ ] Tier 1: Passphrase round-trip works
+- [x] Tier 1: Passphrase round-trip works
 - [x] Tier 2: Keychain storage/retrieval works (platform-specific)
 - [x] Tier 3: Encrypted keyfile round-trip works
 - [x] Tier 4: Unencrypted keyfile works + warning displayed
-- [ ] Wrong passphrase fails gracefully (code 5)
+- [x] Wrong passphrase fails gracefully (code 5)
 
 ### Session Cache Tests
 
@@ -141,7 +141,7 @@ See `docs/design/session-cache.md` for design details.
 
 ### Error UX Tests
 
-- [ ] Error messages include actionable next steps (per RFC-003 §15)
+- [x] Error messages include actionable next steps (per RFC-003 §15)
 - [ ] Exit codes match RFC-003 §14.2
 
 ## Definition of Done

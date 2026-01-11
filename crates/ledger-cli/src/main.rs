@@ -811,12 +811,36 @@ fn open_with_retry_prompt(
     interactive: bool,
     cache_config: Option<&cache::CacheConfig>,
 ) -> anyhow::Result<(AgeSqliteStorage, String)> {
-    let max_attempts: u32 = if interactive { 3 } else { 1 };
+    let test_attempts = if !interactive {
+        std::env::var("LEDGER_TEST_PASSPHRASE_ATTEMPTS")
+            .ok()
+            .map(|value| {
+                value
+                    .split(',')
+                    .map(|item| item.trim().to_string())
+                    .filter(|item| !item.is_empty())
+                    .collect::<Vec<String>>()
+            })
+    } else {
+        None
+    };
+    let max_attempts: u32 = if interactive || test_attempts.is_some() {
+        3
+    } else {
+        1
+    };
     let mut attempts: u32 = 0;
 
     loop {
         attempts += 1;
-        let passphrase = prompt_passphrase(interactive)?;
+        let passphrase = if let Some(values) = test_attempts.as_ref() {
+            values
+                .get((attempts - 1) as usize)
+                .cloned()
+                .ok_or_else(|| anyhow::anyhow!("No passphrase attempts remaining"))?
+        } else {
+            prompt_passphrase(interactive)?
+        };
         match AgeSqliteStorage::open(path, &passphrase) {
             Ok(storage) => {
                 if let Some(config) = cache_config {

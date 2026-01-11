@@ -317,6 +317,7 @@ fn test_cli_check_failure() {
     assert!(!check.status.success());
     let output = String::from_utf8_lossy(&check.stderr);
     assert!(output.contains("Integrity check: FAILED"));
+    assert!(output.contains("Hint:"));
 }
 
 #[test]
@@ -343,6 +344,15 @@ fn test_cli_init_writes_default_config() {
 
     let contents = std::fs::read_to_string(&config_path).expect("read config");
     let value: toml::Value = contents.parse().expect("parse config");
+    let table = value.as_table().expect("config table");
+    let keys: Vec<&String> = table.keys().collect();
+    assert!(keys.contains(&&"ledger".to_string()));
+    assert!(keys.contains(&&"security".to_string()));
+    assert!(keys.contains(&&"keychain".to_string()));
+    assert!(keys.contains(&&"keyfile".to_string()));
+    assert!(keys.contains(&&"ui".to_string()));
+    assert_eq!(keys.len(), 5);
+
     assert_eq!(
         value
             .get("ledger")
@@ -387,6 +397,7 @@ fn test_cli_missing_config_message() {
     let expected_path = config_home.join("ledger").join("config.toml");
     assert!(stderr.contains("No ledger found at"));
     assert!(stderr.contains(&*expected_path.to_string_lossy()));
+    assert!(stderr.contains("ledger init"));
 }
 
 #[test]
@@ -410,6 +421,7 @@ fn test_cli_missing_config_message_uses_env_override() {
     let stderr = String::from_utf8_lossy(&list.stderr);
     assert!(stderr.contains("No ledger found at"));
     assert!(stderr.contains(&*override_path.to_string_lossy()));
+    assert!(stderr.contains("ledger init"));
 }
 
 #[test]
@@ -666,6 +678,44 @@ fn test_cli_list_truncates_summary() {
     assert!(list.status.success());
     let stdout = String::from_utf8_lossy(&list.stdout);
     assert!(stdout.contains("..."));
+}
+
+#[test]
+fn test_cli_quickstart_output() {
+    let output = Command::new(bin()).output().expect("run ledger");
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("Quickstart"));
+    assert!(stdout.contains("ledger init"));
+}
+
+#[test]
+fn test_cli_add_body_no_input_skips_prompt() {
+    let ledger_path = temp_ledger_path("ledger_cli_add_no_input");
+    let passphrase = "test-passphrase-secure-123";
+    let (config_home, data_home) = temp_xdg_dirs("ledger_cli_add_no_input");
+
+    let mut init = Command::new(bin());
+    init.arg("init")
+        .arg(&ledger_path)
+        .env("LEDGER_PASSPHRASE", passphrase);
+    apply_xdg_env(&mut init, &config_home, &data_home);
+    let init = init.output().expect("run init");
+    assert!(init.status.success());
+
+    let mut add = Command::new(bin());
+    add.arg("add")
+        .arg("journal")
+        .arg("--body")
+        .arg("From body")
+        .arg("--no-input")
+        .arg("--ledger")
+        .arg(&ledger_path)
+        .env("LEDGER_PASSPHRASE", passphrase);
+    apply_xdg_env(&mut add, &config_home, &data_home);
+    let add = add.output().expect("run add");
+
+    assert!(add.status.success());
 }
 
 #[test]
@@ -1077,4 +1127,67 @@ fn test_cli_cache_clears_on_incorrect_passphrase() {
     apply_xdg_env(&mut list_after, &config_home, &data_home);
     let list_after = list_after.output().expect("run list after");
     assert!(list_after.status.success());
+}
+
+#[test]
+fn test_cli_wrong_passphrase_exit_code() {
+    let ledger_path = temp_ledger_path("ledger_cli_wrong_passphrase");
+    let passphrase = "test-passphrase-secure-123";
+    let (config_home, data_home) = temp_xdg_dirs("ledger_cli_wrong_passphrase");
+
+    create_ledger_with_passphrase(&ledger_path, passphrase);
+    write_config_file(&config_home, &ledger_path, "passphrase", "none", None, 0);
+
+    let mut list = Command::new(bin());
+    list.arg("list")
+        .arg("--ledger")
+        .arg(&ledger_path)
+        .env("LEDGER_PASSPHRASE", "wrong-passphrase");
+    apply_xdg_env(&mut list, &config_home, &data_home);
+    let list = list.output().expect("run list");
+
+    assert_eq!(list.status.code(), Some(5));
+}
+
+#[test]
+fn test_cli_show_not_found_exit_code() {
+    let ledger_path = temp_ledger_path("ledger_cli_show_not_found");
+    let passphrase = "test-passphrase-secure-123";
+    let (config_home, data_home) = temp_xdg_dirs("ledger_cli_show_not_found");
+
+    create_ledger_with_passphrase(&ledger_path, passphrase);
+    write_config_file(&config_home, &ledger_path, "passphrase", "none", None, 0);
+
+    let mut show = Command::new(bin());
+    show.arg("show")
+        .arg("00000000-0000-0000-0000-000000000000")
+        .arg("--ledger")
+        .arg(&ledger_path)
+        .env("LEDGER_PASSPHRASE", passphrase);
+    apply_xdg_env(&mut show, &config_home, &data_home);
+    let show = show.output().expect("run show");
+
+    assert_eq!(show.status.code(), Some(3));
+}
+
+#[test]
+fn test_cli_passphrase_retry_exits_after_three_failures() {
+    let ledger_path = temp_ledger_path("ledger_cli_retry_exit");
+    let passphrase = "test-passphrase-secure-123";
+    let (config_home, data_home) = temp_xdg_dirs("ledger_cli_retry_exit");
+
+    create_ledger_with_passphrase(&ledger_path, passphrase);
+    write_config_file(&config_home, &ledger_path, "passphrase", "none", None, 0);
+
+    let mut list = Command::new(bin());
+    list.arg("list").arg("--ledger").arg(&ledger_path).env(
+        "LEDGER_TEST_PASSPHRASE_ATTEMPTS",
+        "wrong-pass-one-1,wrong-pass-two-2,wrong-pass-three-3",
+    );
+    apply_xdg_env(&mut list, &config_home, &data_home);
+    let list = list.output().expect("run list");
+
+    let stderr = String::from_utf8_lossy(&list.stderr);
+    assert_eq!(list.status.code(), Some(5));
+    assert!(stderr.contains("Too many failed passphrase attempts"));
 }
