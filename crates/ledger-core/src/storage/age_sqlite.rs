@@ -827,6 +827,21 @@ impl StorageEngine for AgeSqliteStorage {
         Ok(entries)
     }
 
+    fn superseded_entry_ids(&self) -> Result<HashSet<Uuid>> {
+        let conn = self.lock_conn()?;
+        let mut stmt =
+            conn.prepare("SELECT DISTINCT supersedes FROM entries WHERE supersedes IS NOT NULL")?;
+        let rows = stmt.query_map([], |row| row.get::<_, String>(0))?;
+        let mut ids = HashSet::new();
+        for row in rows {
+            let value = row?;
+            let parsed = Uuid::parse_str(&value)
+                .map_err(|e| LedgerError::Storage(format!("Invalid supersedes UUID: {}", e)))?;
+            ids.insert(parsed);
+        }
+        Ok(ids)
+    }
+
     fn get_entry_type(&self, name: &str) -> Result<Option<EntryType>> {
         let conn = self.lock_conn()?;
 

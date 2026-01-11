@@ -8,6 +8,7 @@ use crate::output::{entries_json, entry_summary, entry_table_summary, entry_type
 
 const TABLE_SUMMARY_MAX: usize = 80;
 
+#[allow(clippy::too_many_arguments)]
 pub fn handle_search(
     cli: &Cli,
     query: &str,
@@ -16,6 +17,7 @@ pub fn handle_search(
     json: bool,
     limit: &Option<usize>,
     format: &Option<String>,
+    history: bool,
 ) -> anyhow::Result<()> {
     let (storage, _passphrase) = open_storage_with_retry(cli, false)?;
 
@@ -34,6 +36,10 @@ pub fn handle_search(
         let window = parse_duration(l)?;
         let since = Utc::now() - window;
         entries.retain(|entry| entry.created_at >= since);
+    }
+    if !history {
+        let superseded = storage.superseded_entry_ids()?;
+        entries.retain(|entry| !superseded.contains(&entry.id));
     }
     if let Some(lim) = limit {
         entries.truncate(*lim);

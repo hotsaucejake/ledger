@@ -806,6 +806,7 @@ fn test_cli_edit_creates_revision() {
     list_after
         .arg("list")
         .arg("--json")
+        .arg("--history")
         .arg("--ledger")
         .arg(&ledger_path)
         .env("LEDGER_PASSPHRASE", passphrase);
@@ -821,6 +822,178 @@ fn test_cli_edit_creates_revision() {
         .and_then(|v| v.as_str())
         .expect("supersedes");
     assert_eq!(supersedes, original_id);
+}
+
+#[test]
+fn test_cli_list_history_includes_superseded() {
+    let ledger_path = temp_ledger_path("ledger_cli_list_history");
+    let passphrase = "test-passphrase-secure-123";
+    let (config_home, data_home) = temp_xdg_dirs("ledger_cli_list_history");
+
+    let mut init = Command::new(bin());
+    init.arg("init")
+        .arg(&ledger_path)
+        .env("LEDGER_PASSPHRASE", passphrase);
+    apply_xdg_env(&mut init, &config_home, &data_home);
+    let init = init.output().expect("run init");
+    assert!(init.status.success());
+
+    let mut add = Command::new(bin());
+    add.arg("add")
+        .arg("journal")
+        .arg("--body")
+        .arg("Alpha body")
+        .arg("--ledger")
+        .arg(&ledger_path)
+        .env("LEDGER_PASSPHRASE", passphrase);
+    apply_xdg_env(&mut add, &config_home, &data_home);
+    let add = add.output().expect("run add");
+    assert!(add.status.success());
+
+    let mut list = Command::new(bin());
+    list.arg("list")
+        .arg("--json")
+        .arg("--ledger")
+        .arg(&ledger_path)
+        .env("LEDGER_PASSPHRASE", passphrase);
+    apply_xdg_env(&mut list, &config_home, &data_home);
+    let list = list.output().expect("run list");
+    assert!(list.status.success());
+    let value: serde_json::Value = serde_json::from_slice(&list.stdout).expect("parse list json");
+    let array = value.as_array().expect("list output array");
+    let original_id = array[0]
+        .get("id")
+        .and_then(|v| v.as_str())
+        .expect("original id");
+
+    let mut edit = Command::new(bin());
+    edit.arg("edit")
+        .arg(original_id)
+        .arg("--body")
+        .arg("Alpha body updated")
+        .arg("--ledger")
+        .arg(&ledger_path)
+        .env("LEDGER_PASSPHRASE", passphrase);
+    apply_xdg_env(&mut edit, &config_home, &data_home);
+    let edit = edit.output().expect("run edit");
+    assert!(edit.status.success());
+
+    let mut list_default = Command::new(bin());
+    list_default
+        .arg("list")
+        .arg("--json")
+        .arg("--ledger")
+        .arg(&ledger_path)
+        .env("LEDGER_PASSPHRASE", passphrase);
+    apply_xdg_env(&mut list_default, &config_home, &data_home);
+    let list_default = list_default.output().expect("run list default");
+    let default_value: serde_json::Value =
+        serde_json::from_slice(&list_default.stdout).expect("parse list json");
+    let default_array = default_value.as_array().expect("list output array");
+    assert_eq!(default_array.len(), 1);
+
+    let mut list_history = Command::new(bin());
+    list_history
+        .arg("list")
+        .arg("--history")
+        .arg("--json")
+        .arg("--ledger")
+        .arg(&ledger_path)
+        .env("LEDGER_PASSPHRASE", passphrase);
+    apply_xdg_env(&mut list_history, &config_home, &data_home);
+    let list_history = list_history.output().expect("run list history");
+    let history_value: serde_json::Value =
+        serde_json::from_slice(&list_history.stdout).expect("parse list json");
+    let history_array = history_value.as_array().expect("list output array");
+    assert!(history_array.len() >= 2);
+}
+
+#[test]
+fn test_cli_search_history_includes_superseded() {
+    let ledger_path = temp_ledger_path("ledger_cli_search_history");
+    let passphrase = "test-passphrase-secure-123";
+    let (config_home, data_home) = temp_xdg_dirs("ledger_cli_search_history");
+
+    let mut init = Command::new(bin());
+    init.arg("init")
+        .arg(&ledger_path)
+        .env("LEDGER_PASSPHRASE", passphrase);
+    apply_xdg_env(&mut init, &config_home, &data_home);
+    let init = init.output().expect("run init");
+    assert!(init.status.success());
+
+    let mut add = Command::new(bin());
+    add.arg("add")
+        .arg("journal")
+        .arg("--body")
+        .arg("Searchable entry")
+        .arg("--ledger")
+        .arg(&ledger_path)
+        .env("LEDGER_PASSPHRASE", passphrase);
+    apply_xdg_env(&mut add, &config_home, &data_home);
+    let add = add.output().expect("run add");
+    assert!(add.status.success());
+
+    let mut list = Command::new(bin());
+    list.arg("list")
+        .arg("--json")
+        .arg("--ledger")
+        .arg(&ledger_path)
+        .env("LEDGER_PASSPHRASE", passphrase);
+    apply_xdg_env(&mut list, &config_home, &data_home);
+    let list = list.output().expect("run list");
+    assert!(list.status.success());
+    let value: serde_json::Value = serde_json::from_slice(&list.stdout).expect("parse list json");
+    let array = value.as_array().expect("list output array");
+    let original_id = array[0]
+        .get("id")
+        .and_then(|v| v.as_str())
+        .expect("original id");
+
+    let mut edit = Command::new(bin());
+    edit.arg("edit")
+        .arg(original_id)
+        .arg("--body")
+        .arg("Searchable entry updated")
+        .arg("--ledger")
+        .arg(&ledger_path)
+        .env("LEDGER_PASSPHRASE", passphrase);
+    apply_xdg_env(&mut edit, &config_home, &data_home);
+    let edit = edit.output().expect("run edit");
+    assert!(edit.status.success());
+
+    let mut search_default = Command::new(bin());
+    search_default
+        .arg("search")
+        .arg("Searchable")
+        .arg("--json")
+        .arg("--ledger")
+        .arg(&ledger_path)
+        .env("LEDGER_PASSPHRASE", passphrase);
+    apply_xdg_env(&mut search_default, &config_home, &data_home);
+    let search_default = search_default.output().expect("run search");
+    assert!(search_default.status.success());
+    let default_value: serde_json::Value =
+        serde_json::from_slice(&search_default.stdout).expect("parse search json");
+    let default_array = default_value.as_array().expect("search output array");
+    assert_eq!(default_array.len(), 1);
+
+    let mut search_history = Command::new(bin());
+    search_history
+        .arg("search")
+        .arg("Searchable")
+        .arg("--history")
+        .arg("--json")
+        .arg("--ledger")
+        .arg(&ledger_path)
+        .env("LEDGER_PASSPHRASE", passphrase);
+    apply_xdg_env(&mut search_history, &config_home, &data_home);
+    let search_history = search_history.output().expect("run search history");
+    assert!(search_history.status.success());
+    let history_value: serde_json::Value =
+        serde_json::from_slice(&search_history.stdout).expect("parse search json");
+    let history_array = history_value.as_array().expect("search output array");
+    assert!(history_array.len() >= 2);
 }
 
 #[test]

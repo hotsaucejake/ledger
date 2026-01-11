@@ -75,9 +75,10 @@ fn main() -> anyhow::Result<()> {
             limit,
             json,
             format,
+            history,
         }) => {
             entries::handle_list(
-                &cli, entry_type, tag, last, since, until, limit, *json, format,
+                &cli, entry_type, tag, last, since, until, limit, *json, format, *history,
             )?;
         }
         Some(Commands::Search {
@@ -87,8 +88,9 @@ fn main() -> anyhow::Result<()> {
             json,
             limit,
             format,
+            history,
         }) => {
-            entries::handle_search(&cli, query, r#type, last, *json, limit, format)?;
+            entries::handle_search(&cli, query, r#type, last, *json, limit, format, *history)?;
         }
         Some(Commands::Show { id, json }) => {
             entries::handle_show(&cli, id, *json)?;

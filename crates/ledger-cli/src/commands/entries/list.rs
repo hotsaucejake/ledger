@@ -21,6 +21,7 @@ pub fn handle_list(
     limit: &Option<usize>,
     json: bool,
     format: &Option<String>,
+    history: bool,
 ) -> anyhow::Result<()> {
     let (storage, _passphrase) = open_storage_with_retry(cli, false)?;
 
@@ -59,7 +60,11 @@ pub fn handle_list(
         filter = filter.limit(DEFAULT_LIST_LIMIT);
     }
 
-    let entries = storage.list_entries(&filter)?;
+    let mut entries = storage.list_entries(&filter)?;
+    if !history {
+        let superseded = storage.superseded_entry_ids()?;
+        entries.retain(|entry| !superseded.contains(&entry.id));
+    }
     let format = parse_output_format(format.as_deref())?;
     if json {
         if format.is_some() {

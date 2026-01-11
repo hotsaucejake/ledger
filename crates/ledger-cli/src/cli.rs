@@ -129,6 +129,10 @@ pub enum Commands {
         /// Output format (table, plain)
         #[arg(long, value_name = "FORMAT")]
         format: Option<String>,
+
+        /// Include superseded revisions
+        #[arg(long)]
+        history: bool,
     },
 
     /// Search entries using full-text search
@@ -156,6 +160,10 @@ pub enum Commands {
         /// Output format (table, plain)
         #[arg(long, value_name = "FORMAT")]
         format: Option<String>,
+
+        /// Include superseded revisions
+        #[arg(long)]
+        history: bool,
     },
 
     /// Show a specific entry by ID
