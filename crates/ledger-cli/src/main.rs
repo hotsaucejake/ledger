@@ -22,103 +22,46 @@ fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
 
     match &cli.command {
-        Some(Commands::Init {
-            path,
-            advanced,
-            no_input,
-            timezone,
-            editor,
-            passphrase_cache_ttl_seconds,
-            keyfile_path,
-            config_path,
-        }) => {
-            init::handle_init(
-                &cli,
-                path.clone(),
-                *advanced,
-                *no_input,
-                timezone.clone(),
-                editor.clone(),
-                *passphrase_cache_ttl_seconds,
-                keyfile_path.clone(),
-                config_path.clone(),
-            )?;
+        Some(Commands::Init(args)) => {
+            init::handle_init(&cli, args)?;
         }
-        Some(Commands::Add {
-            entry_type,
-            tag,
-            date,
-            no_input,
-            body,
-        }) => {
+        Some(Commands::Add(args)) => {
             let editor_override = app::load_security_config(&cli)?.editor;
-            entries::handle_add(
-                &cli,
-                entry_type,
-                tag,
-                date,
-                *no_input,
-                body,
-                editor_override.as_deref(),
-            )?;
+            entries::handle_add(&cli, args, editor_override.as_deref())?;
         }
-        Some(Commands::Edit { id, body, no_input }) => {
+        Some(Commands::Edit(args)) => {
             let editor_override = app::load_security_config(&cli)?.editor;
-            entries::handle_edit(&cli, id, body, *no_input, editor_override.as_deref())?;
+            entries::handle_edit(&cli, args, editor_override.as_deref())?;
         }
-        Some(Commands::List {
-            entry_type,
-            tag,
-            last,
-            since,
-            until,
-            limit,
-            json,
-            format,
-            history,
-        }) => {
-            entries::handle_list(
-                &cli, entry_type, tag, last, since, until, limit, *json, format, *history,
-            )?;
+        Some(Commands::List(args)) => {
+            entries::handle_list(&cli, args)?;
         }
-        Some(Commands::Search {
-            query,
-            r#type,
-            last,
-            json,
-            limit,
-            format,
-            history,
-        }) => {
-            entries::handle_search(&cli, query, r#type, last, *json, limit, format, *history)?;
+        Some(Commands::Search(args)) => {
+            entries::handle_search(&cli, args)?;
         }
-        Some(Commands::Show { id, json }) => {
-            entries::handle_show(&cli, id, *json)?;
+        Some(Commands::Show(args)) => {
+            entries::handle_show(&cli, args)?;
         }
-        Some(Commands::Export {
-            entry_type,
-            format,
-            since,
-        }) => {
-            entries::handle_export(&cli, entry_type, format, since)?;
+        Some(Commands::Export(args)) => {
+            entries::handle_export(&cli, args)?;
         }
         Some(Commands::Check) => {
             maintenance::handle_check(&cli)?;
         }
-        Some(Commands::Backup { destination }) => {
-            maintenance::handle_backup(&cli, destination)?;
+        Some(Commands::Backup(args)) => {
+            maintenance::handle_backup(&cli, args)?;
         }
         Some(Commands::Lock) => {
             maintenance::handle_lock(&cli)?;
         }
-        Some(Commands::Doctor { no_input }) => {
-            maintenance::handle_doctor(&cli, *no_input)?;
+        Some(Commands::Doctor(args)) => {
+            maintenance::handle_doctor(&cli, args)?;
         }
-        Some(Commands::Completions { shell }) => {
-            misc::handle_completions(*shell)?;
+        Some(Commands::Completions(args)) => {
+            misc::handle_completions(args)?;
         }
-        Some(Commands::InternalCacheDaemon { ttl, socket }) => {
-            maintenance::handle_internal_cache_daemon(*ttl, socket)?;
+        Some(Commands::InternalCacheDaemon(args)) => {
+            maintenance::handle_internal_cache_daemon(args)?;
         }
         None => {
             println!("Ledger v{}", VERSION);

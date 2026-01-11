@@ -3,10 +3,10 @@ use ledger_core::StorageEngine;
 use crate::app::{
     missing_config_message, missing_ledger_message, open_storage_with_retry, resolve_config_path,
 };
-use crate::cli::Cli;
+use crate::cli::{Cli, DoctorArgs};
 use crate::config::read_config;
 
-pub fn handle_doctor(cli: &Cli, no_input: bool) -> anyhow::Result<()> {
+pub fn handle_doctor(cli: &Cli, args: &DoctorArgs) -> anyhow::Result<()> {
     let config_path = resolve_config_path()?;
     if !config_path.exists() {
         eprintln!("{}", missing_config_message(&config_path));
@@ -20,7 +20,7 @@ pub fn handle_doctor(cli: &Cli, no_input: bool) -> anyhow::Result<()> {
         return Err(anyhow::anyhow!("Ledger file missing"));
     }
 
-    let (storage, _passphrase) = open_storage_with_retry(cli, no_input).map_err(|e| {
+    let (storage, _passphrase) = open_storage_with_retry(cli, args.no_input).map_err(|e| {
         anyhow::anyhow!(
             "Failed to open ledger for diagnostics: {}\nHint: Set LEDGER_PASSPHRASE or run in a TTY.",
             e

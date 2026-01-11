@@ -6,7 +6,7 @@ use uuid::Uuid;
 
 use crate::app::{device_keyfile_warning, resolve_config_path};
 use crate::cache::ledger_hash;
-use crate::cli::Cli;
+use crate::cli::{Cli, InitArgs};
 use crate::config::{
     default_keyfile_path, default_ledger_path, write_config, KeyfileMode, LedgerConfig,
     SecurityTier,
@@ -17,52 +17,16 @@ use crate::security::{
     write_keyfile_plain,
 };
 
-#[allow(clippy::too_many_arguments)]
-pub fn handle_init(
-    cli: &Cli,
-    path: Option<String>,
-    advanced: bool,
-    no_input: bool,
-    timezone_arg: Option<String>,
-    editor_arg: Option<String>,
-    passphrase_cache_ttl_seconds_arg: Option<u64>,
-    keyfile_path_arg: Option<String>,
-    config_path_arg: Option<String>,
-) -> anyhow::Result<()> {
-    run_init_wizard(
-        cli,
-        path,
-        advanced,
-        no_input,
-        timezone_arg,
-        editor_arg,
-        passphrase_cache_ttl_seconds_arg,
-        keyfile_path_arg,
-        config_path_arg,
-    )
-}
-
-#[allow(clippy::too_many_arguments)]
-fn run_init_wizard(
-    cli: &Cli,
-    path: Option<String>,
-    advanced: bool,
-    no_input: bool,
-    timezone_arg: Option<String>,
-    editor_arg: Option<String>,
-    passphrase_cache_ttl_seconds_arg: Option<u64>,
-    keyfile_path_arg: Option<String>,
-    config_path_arg: Option<String>,
-) -> anyhow::Result<()> {
+pub fn handle_init(cli: &Cli, args: &InitArgs) -> anyhow::Result<()> {
     let interactive = std::io::stdin().is_terminal();
-    let effective_no_input = no_input || !interactive;
+    let effective_no_input = args.no_input || !interactive;
 
     if !cli.quiet && !effective_no_input {
         println!("Welcome to Ledger.\n");
     }
 
     let default_ledger = default_ledger_path()?;
-    let ledger_path = match path.or_else(|| cli.ledger.clone()) {
+    let ledger_path = match args.path.clone().or_else(|| cli.ledger.clone()) {
         Some(value) => std::path::PathBuf::from(value),
         None => {
             if effective_no_input {
@@ -77,19 +41,19 @@ fn run_init_wizard(
         }
     };
 
-    let mut config_path = if let Some(ref value) = config_path_arg {
+    let mut config_path = if let Some(ref value) = args.config_path {
         std::path::PathBuf::from(value)
     } else {
         resolve_config_path()?
     };
-    let mut passphrase_cache_ttl_seconds = passphrase_cache_ttl_seconds_arg.unwrap_or(0);
-    let mut keyfile_path = if let Some(ref value) = keyfile_path_arg {
+    let mut passphrase_cache_ttl_seconds = args.passphrase_cache_ttl_seconds.unwrap_or(0);
+    let mut keyfile_path = if let Some(ref value) = args.keyfile_path {
         std::path::PathBuf::from(value)
     } else {
         default_keyfile_path()?
     };
-    let mut timezone: Option<String> = timezone_arg;
-    let mut editor: Option<String> = editor_arg;
+    let mut timezone: Option<String> = args.timezone.clone();
+    let mut editor: Option<String> = args.editor.clone();
 
     let passphrase = if let Ok(value) = std::env::var("LEDGER_PASSPHRASE") {
         if !value.trim().is_empty() {
@@ -141,7 +105,7 @@ fn run_init_wizard(
         }
     }
 
-    if advanced && !effective_no_input {
+    if args.advanced && !effective_no_input {
         if timezone.is_none() {
             let tz_input: String = Input::new()
                 .with_prompt("Timezone")
@@ -165,7 +129,7 @@ fn run_init_wizard(
             }
         }
 
-        if passphrase_cache_ttl_seconds_arg.is_none() {
+        if args.passphrase_cache_ttl_seconds.is_none() {
             let ttl_input: String = Input::new()
                 .with_prompt("Passphrase cache (seconds)")
                 .default(passphrase_cache_ttl_seconds.to_string())
@@ -181,7 +145,7 @@ fn run_init_wizard(
         if matches!(
             tier,
             SecurityTier::PassphraseKeyfile | SecurityTier::DeviceKeyfile
-        ) && keyfile_path_arg.is_none()
+        ) && args.keyfile_path.is_none()
         {
             let input: String = Input::new()
                 .with_prompt("Keyfile path")
@@ -190,7 +154,7 @@ fn run_init_wizard(
             keyfile_path = std::path::PathBuf::from(input);
         }
 
-        if config_path_arg.is_none() {
+        if args.config_path.is_none() {
             let input: String = Input::new()
                 .with_prompt("Ledger config path")
                 .default(config_path.to_string_lossy().to_string())

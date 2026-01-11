@@ -3,19 +3,18 @@ use uuid::Uuid;
 use ledger_core::storage::{NewEntry, StorageEngine};
 
 use crate::app::{exit_not_found_with_hint, open_storage_with_retry};
-use crate::cli::Cli;
+use crate::cli::{Cli, EditArgs};
 use crate::helpers::{ensure_journal_type_name, read_entry_body};
 use crate::output::entry_type_name_map;
 
 pub fn handle_edit(
     cli: &Cli,
-    id: &str,
-    body: &Option<String>,
-    no_input: bool,
+    args: &EditArgs,
     editor_override: Option<&str>,
 ) -> anyhow::Result<()> {
-    let (mut storage, passphrase) = open_storage_with_retry(cli, no_input)?;
-    let parsed = Uuid::parse_str(id).map_err(|e| anyhow::anyhow!("Invalid entry ID: {}", e))?;
+    let (mut storage, passphrase) = open_storage_with_retry(cli, args.no_input)?;
+    let parsed =
+        Uuid::parse_str(&args.id).map_err(|e| anyhow::anyhow!("Invalid entry ID: {}", e))?;
     let entry = storage.get_entry(&parsed)?.unwrap_or_else(|| {
         exit_not_found_with_hint(
             "Entry not found",
@@ -34,7 +33,12 @@ pub fn handle_edit(
         .get("body")
         .and_then(|v| v.as_str())
         .unwrap_or("");
-    let body = read_entry_body(no_input, body.clone(), editor_override, Some(existing_body))?;
+    let body = read_entry_body(
+        args.no_input,
+        args.body.clone(),
+        editor_override,
+        Some(existing_body),
+    )?;
     if body.trim().is_empty() {
         return Err(anyhow::anyhow!("Entry body is empty"));
     }

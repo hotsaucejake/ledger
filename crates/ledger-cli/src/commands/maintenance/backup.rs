@@ -3,9 +3,9 @@ use std::path::Path;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::app::{missing_ledger_message, resolve_ledger_path};
-use crate::cli::Cli;
+use crate::cli::{BackupArgs, Cli};
 
-pub fn handle_backup(cli: &Cli, destination: &str) -> anyhow::Result<()> {
+pub fn handle_backup(cli: &Cli, args: &BackupArgs) -> anyhow::Result<()> {
     let source = resolve_ledger_path(cli)?;
     let source_path = Path::new(&source);
     if !source_path.exists() {
@@ -13,19 +13,19 @@ pub fn handle_backup(cli: &Cli, destination: &str) -> anyhow::Result<()> {
     }
     if std::io::stdin().is_terminal() && !cli.quiet {
         let proceed = dialoguer::Confirm::new()
-            .with_prompt(format!("Back up ledger to {}?", destination))
+            .with_prompt(format!("Back up ledger to {}?", args.destination))
             .default(true)
             .interact()?;
         if !proceed {
             return Err(anyhow::anyhow!("Backup cancelled"));
         }
     }
-    let count = backup_atomic_copy(source_path, Path::new(destination))?;
+    let count = backup_atomic_copy(source_path, Path::new(&args.destination))?;
     if count == 0 {
         return Err(anyhow::anyhow!("Backup failed: zero bytes written"));
     }
     if !cli.quiet {
-        println!("Backed up ledger to {}", destination);
+        println!("Backed up ledger to {}", args.destination);
     }
     Ok(())
 }
