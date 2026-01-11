@@ -213,9 +213,13 @@ fn expire_entries(cache: &mut HashMap<String, CacheEntry>, ttl: Duration) {
 }
 
 fn send_line(stream: &mut std::os::unix::net::UnixStream, line: &str) -> anyhow::Result<()> {
+    use std::net::Shutdown;
     stream
         .write_all(format!("{}\n", line).as_bytes())
-        .map_err(|e| anyhow::anyhow!("Cache write failed: {}", e))
+        .map_err(|e| anyhow::anyhow!("Cache write failed: {}", e))?;
+    stream
+        .shutdown(Shutdown::Write)
+        .map_err(|e| anyhow::anyhow!("Cache shutdown failed: {}", e))
 }
 
 fn read_response(stream: &mut std::os::unix::net::UnixStream) -> anyhow::Result<String> {
@@ -233,11 +237,14 @@ fn ensure_daemon_running(config: &CacheConfig) -> anyhow::Result<()> {
 
     let exe = std::env::current_exe().map_err(|e| anyhow::anyhow!("{}", e))?;
     std::process::Command::new(exe)
-        .arg("--internal-cache-daemon")
+        .arg("internal-cache-daemon")
         .arg("--ttl")
         .arg(config.ttl.as_secs().to_string())
         .arg("--socket")
         .arg(&config.socket_path)
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
         .spawn()
         .map_err(|e| anyhow::anyhow!("Failed to spawn cache daemon: {}", e))?;
 

@@ -1,7 +1,8 @@
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::ptr::NonNull;
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::thread::sleep;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use rusqlite::serialize::OwnedData;
 use rusqlite::{Connection, DatabaseName};
@@ -38,7 +39,8 @@ fn temp_xdg_dirs(prefix: &str) -> (PathBuf, PathBuf) {
 
 fn apply_xdg_env(cmd: &mut Command, config: &PathBuf, data: &PathBuf) {
     cmd.env("XDG_CONFIG_HOME", config)
-        .env("XDG_DATA_HOME", data);
+        .env("XDG_DATA_HOME", data)
+        .env("XDG_RUNTIME_DIR", data.parent().unwrap().join("runtime"));
 }
 
 fn write_config_file(
@@ -47,6 +49,7 @@ fn write_config_file(
     tier: &str,
     keyfile_mode: &str,
     keyfile_path: Option<&Path>,
+    cache_ttl_seconds: u64,
 ) {
     let config_path = config_home.join("ledger").join("config.toml");
     let keyfile_path_value = keyfile_path
@@ -59,9 +62,10 @@ fn write_config_file(
     };
     let keychain_enabled = tier == "passphrase_keychain";
     let contents = format!(
-        "[ledger]\npath = \"{}\"\n\n[security]\ntier = \"{}\"\npassphrase_cache_ttl_seconds = 0\n\n[keychain]\nenabled = {}\n\n[keyfile]\nmode = \"{}\"\n{}",
+        "[ledger]\npath = \"{}\"\n\n[security]\ntier = \"{}\"\npassphrase_cache_ttl_seconds = {}\n\n[keychain]\nenabled = {}\n\n[keyfile]\nmode = \"{}\"\n{}",
         ledger_path.to_string_lossy(),
         tier,
+        cache_ttl_seconds,
         keychain_enabled,
         keyfile_mode,
         keyfile_path_line
@@ -761,6 +765,7 @@ fn test_cli_passphrase_keyfile_flow() {
         "passphrase_keyfile",
         "encrypted",
         Some(&keyfile_path),
+        0,
     );
 
     let mut list = Command::new(bin());
@@ -794,6 +799,7 @@ fn test_cli_device_keyfile_flow() {
         "device_keyfile",
         "plain",
         Some(&keyfile_path),
+        0,
     );
 
     let mut list = Command::new(bin());
@@ -825,6 +831,7 @@ fn test_cli_keychain_flow_uses_cached_passphrase() {
         "passphrase_keychain",
         "none",
         None,
+        0,
     );
 
     let mut list = Command::new(bin());
@@ -862,6 +869,7 @@ fn test_cli_invalid_keyfile_mode_errors() {
         "passphrase_keyfile",
         "none",
         Some(&config_home.join("ledger").join("ledger.key")),
+        0,
     );
 
     let mut list = Command::new(bin());
@@ -884,7 +892,14 @@ fn test_cli_missing_keyfile_path_errors() {
     let (config_home, data_home) = temp_xdg_dirs("ledger_cli_keyfile_missing_path");
 
     create_ledger_with_passphrase(&ledger_path, passphrase);
-    write_config_file(&config_home, &ledger_path, "device_keyfile", "plain", None);
+    write_config_file(
+        &config_home,
+        &ledger_path,
+        "device_keyfile",
+        "plain",
+        None,
+        0,
+    );
 
     let mut list = Command::new(bin());
     list.arg("list").arg("--ledger").arg(&ledger_path);
@@ -894,4 +909,76 @@ fn test_cli_missing_keyfile_path_errors() {
     assert!(!list.status.success());
     let stderr = String::from_utf8_lossy(&list.stderr);
     assert!(stderr.contains("keyfile path is required for device_keyfile"));
+}
+
+#[test]
+fn test_cli_cache_lock_clears_cache() {
+    let ledger_path = temp_ledger_path("ledger_cli_cache_lock");
+    let passphrase = "test-passphrase-secure-123";
+    let (config_home, data_home) = temp_xdg_dirs("ledger_cli_cache_lock");
+
+    create_ledger_with_passphrase(&ledger_path, passphrase);
+    write_config_file(&config_home, &ledger_path, "passphrase", "none", None, 300);
+
+    let mut list = Command::new(bin());
+    list.arg("list")
+        .arg("--ledger")
+        .arg(&ledger_path)
+        .env("LEDGER_PASSPHRASE", passphrase);
+    apply_xdg_env(&mut list, &config_home, &data_home);
+    let list = list.output().expect("run list");
+    assert!(list.status.success());
+
+    let mut lock = Command::new(bin());
+    lock.arg("lock");
+    apply_xdg_env(&mut lock, &config_home, &data_home);
+    let lock = lock.output().expect("run lock");
+    assert!(lock.status.success());
+
+    let mut list_cached = Command::new(bin());
+    list_cached.arg("list").arg("--ledger").arg(&ledger_path);
+    apply_xdg_env(&mut list_cached, &config_home, &data_home);
+    let list_cached = list_cached.output().expect("run list cached");
+
+    assert!(!list_cached.status.success());
+}
+
+#[test]
+fn test_cli_cache_expires_after_ttl() {
+    let ledger_path = temp_ledger_path("ledger_cli_cache_ttl");
+    let passphrase = "test-passphrase-secure-123";
+    let (config_home, data_home) = temp_xdg_dirs("ledger_cli_cache_ttl");
+
+    create_ledger_with_passphrase(&ledger_path, passphrase);
+    write_config_file(&config_home, &ledger_path, "passphrase", "none", None, 1);
+
+    // First list command with passphrase - should cache the passphrase
+    let mut list = Command::new(bin());
+    list.arg("list")
+        .arg("--ledger")
+        .arg(&ledger_path)
+        .env("LEDGER_PASSPHRASE", passphrase);
+    apply_xdg_env(&mut list, &config_home, &data_home);
+    let list = list.output().expect("run list");
+    assert!(list.status.success(), "first list failed");
+
+    // Second list command without passphrase - should use cached passphrase
+    let mut list_cached = Command::new(bin());
+    list_cached.arg("list").arg("--ledger").arg(&ledger_path);
+    apply_xdg_env(&mut list_cached, &config_home, &data_home);
+    let list_cached = list_cached.output().expect("run list cached");
+    assert!(
+        list_cached.status.success(),
+        "list_cached failed: {}",
+        String::from_utf8_lossy(&list_cached.stderr)
+    );
+
+    sleep(Duration::from_secs(2));
+
+    let mut list_expired = Command::new(bin());
+    list_expired.arg("list").arg("--ledger").arg(&ledger_path);
+    apply_xdg_env(&mut list_expired, &config_home, &data_home);
+    let list_expired = list_expired.output().expect("run list expired");
+
+    assert!(!list_expired.status.success());
 }

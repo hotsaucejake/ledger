@@ -138,6 +138,9 @@ pub fn read_entry_body(
             .map_err(|e| anyhow::anyhow!("Failed to read stdin: {}", e))?;
         let trimmed = buffer.trim_end().to_string();
         if trimmed.is_empty() {
+            if no_input {
+                return Err(anyhow::anyhow!("No input provided on stdin"));
+            }
             if editor_override.is_some() {
                 return read_body_from_editor(editor_override);
             }

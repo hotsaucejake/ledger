@@ -505,6 +505,7 @@ fn main() -> anyhow::Result<()> {
                 Err(err) => {
                     eprintln!("Integrity check: FAILED");
                     eprintln!("- error: {}", err);
+                    eprintln!("Hint: Restore from a backup or export data before retrying.");
                     return Err(anyhow::anyhow!("Integrity check failed"));
                 }
             }

@@ -135,9 +135,9 @@ See `docs/design/session-cache.md` for design details.
 ### Session Cache Tests
 
 - [ ] Cache stores passphrase after successful unlock
-- [ ] Cache expires after TTL
-- [ ] `ledger lock` clears cache immediately
-- [ ] Cache disabled when TTL = 0
+- [x] Cache expires after TTL
+- [x] `ledger lock` clears cache immediately
+- [x] Cache disabled when TTL = 0
 
 ### Error UX Tests
 
