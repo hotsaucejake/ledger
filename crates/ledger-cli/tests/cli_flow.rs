@@ -381,6 +381,13 @@ fn test_cli_init_writes_default_config() {
             .and_then(|mode| mode.as_str()),
         Some("none")
     );
+    assert_eq!(
+        value
+            .get("security")
+            .and_then(|section| section.get("passphrase_cache_ttl_seconds"))
+            .and_then(|ttl| ttl.as_integer()),
+        Some(0)
+    );
 }
 
 #[test]
@@ -821,6 +828,62 @@ fn test_cli_init_advanced_ui_fields() {
         Some("America/New_York")
     );
     assert_eq!(ui.get("editor").and_then(|v| v.as_str()), Some("vim"));
+}
+
+#[test]
+fn test_cli_init_flags_skip_prompts() {
+    let passphrase = "test-passphrase-secure-123";
+    let (config_home, data_home) = temp_xdg_dirs("ledger_cli_init_flags");
+    let config_path = std::env::temp_dir().join(format!(
+        "ledger_config_flags_{}_{}.toml",
+        std::process::id(),
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("system time")
+            .as_nanos()
+    ));
+
+    let mut init = Command::new(bin());
+    init.arg("init")
+        .arg("--advanced")
+        .arg("--timezone")
+        .arg("UTC")
+        .arg("--editor")
+        .arg("vim")
+        .arg("--passphrase-cache-ttl-seconds")
+        .arg("120")
+        .arg("--config-path")
+        .arg(&config_path)
+        .env("LEDGER_PASSPHRASE", passphrase);
+    apply_xdg_env(&mut init, &config_home, &data_home);
+    let init = init
+        .stdin(std::process::Stdio::piped())
+        .spawn()
+        .expect("spawn init");
+    init.stdin
+        .as_ref()
+        .expect("stdin")
+        .write_all(b"1\n")
+        .expect("write stdin");
+    let output = init.wait_with_output().expect("wait init");
+    assert!(
+        output.status.success(),
+        "stderr={}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    let contents = std::fs::read_to_string(&config_path).expect("read config");
+    let value: toml::Value = contents.parse().expect("parse config");
+    let ui = value.get("ui").expect("ui section");
+    assert_eq!(ui.get("timezone").and_then(|v| v.as_str()), Some("UTC"));
+    assert_eq!(ui.get("editor").and_then(|v| v.as_str()), Some("vim"));
+    assert_eq!(
+        value
+            .get("security")
+            .and_then(|section| section.get("passphrase_cache_ttl_seconds"))
+            .and_then(|ttl| ttl.as_integer()),
+        Some(120)
+    );
 }
 
 #[test]

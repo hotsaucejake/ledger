@@ -39,7 +39,7 @@ A first-time user should:
 
 - [x] Init wizard (default flow + `--advanced`)
 - [x] Config file generated at `~/.config/ledger/config.toml`
-- [ ] Config file format matches `docs/design/config-spec.md`
+- [x] Config file format matches `docs/design/config-spec.md`
 - [x] XDG config path detection + creation
 - [x] Default ledger path: `~/.local/share/ledger/ledger.ledger`
 - [x] Clear error when ledger is missing (see RFC-003 §15)
@@ -52,7 +52,7 @@ A first-time user should:
 
 ### 2. Daily UX Consistency
 
-- [ ] Standard prompt rules (flags win, defaults in brackets)
+- [x] Standard prompt rules (flags win, defaults in brackets)
 - [x] Output rules (stable human output, stable JSON output)
 - [x] Exit code consistency
 - [ ] Clear errors with next steps

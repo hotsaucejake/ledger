@@ -93,6 +93,18 @@ enum Commands {
         /// Set default editor (use with --advanced or --no-input)
         #[arg(long)]
         editor: Option<String>,
+
+        /// Passphrase cache TTL seconds (advanced)
+        #[arg(long)]
+        passphrase_cache_ttl_seconds: Option<u64>,
+
+        /// Keyfile path override (advanced)
+        #[arg(long)]
+        keyfile_path: Option<String>,
+
+        /// Config path override (advanced)
+        #[arg(long)]
+        config_path: Option<String>,
     },
 
     /// Add a new entry to the ledger
@@ -247,6 +259,9 @@ fn main() -> anyhow::Result<()> {
             no_input,
             timezone,
             editor,
+            passphrase_cache_ttl_seconds,
+            keyfile_path,
+            config_path,
         }) => {
             run_init_wizard(
                 &cli,
@@ -255,6 +270,9 @@ fn main() -> anyhow::Result<()> {
                 *no_input,
                 timezone.clone(),
                 editor.clone(),
+                *passphrase_cache_ttl_seconds,
+                keyfile_path.clone(),
+                config_path.clone(),
             )?;
         }
         Some(Commands::Add {
@@ -925,6 +943,7 @@ fn decrypt_keyfile_with_retry(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn run_init_wizard(
     cli: &Cli,
     path: Option<String>,
@@ -932,6 +951,9 @@ fn run_init_wizard(
     no_input: bool,
     timezone_arg: Option<String>,
     editor_arg: Option<String>,
+    passphrase_cache_ttl_seconds_arg: Option<u64>,
+    keyfile_path_arg: Option<String>,
+    config_path_arg: Option<String>,
 ) -> anyhow::Result<()> {
     let interactive = std::io::stdin().is_terminal();
     let effective_no_input = no_input || !interactive;
@@ -956,9 +978,17 @@ fn run_init_wizard(
         }
     };
 
-    let mut config_path = resolve_config_path()?;
-    let mut passphrase_cache_ttl_seconds = 0_u64;
-    let mut keyfile_path = default_keyfile_path()?;
+    let mut config_path = if let Some(ref value) = config_path_arg {
+        std::path::PathBuf::from(value)
+    } else {
+        resolve_config_path()?
+    };
+    let mut passphrase_cache_ttl_seconds = passphrase_cache_ttl_seconds_arg.unwrap_or(0);
+    let mut keyfile_path = if let Some(ref value) = keyfile_path_arg {
+        std::path::PathBuf::from(value)
+    } else {
+        default_keyfile_path()?
+    };
     let mut timezone: Option<String> = timezone_arg;
     let mut editor: Option<String> = editor_arg;
 
@@ -1013,40 +1043,47 @@ fn run_init_wizard(
     }
 
     if advanced && !effective_no_input {
-        let tz_input: String = Input::new()
-            .with_prompt("Timezone")
-            .default("auto".to_string())
-            .interact_text()?;
-        if tz_input.trim().is_empty() || tz_input.trim().eq_ignore_ascii_case("auto") {
-            timezone = None;
-        } else {
-            timezone = Some(tz_input);
+        if timezone.is_none() {
+            let tz_input: String = Input::new()
+                .with_prompt("Timezone")
+                .default("auto".to_string())
+                .interact_text()?;
+            if tz_input.trim().is_empty() || tz_input.trim().eq_ignore_ascii_case("auto") {
+                timezone = None;
+            } else {
+                timezone = Some(tz_input);
+            }
         }
 
-        let default_editor = default_editor();
-        let editor_input: String = Input::new()
-            .with_prompt("Default editor")
-            .default(default_editor)
-            .interact_text()?;
-        if !editor_input.trim().is_empty() {
-            editor = Some(editor_input);
+        if editor.is_none() {
+            let default_editor = default_editor();
+            let editor_input: String = Input::new()
+                .with_prompt("Default editor")
+                .default(default_editor)
+                .interact_text()?;
+            if !editor_input.trim().is_empty() {
+                editor = Some(editor_input);
+            }
         }
 
-        let ttl_input: String = Input::new()
-            .with_prompt("Passphrase cache (seconds)")
-            .default(passphrase_cache_ttl_seconds.to_string())
-            .interact_text()?;
-        passphrase_cache_ttl_seconds = ttl_input.parse().map_err(|_| {
-            anyhow::anyhow!(
-                "Invalid cache TTL: {} (expected integer seconds)",
-                ttl_input
-            )
-        })?;
+        if passphrase_cache_ttl_seconds_arg.is_none() {
+            let ttl_input: String = Input::new()
+                .with_prompt("Passphrase cache (seconds)")
+                .default(passphrase_cache_ttl_seconds.to_string())
+                .interact_text()?;
+            passphrase_cache_ttl_seconds = ttl_input.parse().map_err(|_| {
+                anyhow::anyhow!(
+                    "Invalid cache TTL: {} (expected integer seconds)",
+                    ttl_input
+                )
+            })?;
+        }
 
         if matches!(
             tier,
             SecurityTier::PassphraseKeyfile | SecurityTier::DeviceKeyfile
-        ) {
+        ) && keyfile_path_arg.is_none()
+        {
             let input: String = Input::new()
                 .with_prompt("Keyfile path")
                 .default(keyfile_path.to_string_lossy().to_string())
@@ -1054,11 +1091,13 @@ fn run_init_wizard(
             keyfile_path = std::path::PathBuf::from(input);
         }
 
-        let input: String = Input::new()
-            .with_prompt("Ledger config path")
-            .default(config_path.to_string_lossy().to_string())
-            .interact_text()?;
-        config_path = std::path::PathBuf::from(input);
+        if config_path_arg.is_none() {
+            let input: String = Input::new()
+                .with_prompt("Ledger config path")
+                .default(config_path.to_string_lossy().to_string())
+                .interact_text()?;
+            config_path = std::path::PathBuf::from(input);
+        }
     }
 
     let (ledger_passphrase, keyfile_mode, keyfile_path_value) = match tier {
