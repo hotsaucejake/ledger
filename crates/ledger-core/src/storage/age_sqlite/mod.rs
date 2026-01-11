@@ -1,8 +1,11 @@
 //! Age-encrypted SQLite storage backend.
 //!
-//! This is a skeleton implementation that wires create/open/close
-//! with Age passphrase encryption. SQLite schema and entry operations
-//! will be added in subsequent steps.
+//! This module provides an encrypted SQLite storage engine using Age
+//! passphrase encryption. The database is held in memory and serialized
+//! to disk with encryption on close.
+
+mod row;
+mod validation;
 
 use std::collections::HashSet;
 use std::fs;
@@ -12,7 +15,7 @@ use std::ptr::NonNull;
 use std::sync::{Mutex, MutexGuard};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use chrono::{DateTime, NaiveDate, Utc};
+use chrono::{DateTime, Utc};
 use rusqlite::serialize::OwnedData;
 use rusqlite::{Connection, DatabaseName, OptionalExtension};
 use uuid::Uuid;
@@ -25,62 +28,10 @@ use crate::storage::types::{
     Entry, EntryFilter, EntryType, LedgerMetadata, NewEntry, NewEntryType,
 };
 
-/// Raw row data from the entries table, before parsing into domain types.
-#[derive(Debug)]
-struct EntryRow {
-    id: String,
-    entry_type_id: String,
-    schema_version: i32,
-    data_json: String,
-    tags_json: Option<String>,
-    created_at: String,
-    device_id: String,
-    supersedes: Option<String>,
-}
+use row::EntryRow;
+use validation::{fts_content_for_entry, normalize_tags, validate_entry_data, MAX_DATA_BYTES};
 
-impl TryFrom<EntryRow> for Entry {
-    type Error = LedgerError;
-
-    fn try_from(row: EntryRow) -> Result<Self> {
-        let id = Uuid::parse_str(&row.id)
-            .map_err(|e| LedgerError::Storage(format!("Invalid entry UUID: {}", e)))?;
-        let entry_type_id = Uuid::parse_str(&row.entry_type_id)
-            .map_err(|e| LedgerError::Storage(format!("Invalid entry_type UUID: {}", e)))?;
-        let device_id = Uuid::parse_str(&row.device_id)
-            .map_err(|e| LedgerError::Storage(format!("Invalid device_id: {}", e)))?;
-        let created_at = DateTime::parse_from_rfc3339(&row.created_at)
-            .map_err(|e| LedgerError::Storage(format!("Invalid timestamp: {}", e)))?
-            .with_timezone(&Utc);
-        let data: serde_json::Value = serde_json::from_str(&row.data_json)
-            .map_err(|e| LedgerError::Storage(format!("Invalid JSON: {}", e)))?;
-        let tags: Vec<String> = match row.tags_json {
-            Some(ref value) => serde_json::from_str(value)
-                .map_err(|e| LedgerError::Storage(format!("Invalid tags JSON: {}", e)))?,
-            None => Vec::new(),
-        };
-        let supersedes = row
-            .supersedes
-            .as_ref()
-            .map(|s| {
-                Uuid::parse_str(s)
-                    .map_err(|e| LedgerError::Storage(format!("Invalid supersedes UUID: {}", e)))
-            })
-            .transpose()?;
-
-        Ok(Entry {
-            id,
-            entry_type_id,
-            schema_version: row.schema_version,
-            data,
-            tags,
-            created_at,
-            device_id,
-            supersedes,
-        })
-    }
-}
-
-/// Age-encrypted SQLite storage engine (Phase 0.1).
+/// Age-encrypted SQLite storage engine.
 pub struct AgeSqliteStorage {
     path: PathBuf,
     conn: Mutex<Connection>,
@@ -89,197 +40,11 @@ pub struct AgeSqliteStorage {
 }
 
 impl AgeSqliteStorage {
-    const MAX_TAG_BYTES: usize = 128;
-    const MAX_TAGS_PER_ENTRY: usize = 100;
-    const MAX_DATA_BYTES: usize = 1024 * 1024;
-
     /// Lock the database connection, returning an error if the mutex is poisoned.
     fn lock_conn(&self) -> Result<MutexGuard<'_, Connection>> {
         self.conn
             .lock()
             .map_err(|_| LedgerError::Storage("SQLite connection poisoned".to_string()))
-    }
-
-    fn normalize_tags(tags: &[String]) -> Result<Vec<String>> {
-        if tags.len() > Self::MAX_TAGS_PER_ENTRY {
-            return Err(LedgerError::Validation(format!(
-                "Too many tags (max {})",
-                Self::MAX_TAGS_PER_ENTRY
-            )));
-        }
-
-        let mut seen = HashSet::with_capacity(tags.len());
-        let mut normalized = Vec::with_capacity(tags.len());
-
-        for tag in tags {
-            let trimmed = tag.trim().to_ascii_lowercase();
-            if trimmed.is_empty() {
-                return Err(LedgerError::Validation(
-                    "Empty tag is not allowed".to_string(),
-                ));
-            }
-            if trimmed.len() > Self::MAX_TAG_BYTES {
-                return Err(LedgerError::Validation(format!(
-                    "Tag too long (max {} bytes)",
-                    Self::MAX_TAG_BYTES
-                )));
-            }
-            if !trimmed
-                .chars()
-                .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_' || c == ':')
-            {
-                return Err(LedgerError::Validation(
-                    "Tag contains invalid characters".to_string(),
-                ));
-            }
-            // Use HashSet for O(1) duplicate detection instead of Vec::contains O(n)
-            if seen.insert(trimmed.clone()) {
-                normalized.push(trimmed);
-            }
-        }
-
-        Ok(normalized)
-    }
-
-    fn fts_content_for_entry(data: &serde_json::Value) -> String {
-        data.get("body")
-            .and_then(|value| value.as_str())
-            .map(|value| value.to_string())
-            .unwrap_or_else(|| data.to_string())
-    }
-
-    fn validate_entry_data(
-        schema_json: &serde_json::Value,
-        data: &serde_json::Value,
-    ) -> Result<()> {
-        let fields = schema_json
-            .get("fields")
-            .and_then(|value| value.as_array())
-            .ok_or_else(|| {
-                LedgerError::Validation("Schema fields missing or invalid".to_string())
-            })?;
-
-        let data_obj = data.as_object().ok_or_else(|| {
-            LedgerError::Validation("Entry data must be a JSON object".to_string())
-        })?;
-
-        let mut allowed_fields = Vec::new();
-
-        for field in fields {
-            let name = field
-                .get("name")
-                .and_then(|value| value.as_str())
-                .ok_or_else(|| LedgerError::Validation("Schema field name missing".to_string()))?;
-            allowed_fields.push(name.to_string());
-            let field_type = field
-                .get("type")
-                .and_then(|value| value.as_str())
-                .ok_or_else(|| LedgerError::Validation("Schema field type missing".to_string()))?;
-            let required = field
-                .get("required")
-                .and_then(|value| value.as_bool())
-                .unwrap_or(false);
-            let nullable = field
-                .get("nullable")
-                .and_then(|value| value.as_bool())
-                .unwrap_or(false);
-
-            let value = match data_obj.get(name) {
-                Some(v) => v,
-                None => {
-                    if required {
-                        return Err(LedgerError::Validation(format!(
-                            "Missing required field: {}",
-                            name
-                        )));
-                    }
-                    continue;
-                }
-            };
-            if value.is_null() {
-                if !nullable {
-                    return Err(LedgerError::Validation(format!(
-                        "Field {} cannot be null",
-                        name
-                    )));
-                }
-                continue;
-            }
-
-            match field_type {
-                "string" | "text" => {
-                    if !value.is_string() {
-                        return Err(LedgerError::Validation(format!(
-                            "Field {} must be a string",
-                            name
-                        )));
-                    }
-                }
-                "number" => {
-                    if !value.is_number() {
-                        return Err(LedgerError::Validation(format!(
-                            "Field {} must be a number",
-                            name
-                        )));
-                    }
-                }
-                "integer" => {
-                    if value.as_i64().is_none() {
-                        return Err(LedgerError::Validation(format!(
-                            "Field {} must be an integer",
-                            name
-                        )));
-                    }
-                }
-                "boolean" => {
-                    if !value.is_boolean() {
-                        return Err(LedgerError::Validation(format!(
-                            "Field {} must be a boolean",
-                            name
-                        )));
-                    }
-                }
-                "date" => {
-                    let raw = value.as_str().ok_or_else(|| {
-                        LedgerError::Validation(format!("Field {} must be a date string", name))
-                    })?;
-                    if NaiveDate::parse_from_str(raw, "%Y-%m-%d").is_err() {
-                        return Err(LedgerError::Validation(format!(
-                            "Field {} must be YYYY-MM-DD",
-                            name
-                        )));
-                    }
-                }
-                "datetime" => {
-                    let raw = value.as_str().ok_or_else(|| {
-                        LedgerError::Validation(format!(
-                            "Field {} must be an ISO-8601 string",
-                            name
-                        ))
-                    })?;
-                    if DateTime::parse_from_rfc3339(raw).is_err() {
-                        return Err(LedgerError::Validation(format!(
-                            "Field {} must be ISO-8601",
-                            name
-                        )));
-                    }
-                }
-                other => {
-                    return Err(LedgerError::Validation(format!(
-                        "Unsupported field type: {}",
-                        other
-                    )))
-                }
-            }
-        }
-
-        for key in data_obj.keys() {
-            if !allowed_fields.contains(key) {
-                return Err(LedgerError::Validation(format!("Unknown field: {}", key)));
-            }
-        }
-
-        Ok(())
     }
 
     fn empty_payload(conn: &Connection) -> Result<Vec<u8>> {
@@ -545,8 +310,7 @@ impl StorageEngine for AgeSqliteStorage {
                 (entry.entry_type_id.to_string(), entry.schema_version),
                 |row| row.get(0),
             )
-            .optional()
-            ?;
+            .optional()?;
         let schema_json = if let Some(value) = schema_json {
             value
         } else {
@@ -556,9 +320,9 @@ impl StorageEngine for AgeSqliteStorage {
         };
         let schema_value: serde_json::Value = serde_json::from_str(&schema_json)
             .map_err(|e| LedgerError::Storage(format!("Invalid schema JSON: {}", e)))?;
-        Self::validate_entry_data(&schema_value, &entry.data)?;
+        validate_entry_data(&schema_value, &entry.data)?;
 
-        let normalized_tags = Self::normalize_tags(&entry.tags)?;
+        let normalized_tags = normalize_tags(&entry.tags)?;
         let tags_json =
             if normalized_tags.is_empty() {
                 None
@@ -570,10 +334,10 @@ impl StorageEngine for AgeSqliteStorage {
 
         let data_json = serde_json::to_string(&entry.data)
             .map_err(|e| LedgerError::Storage(format!("Failed to serialize entry data: {}", e)))?;
-        if data_json.len() > Self::MAX_DATA_BYTES {
+        if data_json.len() > MAX_DATA_BYTES {
             return Err(LedgerError::Validation(format!(
                 "Entry data too large (max {} bytes)",
-                Self::MAX_DATA_BYTES
+                MAX_DATA_BYTES
             )));
         }
 
@@ -608,7 +372,7 @@ impl StorageEngine for AgeSqliteStorage {
             ),
         )?;
 
-        let fts_content = Self::fts_content_for_entry(&entry.data);
+        let fts_content = fts_content_for_entry(&entry.data);
         tx.execute(
             "INSERT INTO entries_fts (entry_id, content) VALUES (?, ?)",
             (id.to_string(), fts_content),
@@ -688,7 +452,7 @@ impl StorageEngine for AgeSqliteStorage {
         }
 
         if let Some(ref tag) = filter.tag {
-            let normalized = Self::normalize_tags(std::slice::from_ref(tag))?;
+            let normalized = normalize_tags(std::slice::from_ref(tag))?;
             let normalized_tag = normalized
                 .first()
                 .ok_or_else(|| LedgerError::Validation("Invalid tag filter".to_string()))?
@@ -958,8 +722,7 @@ impl StorageEngine for AgeSqliteStorage {
                 schema_json_str,
                 created_at.clone(),
             ),
-        )
-        ?;
+        )?;
 
         // Update last_modified
         tx.execute(
@@ -1045,52 +808,44 @@ impl StorageEngine for AgeSqliteStorage {
             ));
         }
 
-        let missing_fts: i64 = conn
-            .query_row(
-                "SELECT COUNT(*) FROM entries e LEFT JOIN entries_fts f ON e.id = f.entry_id WHERE f.entry_id IS NULL",
-                [],
-                |row| row.get(0),
-            )
-            ?;
+        let missing_fts: i64 = conn.query_row(
+            "SELECT COUNT(*) FROM entries e LEFT JOIN entries_fts f ON e.id = f.entry_id WHERE f.entry_id IS NULL",
+            [],
+            |row| row.get(0),
+        )?;
         if missing_fts > 0 {
             return Err(LedgerError::Storage(
                 "FTS index missing entries".to_string(),
             ));
         }
 
-        let orphaned_fts: i64 = conn
-            .query_row(
-                "SELECT COUNT(*) FROM entries_fts f LEFT JOIN entries e ON f.entry_id = e.id WHERE e.id IS NULL",
-                [],
-                |row| row.get(0),
-            )
-            ?;
+        let orphaned_fts: i64 = conn.query_row(
+            "SELECT COUNT(*) FROM entries_fts f LEFT JOIN entries e ON f.entry_id = e.id WHERE e.id IS NULL",
+            [],
+            |row| row.get(0),
+        )?;
         if orphaned_fts > 0 {
             return Err(LedgerError::Storage(
                 "FTS index has orphaned rows".to_string(),
             ));
         }
 
-        let invalid_active: i64 = conn
-            .query_row(
-                "SELECT COUNT(*) FROM (SELECT 1 FROM entry_type_versions GROUP BY entry_type_id HAVING SUM(active) != 1)",
-                [],
-                |row| row.get(0),
-            )
-            ?;
+        let invalid_active: i64 = conn.query_row(
+            "SELECT COUNT(*) FROM (SELECT 1 FROM entry_type_versions GROUP BY entry_type_id HAVING SUM(active) != 1)",
+            [],
+            |row| row.get(0),
+        )?;
         if invalid_active > 0 {
             return Err(LedgerError::Storage(
                 "Entry type versions have invalid active state".to_string(),
             ));
         }
 
-        let metadata_count: i64 = conn
-            .query_row(
-                "SELECT COUNT(*) FROM meta WHERE key IN ('format_version', 'device_id', 'created_at', 'last_modified')",
-                [],
-                |row| row.get(0),
-            )
-            ?;
+        let metadata_count: i64 = conn.query_row(
+            "SELECT COUNT(*) FROM meta WHERE key IN ('format_version', 'device_id', 'created_at', 'last_modified')",
+            [],
+            |row| row.get(0),
+        )?;
         if metadata_count < 4 {
             return Err(LedgerError::Storage(
                 "Metadata table missing required keys".to_string(),
