@@ -79,6 +79,22 @@ pub struct AddArgs {
     /// Disable interactive prompts
     #[arg(long)]
     pub no_input: bool,
+
+    /// Use a specific template instead of the default
+    #[arg(long, value_name = "TEMPLATE")]
+    pub template: Option<String>,
+
+    /// Attach entry to composition(s)
+    #[arg(long, value_name = "COMPOSITION")]
+    pub compose: Vec<String>,
+
+    /// Skip automatic composition attachment from template defaults
+    #[arg(long)]
+    pub no_compose: bool,
+
+    /// Set field values (format: field=value, can be repeated)
+    #[arg(long = "field", short = 'f', value_name = "FIELD=VALUE")]
+    pub fields: Vec<String>,
 }
 
 /// Arguments for the `edit` command
@@ -230,6 +246,240 @@ pub struct InternalCacheDaemonArgs {
     pub socket: String,
 }
 
+// ============================================================================
+// Composition Commands
+// ============================================================================
+
+/// Arguments for the `compositions` command
+#[derive(Args)]
+pub struct CompositionsArgs {
+    #[command(subcommand)]
+    pub command: CompositionsSubcommand,
+}
+
+#[derive(Subcommand)]
+pub enum CompositionsSubcommand {
+    /// Create a new composition
+    Create(CompositionCreateArgs),
+    /// List all compositions
+    List(CompositionListArgs),
+    /// Show composition details
+    Show(CompositionShowArgs),
+    /// Rename a composition
+    Rename(CompositionRenameArgs),
+    /// Delete a composition
+    Delete(CompositionDeleteArgs),
+}
+
+/// Arguments for creating a composition
+#[derive(Args)]
+pub struct CompositionCreateArgs {
+    /// Name of the composition
+    #[arg(value_name = "NAME")]
+    pub name: String,
+
+    /// Optional description
+    #[arg(long, short)]
+    pub description: Option<String>,
+}
+
+/// Arguments for listing compositions
+#[derive(Args)]
+pub struct CompositionListArgs {
+    /// Output as JSON
+    #[arg(long)]
+    pub json: bool,
+
+    /// Limit number of results
+    #[arg(long)]
+    pub limit: Option<usize>,
+}
+
+/// Arguments for showing a composition
+#[derive(Args)]
+pub struct CompositionShowArgs {
+    /// Composition name or ID
+    #[arg(value_name = "NAME_OR_ID")]
+    pub name_or_id: String,
+
+    /// Output as JSON
+    #[arg(long)]
+    pub json: bool,
+}
+
+/// Arguments for renaming a composition
+#[derive(Args)]
+pub struct CompositionRenameArgs {
+    /// Current composition name or ID
+    #[arg(value_name = "NAME_OR_ID")]
+    pub name_or_id: String,
+
+    /// New name
+    #[arg(value_name = "NEW_NAME")]
+    pub new_name: String,
+}
+
+/// Arguments for deleting a composition
+#[derive(Args)]
+pub struct CompositionDeleteArgs {
+    /// Composition name or ID
+    #[arg(value_name = "NAME_OR_ID")]
+    pub name_or_id: String,
+
+    /// Skip confirmation prompt
+    #[arg(long)]
+    pub force: bool,
+}
+
+// ============================================================================
+// Template Commands
+// ============================================================================
+
+/// Arguments for the `templates` command
+#[derive(Args)]
+pub struct TemplatesArgs {
+    #[command(subcommand)]
+    pub command: TemplatesSubcommand,
+}
+
+#[derive(Subcommand)]
+pub enum TemplatesSubcommand {
+    /// Create a new template
+    Create(TemplateCreateArgs),
+    /// List all templates
+    List(TemplateListArgs),
+    /// Show template details
+    Show(TemplateShowArgs),
+    /// Update a template (creates new version)
+    Update(TemplateUpdateArgs),
+    /// Delete a template
+    Delete(TemplateDeleteArgs),
+    /// Set the default template for an entry type
+    SetDefault(TemplateSetDefaultArgs),
+    /// Clear the default template for an entry type
+    ClearDefault(TemplateClearDefaultArgs),
+}
+
+/// Arguments for creating a template
+#[derive(Args)]
+pub struct TemplateCreateArgs {
+    /// Template name
+    #[arg(value_name = "NAME")]
+    pub name: String,
+
+    /// Entry type this template is for
+    #[arg(long, short = 't', value_name = "TYPE")]
+    pub entry_type: String,
+
+    /// Optional description
+    #[arg(long, short)]
+    pub description: Option<String>,
+
+    /// Template defaults as JSON string
+    #[arg(long, value_name = "JSON")]
+    pub defaults: Option<String>,
+
+    /// Set as default template for the entry type
+    #[arg(long)]
+    pub set_default: bool,
+}
+
+/// Arguments for listing templates
+#[derive(Args)]
+pub struct TemplateListArgs {
+    /// Filter by entry type
+    #[arg(long, short = 't', value_name = "TYPE")]
+    pub entry_type: Option<String>,
+
+    /// Output as JSON
+    #[arg(long)]
+    pub json: bool,
+}
+
+/// Arguments for showing a template
+#[derive(Args)]
+pub struct TemplateShowArgs {
+    /// Template name or ID
+    #[arg(value_name = "NAME_OR_ID")]
+    pub name_or_id: String,
+
+    /// Output as JSON
+    #[arg(long)]
+    pub json: bool,
+}
+
+/// Arguments for updating a template
+#[derive(Args)]
+pub struct TemplateUpdateArgs {
+    /// Template name or ID
+    #[arg(value_name = "NAME_OR_ID")]
+    pub name_or_id: String,
+
+    /// New template defaults as JSON string
+    #[arg(long, value_name = "JSON")]
+    pub defaults: String,
+}
+
+/// Arguments for deleting a template
+#[derive(Args)]
+pub struct TemplateDeleteArgs {
+    /// Template name or ID
+    #[arg(value_name = "NAME_OR_ID")]
+    pub name_or_id: String,
+
+    /// Skip confirmation prompt
+    #[arg(long)]
+    pub force: bool,
+}
+
+/// Arguments for setting default template
+#[derive(Args)]
+pub struct TemplateSetDefaultArgs {
+    /// Entry type name
+    #[arg(value_name = "TYPE")]
+    pub entry_type: String,
+
+    /// Template name or ID
+    #[arg(value_name = "TEMPLATE")]
+    pub template: String,
+}
+
+/// Arguments for clearing default template
+#[derive(Args)]
+pub struct TemplateClearDefaultArgs {
+    /// Entry type name
+    #[arg(value_name = "TYPE")]
+    pub entry_type: String,
+}
+
+// ============================================================================
+// Attach/Detach Commands
+// ============================================================================
+
+/// Arguments for the `attach` command
+#[derive(Args)]
+pub struct AttachArgs {
+    /// Entry ID to attach
+    #[arg(value_name = "ENTRY_ID")]
+    pub entry_id: String,
+
+    /// Composition name or ID to attach to
+    #[arg(value_name = "COMPOSITION")]
+    pub composition: String,
+}
+
+/// Arguments for the `detach` command
+#[derive(Args)]
+pub struct DetachArgs {
+    /// Entry ID to detach
+    #[arg(value_name = "ENTRY_ID")]
+    pub entry_id: String,
+
+    /// Composition name or ID to detach from
+    #[arg(value_name = "COMPOSITION")]
+    pub composition: String,
+}
+
 #[derive(Subcommand)]
 pub enum Commands {
     /// Initialize a new encrypted ledger
@@ -271,4 +521,16 @@ pub enum Commands {
     /// Internal cache daemon (not user-facing)
     #[command(hide = true, name = "internal-cache-daemon")]
     InternalCacheDaemon(InternalCacheDaemonArgs),
+
+    /// Manage compositions (semantic groupings of entries)
+    Compositions(CompositionsArgs),
+
+    /// Manage templates (reusable defaults for entries)
+    Templates(TemplatesArgs),
+
+    /// Attach an entry to a composition
+    Attach(AttachArgs),
+
+    /// Detach an entry from a composition
+    Detach(DetachArgs),
 }

@@ -154,6 +154,147 @@ impl NewEntry {
     }
 }
 
+/// A composition - semantic grouping of entries.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Composition {
+    /// Unique identifier for this composition
+    pub id: Uuid,
+
+    /// User-facing name (unique within ledger)
+    pub name: String,
+
+    /// Optional description
+    pub description: Option<String>,
+
+    /// When this composition was created
+    pub created_at: DateTime<Utc>,
+
+    /// Device that created this composition
+    pub device_id: Uuid,
+
+    /// Optional structured metadata
+    pub metadata: Option<serde_json::Value>,
+}
+
+/// Builder for creating new compositions.
+#[derive(Debug, Clone)]
+pub struct NewComposition {
+    /// User-facing name
+    pub name: String,
+
+    /// Optional description
+    pub description: Option<String>,
+
+    /// Device ID
+    pub device_id: Uuid,
+
+    /// Optional structured metadata
+    pub metadata: Option<serde_json::Value>,
+}
+
+impl NewComposition {
+    pub fn new(name: impl Into<String>, device_id: Uuid) -> Self {
+        Self {
+            name: name.into(),
+            description: None,
+            device_id,
+            metadata: None,
+        }
+    }
+
+    pub fn with_description(mut self, description: impl Into<String>) -> Self {
+        self.description = Some(description.into());
+        self
+    }
+
+    pub fn with_metadata(mut self, metadata: serde_json::Value) -> Self {
+        self.metadata = Some(metadata);
+        self
+    }
+}
+
+/// A template - reusable defaults for entry creation.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Template {
+    /// Unique identifier for this template
+    pub id: Uuid,
+
+    /// User-facing name (unique within ledger)
+    pub name: String,
+
+    /// Entry type this template applies to
+    pub entry_type_id: Uuid,
+
+    /// Template version number
+    pub version: i32,
+
+    /// When this template version was created
+    pub created_at: DateTime<Utc>,
+
+    /// Device that created this template
+    pub device_id: Uuid,
+
+    /// Optional description
+    pub description: Option<String>,
+
+    /// Template data (defaults, default_tags, default_compositions, prompt_overrides)
+    pub template_json: serde_json::Value,
+}
+
+/// Builder for creating new templates.
+#[derive(Debug, Clone)]
+pub struct NewTemplate {
+    /// User-facing name
+    pub name: String,
+
+    /// Entry type this template applies to
+    pub entry_type_id: Uuid,
+
+    /// Device ID
+    pub device_id: Uuid,
+
+    /// Optional description
+    pub description: Option<String>,
+
+    /// Template data (defaults, default_tags, default_compositions, prompt_overrides)
+    pub template_json: serde_json::Value,
+}
+
+impl NewTemplate {
+    pub fn new(
+        name: impl Into<String>,
+        entry_type_id: Uuid,
+        template_json: serde_json::Value,
+        device_id: Uuid,
+    ) -> Self {
+        Self {
+            name: name.into(),
+            entry_type_id,
+            device_id,
+            description: None,
+            template_json,
+        }
+    }
+
+    pub fn with_description(mut self, description: impl Into<String>) -> Self {
+        self.description = Some(description.into());
+        self
+    }
+}
+
+/// An entry-composition association.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EntryComposition {
+    /// Entry ID
+    pub entry_id: Uuid,
+
+    /// Composition ID
+    pub composition_id: Uuid,
+
+    /// When the entry was added to the composition
+    pub added_at: DateTime<Utc>,
+}
+
 /// Filter for querying entries.
 #[derive(Debug, Clone, Default)]
 pub struct EntryFilter {
@@ -171,6 +312,9 @@ pub struct EntryFilter {
 
     /// Maximum number of results
     pub limit: Option<usize>,
+
+    /// Filter by composition ID
+    pub composition_id: Option<Uuid>,
 }
 
 impl EntryFilter {
@@ -196,6 +340,29 @@ impl EntryFilter {
     pub fn until(mut self, date: DateTime<Utc>) -> Self {
         self.until = Some(date);
         self
+    }
+
+    pub fn limit(mut self, limit: usize) -> Self {
+        self.limit = Some(limit);
+        self
+    }
+
+    pub fn composition(mut self, id: Uuid) -> Self {
+        self.composition_id = Some(id);
+        self
+    }
+}
+
+/// Filter for querying compositions.
+#[derive(Debug, Clone, Default)]
+pub struct CompositionFilter {
+    /// Maximum number of results
+    pub limit: Option<usize>,
+}
+
+impl CompositionFilter {
+    pub fn new() -> Self {
+        Self::default()
     }
 
     pub fn limit(mut self, limit: usize) -> Self {
@@ -228,17 +395,64 @@ mod tests {
     #[test]
     fn test_entry_filter_builder() {
         let type_id = Uuid::new_v4();
+        let comp_id = Uuid::new_v4();
         let now = Utc::now();
 
         let filter = EntryFilter::new()
             .entry_type(type_id)
             .tag("test")
             .since(now)
-            .limit(10);
+            .limit(10)
+            .composition(comp_id);
 
         assert_eq!(filter.entry_type_id, Some(type_id));
         assert_eq!(filter.tag, Some("test".to_string()));
         assert_eq!(filter.since, Some(now));
+        assert_eq!(filter.limit, Some(10));
+        assert_eq!(filter.composition_id, Some(comp_id));
+    }
+
+    #[test]
+    fn test_new_composition_builder() {
+        let device_id = Uuid::new_v4();
+        let metadata = serde_json::json!({"key": "value"});
+
+        let comp = NewComposition::new("project_x", device_id)
+            .with_description("My project")
+            .with_metadata(metadata.clone());
+
+        assert_eq!(comp.name, "project_x");
+        assert_eq!(comp.description, Some("My project".to_string()));
+        assert_eq!(comp.device_id, device_id);
+        assert_eq!(comp.metadata, Some(metadata));
+    }
+
+    #[test]
+    fn test_new_template_builder() {
+        let device_id = Uuid::new_v4();
+        let type_id = Uuid::new_v4();
+        let template_json = serde_json::json!({
+            "defaults": {"car": "civic"},
+            "default_tags": ["car", "fuel"]
+        });
+
+        let template = NewTemplate::new("gas_fillup", type_id, template_json.clone(), device_id)
+            .with_description("Template for gas fillups");
+
+        assert_eq!(template.name, "gas_fillup");
+        assert_eq!(template.entry_type_id, type_id);
+        assert_eq!(template.device_id, device_id);
+        assert_eq!(
+            template.description,
+            Some("Template for gas fillups".to_string())
+        );
+        assert_eq!(template.template_json, template_json);
+    }
+
+    #[test]
+    fn test_composition_filter_builder() {
+        let filter = CompositionFilter::new().limit(10);
+
         assert_eq!(filter.limit, Some(10));
     }
 }

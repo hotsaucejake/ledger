@@ -29,4 +29,7 @@ pub mod types;
 // Re-export public types
 pub use age_sqlite::AgeSqliteStorage;
 pub use traits::StorageEngine;
-pub use types::{Entry, EntryFilter, EntryType, LedgerMetadata, NewEntry, NewEntryType};
+pub use types::{
+    Composition, CompositionFilter, Entry, EntryComposition, EntryFilter, EntryType,
+    LedgerMetadata, NewComposition, NewEntry, NewEntryType, NewTemplate, Template,
+};

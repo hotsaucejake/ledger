@@ -5,7 +5,7 @@
 [![CI](https://github.com/hotsaucejake/ledger/actions/workflows/ci.yml/badge.svg)](https://github.com/hotsaucejake/ledger/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-MIT%2FApache--2.0-blue.svg)](LICENSE)
 
-> **Status**: Milestone 2 (UX Polish) — Core UX implemented, verification in progress
+> **Status**: Milestone 5 (Compositions & Templates) — Complete
 
 ## Overview
 
@@ -19,23 +19,30 @@ Ledger combines strong encryption at rest, structured queryable data, user-defin
 - **Structure without rigidity**: Free-form writing, structured metrics, or hybrid
 - **Future-proof**: Versioned schemas, explicit migrations, documented format
 
-## Current Status: Phase 0.1 (Journal Workflow)
+## Current Status: Phase 0.2 (Compositions & Templates)
 
-The encrypted storage and CLI flows are now functional for Phase 0.1 journaling:
+The encrypted storage and CLI flows are functional with compositions and templates:
 
 - [x] Age-encrypted SQLite storage (in-memory)
 - [x] Schema initialization + metadata
 - [x] Entry CRUD + FTS search
 - [x] CLI init/add/list/search/show/check/export/backup
+- [x] Compositions (semantic grouping across entry types)
+- [x] Templates (reusable defaults stored in the ledger)
+- [x] Template-first prompting for entry creation
 - [x] CLI integration tests
 
-### Available Commands (functional for journal)
+### Available Commands
 
 ```bash
+# Core commands
 ledger init                  # Initialize encrypted ledger
 ledger init --advanced       # Advanced init wizard (editor, timezone, cache, keyfile)
-ledger add <type>            # Add entry
+ledger add <type>            # Add entry (prompts for fields)
 ledger add journal --body "" # Add inline entry
+ledger add journal --template <name>  # Use specific template
+ledger add journal --compose <name>   # Attach to composition
+ledger add journal --no-compose       # Skip composition attachment
 ledger list [type]           # List entries
 ledger list --json           # List entries as JSON
 ledger list --last 7d        # List recent entries
@@ -53,6 +60,27 @@ ledger check                 # Integrity check
 ledger backup <dest>         # Backup ledger
 ledger lock                  # Clear passphrase cache
 ledger completions bash      # Generate shell completions
+
+# Compositions (semantic grouping)
+ledger compositions create <name>           # Create composition
+ledger compositions create <name> --description "..."
+ledger compositions list                    # List all compositions
+ledger compositions list --json             # List as JSON
+ledger compositions show <name>             # Show composition details
+ledger compositions rename <old> <new>      # Rename composition
+ledger compositions delete <name>           # Delete composition
+ledger attach <entry-id> <composition>      # Attach entry to composition
+ledger detach <entry-id> <composition>      # Detach entry from composition
+
+# Templates (reusable defaults)
+ledger templates create <name> --entry-type <type>  # Create template
+ledger templates create <name> --entry-type journal --defaults '{"body": "..."}'
+ledger templates create <name> --entry-type journal --set-default
+ledger templates list                       # List all templates
+ledger templates list --json                # List as JSON
+ledger templates show <name>                # Show template details
+ledger templates update <name> --defaults '{"body": "new default"}'
+ledger templates delete <name>              # Delete template
 ```
 
 Environment variables:
@@ -62,6 +90,68 @@ LEDGER_PATH=/path/to/ledger.ledger
 LEDGER_PASSPHRASE="your passphrase"
 LEDGER_CONFIG=/path/to/config.toml
 ```
+
+## Compositions
+
+Compositions are **semantic groupings** that can span multiple entry types. Use them to organize related entries around themes, projects, or topics.
+
+```bash
+# Create a composition for a research project
+ledger compositions create "research-paper" --description "PhD thesis research"
+
+# Add entries and attach them to the composition
+ledger add journal --body "Literature review notes" --compose "research-paper"
+
+# Or attach existing entries
+ledger attach <entry-id> "research-paper"
+
+# View all entries in a composition
+ledger compositions show "research-paper"
+```
+
+**Key concepts:**
+- Entries can belong to multiple compositions
+- Compositions work across entry types (journal, bookmark, etc.)
+- Use `--compose` during `add` or `attach` after creation
+- Use `--no-compose` to skip automatic composition attachment
+
+## Templates
+
+Templates store **reusable defaults** for entry creation. They pre-fill field values and can be set as the default for an entry type.
+
+```bash
+# Create a template with default values
+ledger templates create "morning-journal" \
+  --entry-type journal \
+  --defaults '{"body": "Morning reflection:\n\n1. Grateful for:\n2. Focus today:\n3. Intention:"}' \
+  --set-default
+
+# Use template when adding entries
+ledger add journal --template "morning-journal"
+
+# If set as default, it applies automatically
+ledger add journal  # Uses morning-journal template defaults
+```
+
+**Template JSON structure:**
+```json
+{
+  "defaults": {
+    "body": "Default text",
+    "field_name": "default value"
+  },
+  "default_tags": ["tag1", "tag2"],
+  "default_compositions": ["composition-id"],
+  "prompt_overrides": {
+    "field_name": "Custom prompt text"
+  }
+}
+```
+
+**Prompting rules:**
+- No flags: prompts for all fields (template defaults pre-filled)
+- Some flags: prompts only for missing required fields
+- All flags provided: stores only provided values (no extra prompts)
 
 ## Building
 
@@ -97,22 +187,24 @@ Ledger writes a config at `~/.config/ledger/config.toml` by default. It includes
 
 ## Development Roadmap
 
-### Phase 0.1 — Minimal Viable Journal
+### Phase 0.1 — Minimal Viable Journal ✓
 
-- **M1**: Encrypted storage (Age + SQLite in-memory)
-- **M2**: Journal entries (`add`, `list`, `show`)
-- **M3**: Full-text search
-- **M4**: Export & backup
+- **M1**: Encrypted storage (Age + SQLite in-memory) ✓
+- **M2**: Journal entries (`add`, `list`, `show`) ✓
+- **M3**: Full-text search ✓
+- **M4**: Export & backup ✓
 
 Exit criteria: Can create, search, and export encrypted journal entries.
 
-### Phase 0.2 — Structured Schemas, Templates, Compositions
+### Phase 0.2 — Structured Schemas, Templates, Compositions ✓
 
-- User-defined entry types
-- Schema creation with guardrails
-- Compositions (semantic grouping)
-- Templates stored in the ledger (reusable defaults)
-- Enum fields (single/multi-select)
+- **M5**: Compositions & Templates ✓
+  - Compositions (semantic grouping across entry types)
+  - Templates stored in the ledger (reusable defaults)
+  - Template-first prompting for entry creation
+  - Enum fields (single/multi-select)
+
+Exit criteria: Can create compositions, define templates, and use template defaults during entry creation.
 
 ### Phase 0.3 — Query & Analysis
 
@@ -215,6 +307,7 @@ cargo test -p ledger-cli
 ### Manual Testing Loop
 
 ```bash
+# Basic workflow
 ledger init ./test.ledger
 ledger add journal --body "Hello"
 ledger list --json
@@ -222,6 +315,16 @@ ledger search "Hello"
 ledger show <id>
 ledger export --json
 ledger backup ./test.ledger.bak
+
+# Compositions workflow
+ledger compositions create "my-project"
+ledger add journal --body "Project notes" --compose "my-project"
+ledger compositions show "my-project"
+
+# Templates workflow
+ledger templates create "daily" --entry-type journal --defaults '{"body": "Today:"}' --set-default
+ledger add journal  # Uses template defaults
+ledger templates list --json
 ```
 
 ### Common Environment Variables
