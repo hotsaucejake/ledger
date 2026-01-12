@@ -1604,3 +1604,658 @@ fn test_cli_doctor_ok() {
     let stdout = String::from_utf8_lossy(&doctor.stdout);
     assert!(stdout.contains("Doctor: OK"));
 }
+
+// ============================================================================
+// Composition Tests (M5)
+// ============================================================================
+
+#[test]
+fn test_cli_compositions_crud() {
+    let ledger_path = temp_ledger_path("ledger_cli_comp_crud");
+    let passphrase = "test-passphrase-secure-123";
+    let (config_home, data_home) = temp_xdg_dirs("ledger_cli_comp_crud");
+
+    // Init ledger
+    let mut init = Command::new(bin());
+    init.arg("init")
+        .arg(&ledger_path)
+        .env("LEDGER_PASSPHRASE", passphrase);
+    apply_xdg_env(&mut init, &config_home, &data_home);
+    let init = init.output().expect("run init");
+    assert!(init.status.success());
+
+    // Create composition
+    let mut create = Command::new(bin());
+    create
+        .arg("compositions")
+        .arg("create")
+        .arg("my-project")
+        .arg("--description")
+        .arg("A test project composition")
+        .arg("--ledger")
+        .arg(&ledger_path)
+        .env("LEDGER_PASSPHRASE", passphrase);
+    apply_xdg_env(&mut create, &config_home, &data_home);
+    let create = create.output().expect("run compositions create");
+    assert!(
+        create.status.success(),
+        "create failed: {}",
+        String::from_utf8_lossy(&create.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&create.stdout);
+    assert!(stdout.contains("Created composition 'my-project'"));
+
+    // List compositions
+    let mut list = Command::new(bin());
+    list.arg("compositions")
+        .arg("list")
+        .arg("--json")
+        .arg("--ledger")
+        .arg(&ledger_path)
+        .env("LEDGER_PASSPHRASE", passphrase);
+    apply_xdg_env(&mut list, &config_home, &data_home);
+    let list = list.output().expect("run compositions list");
+    assert!(list.status.success());
+    let value: serde_json::Value = serde_json::from_slice(&list.stdout).expect("parse json");
+    let array = value.as_array().expect("list output array");
+    assert_eq!(array.len(), 1);
+    assert_eq!(
+        array[0].get("name").and_then(|v| v.as_str()),
+        Some("my-project")
+    );
+
+    // Show composition
+    let mut show = Command::new(bin());
+    show.arg("compositions")
+        .arg("show")
+        .arg("my-project")
+        .arg("--ledger")
+        .arg(&ledger_path)
+        .env("LEDGER_PASSPHRASE", passphrase);
+    apply_xdg_env(&mut show, &config_home, &data_home);
+    let show = show.output().expect("run compositions show");
+    assert!(show.status.success());
+    let stdout = String::from_utf8_lossy(&show.stdout);
+    assert!(stdout.contains("my-project"));
+    assert!(stdout.contains("A test project composition"));
+
+    // Rename composition
+    let mut rename = Command::new(bin());
+    rename
+        .arg("compositions")
+        .arg("rename")
+        .arg("my-project")
+        .arg("renamed-project")
+        .arg("--ledger")
+        .arg(&ledger_path)
+        .env("LEDGER_PASSPHRASE", passphrase);
+    apply_xdg_env(&mut rename, &config_home, &data_home);
+    let rename = rename.output().expect("run compositions rename");
+    assert!(rename.status.success());
+
+    // Verify rename
+    let mut list2 = Command::new(bin());
+    list2
+        .arg("compositions")
+        .arg("list")
+        .arg("--json")
+        .arg("--ledger")
+        .arg(&ledger_path)
+        .env("LEDGER_PASSPHRASE", passphrase);
+    apply_xdg_env(&mut list2, &config_home, &data_home);
+    let list2 = list2.output().expect("run compositions list");
+    let value: serde_json::Value = serde_json::from_slice(&list2.stdout).expect("parse json");
+    let array = value.as_array().expect("list output array");
+    assert_eq!(
+        array[0].get("name").and_then(|v| v.as_str()),
+        Some("renamed-project")
+    );
+
+    // Delete composition
+    let mut delete = Command::new(bin());
+    delete
+        .arg("compositions")
+        .arg("delete")
+        .arg("renamed-project")
+        .arg("--force")
+        .arg("--ledger")
+        .arg(&ledger_path)
+        .env("LEDGER_PASSPHRASE", passphrase);
+    apply_xdg_env(&mut delete, &config_home, &data_home);
+    let delete = delete.output().expect("run compositions delete");
+    assert!(
+        delete.status.success(),
+        "delete failed: {}",
+        String::from_utf8_lossy(&delete.stderr)
+    );
+
+    // Verify deletion
+    let mut list3 = Command::new(bin());
+    list3
+        .arg("compositions")
+        .arg("list")
+        .arg("--json")
+        .arg("--ledger")
+        .arg(&ledger_path)
+        .env("LEDGER_PASSPHRASE", passphrase);
+    apply_xdg_env(&mut list3, &config_home, &data_home);
+    let list3 = list3.output().expect("run compositions list");
+    let value: serde_json::Value = serde_json::from_slice(&list3.stdout).expect("parse json");
+    let array = value.as_array().expect("list output array");
+    assert!(array.is_empty());
+}
+
+#[test]
+fn test_cli_attach_detach_entry() {
+    let ledger_path = temp_ledger_path("ledger_cli_attach");
+    let passphrase = "test-passphrase-secure-123";
+    let (config_home, data_home) = temp_xdg_dirs("ledger_cli_attach");
+
+    // Init ledger
+    let mut init = Command::new(bin());
+    init.arg("init")
+        .arg(&ledger_path)
+        .env("LEDGER_PASSPHRASE", passphrase);
+    apply_xdg_env(&mut init, &config_home, &data_home);
+    let init = init.output().expect("run init");
+    assert!(init.status.success());
+
+    // Create composition
+    let mut create = Command::new(bin());
+    create
+        .arg("compositions")
+        .arg("create")
+        .arg("research")
+        .arg("--ledger")
+        .arg(&ledger_path)
+        .env("LEDGER_PASSPHRASE", passphrase);
+    apply_xdg_env(&mut create, &config_home, &data_home);
+    let create = create.output().expect("run compositions create");
+    assert!(create.status.success());
+
+    // Add entry
+    let mut add = Command::new(bin());
+    add.arg("add")
+        .arg("journal")
+        .arg("--body")
+        .arg("Research notes")
+        .arg("--ledger")
+        .arg(&ledger_path)
+        .env("LEDGER_PASSPHRASE", passphrase);
+    apply_xdg_env(&mut add, &config_home, &data_home);
+    let add = add.output().expect("run add");
+    assert!(add.status.success());
+
+    // Get entry ID
+    let mut list = Command::new(bin());
+    list.arg("list")
+        .arg("--json")
+        .arg("--ledger")
+        .arg(&ledger_path)
+        .env("LEDGER_PASSPHRASE", passphrase);
+    apply_xdg_env(&mut list, &config_home, &data_home);
+    let list = list.output().expect("run list");
+    let value: serde_json::Value = serde_json::from_slice(&list.stdout).expect("parse json");
+    let entry_id = value.as_array().unwrap()[0]
+        .get("id")
+        .and_then(|v| v.as_str())
+        .unwrap();
+
+    // Attach entry to composition
+    let mut attach = Command::new(bin());
+    attach
+        .arg("attach")
+        .arg(entry_id)
+        .arg("research")
+        .arg("--ledger")
+        .arg(&ledger_path)
+        .env("LEDGER_PASSPHRASE", passphrase);
+    apply_xdg_env(&mut attach, &config_home, &data_home);
+    let attach = attach.output().expect("run attach");
+    assert!(
+        attach.status.success(),
+        "attach failed: {}",
+        String::from_utf8_lossy(&attach.stderr)
+    );
+
+    // Show composition - should list entry
+    let mut show = Command::new(bin());
+    show.arg("compositions")
+        .arg("show")
+        .arg("research")
+        .arg("--ledger")
+        .arg(&ledger_path)
+        .env("LEDGER_PASSPHRASE", passphrase);
+    apply_xdg_env(&mut show, &config_home, &data_home);
+    let show = show.output().expect("run compositions show");
+    assert!(show.status.success());
+    let stdout = String::from_utf8_lossy(&show.stdout);
+    assert!(
+        stdout.contains("Entries:     1"),
+        "expected 1 entry, got: {}",
+        stdout
+    );
+
+    // Detach entry
+    let mut detach = Command::new(bin());
+    detach
+        .arg("detach")
+        .arg(entry_id)
+        .arg("research")
+        .arg("--ledger")
+        .arg(&ledger_path)
+        .env("LEDGER_PASSPHRASE", passphrase);
+    apply_xdg_env(&mut detach, &config_home, &data_home);
+    let detach = detach.output().expect("run detach");
+    assert!(detach.status.success());
+
+    // Verify detachment
+    let mut show2 = Command::new(bin());
+    show2
+        .arg("compositions")
+        .arg("show")
+        .arg("research")
+        .arg("--ledger")
+        .arg(&ledger_path)
+        .env("LEDGER_PASSPHRASE", passphrase);
+    apply_xdg_env(&mut show2, &config_home, &data_home);
+    let show2 = show2.output().expect("run compositions show");
+    let stdout = String::from_utf8_lossy(&show2.stdout);
+    assert!(
+        stdout.contains("Entries:     0"),
+        "expected 0 entries, got: {}",
+        stdout
+    );
+}
+
+// ============================================================================
+// Template Tests (M5)
+// ============================================================================
+
+#[test]
+fn test_cli_templates_crud() {
+    let ledger_path = temp_ledger_path("ledger_cli_tmpl_crud");
+    let passphrase = "test-passphrase-secure-123";
+    let (config_home, data_home) = temp_xdg_dirs("ledger_cli_tmpl_crud");
+
+    // Init ledger
+    let mut init = Command::new(bin());
+    init.arg("init")
+        .arg(&ledger_path)
+        .env("LEDGER_PASSPHRASE", passphrase);
+    apply_xdg_env(&mut init, &config_home, &data_home);
+    let init = init.output().expect("run init");
+    assert!(init.status.success());
+
+    // Create template
+    let mut create = Command::new(bin());
+    create
+        .arg("templates")
+        .arg("create")
+        .arg("daily-journal")
+        .arg("--entry-type")
+        .arg("journal")
+        .arg("--description")
+        .arg("Daily journal template")
+        .arg("--defaults")
+        .arg(r#"{"body": "Today I..."}"#)
+        .arg("--ledger")
+        .arg(&ledger_path)
+        .env("LEDGER_PASSPHRASE", passphrase);
+    apply_xdg_env(&mut create, &config_home, &data_home);
+    let create = create.output().expect("run templates create");
+    assert!(
+        create.status.success(),
+        "create failed: {}",
+        String::from_utf8_lossy(&create.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&create.stdout);
+    assert!(stdout.contains("Created template 'daily-journal'"));
+
+    // List templates
+    let mut list = Command::new(bin());
+    list.arg("templates")
+        .arg("list")
+        .arg("--json")
+        .arg("--ledger")
+        .arg(&ledger_path)
+        .env("LEDGER_PASSPHRASE", passphrase);
+    apply_xdg_env(&mut list, &config_home, &data_home);
+    let list = list.output().expect("run templates list");
+    assert!(list.status.success());
+    let value: serde_json::Value = serde_json::from_slice(&list.stdout).expect("parse json");
+    let array = value.as_array().expect("list output array");
+    assert_eq!(array.len(), 1);
+    assert_eq!(
+        array[0].get("name").and_then(|v| v.as_str()),
+        Some("daily-journal")
+    );
+
+    // Show template
+    let mut show = Command::new(bin());
+    show.arg("templates")
+        .arg("show")
+        .arg("daily-journal")
+        .arg("--ledger")
+        .arg(&ledger_path)
+        .env("LEDGER_PASSPHRASE", passphrase);
+    apply_xdg_env(&mut show, &config_home, &data_home);
+    let show = show.output().expect("run templates show");
+    assert!(show.status.success());
+    let stdout = String::from_utf8_lossy(&show.stdout);
+    assert!(stdout.contains("daily-journal"));
+    assert!(stdout.contains("Daily journal template"));
+
+    // Update template
+    let mut update = Command::new(bin());
+    update
+        .arg("templates")
+        .arg("update")
+        .arg("daily-journal")
+        .arg("--defaults")
+        .arg(r#"{"body": "Morning entry..."}"#)
+        .arg("--ledger")
+        .arg(&ledger_path)
+        .env("LEDGER_PASSPHRASE", passphrase);
+    apply_xdg_env(&mut update, &config_home, &data_home);
+    let update = update.output().expect("run templates update");
+    assert!(
+        update.status.success(),
+        "update failed: {}",
+        String::from_utf8_lossy(&update.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&update.stdout);
+    assert!(stdout.contains("version 2"));
+
+    // Delete template
+    let mut delete = Command::new(bin());
+    delete
+        .arg("templates")
+        .arg("delete")
+        .arg("daily-journal")
+        .arg("--force")
+        .arg("--ledger")
+        .arg(&ledger_path)
+        .env("LEDGER_PASSPHRASE", passphrase);
+    apply_xdg_env(&mut delete, &config_home, &data_home);
+    let delete = delete.output().expect("run templates delete");
+    assert!(delete.status.success());
+
+    // Verify deletion
+    let mut list2 = Command::new(bin());
+    list2
+        .arg("templates")
+        .arg("list")
+        .arg("--json")
+        .arg("--ledger")
+        .arg(&ledger_path)
+        .env("LEDGER_PASSPHRASE", passphrase);
+    apply_xdg_env(&mut list2, &config_home, &data_home);
+    let list2 = list2.output().expect("run templates list");
+    let value: serde_json::Value = serde_json::from_slice(&list2.stdout).expect("parse json");
+    let array = value.as_array().expect("list output array");
+    assert!(array.is_empty());
+}
+
+#[test]
+fn test_cli_template_set_default() {
+    let ledger_path = temp_ledger_path("ledger_cli_tmpl_default");
+    let passphrase = "test-passphrase-secure-123";
+    let (config_home, data_home) = temp_xdg_dirs("ledger_cli_tmpl_default");
+
+    // Init ledger
+    let mut init = Command::new(bin());
+    init.arg("init")
+        .arg(&ledger_path)
+        .env("LEDGER_PASSPHRASE", passphrase);
+    apply_xdg_env(&mut init, &config_home, &data_home);
+    let init = init.output().expect("run init");
+    assert!(init.status.success());
+
+    // Create template and set as default
+    let mut create = Command::new(bin());
+    create
+        .arg("templates")
+        .arg("create")
+        .arg("default-journal")
+        .arg("--entry-type")
+        .arg("journal")
+        .arg("--set-default")
+        .arg("--ledger")
+        .arg(&ledger_path)
+        .env("LEDGER_PASSPHRASE", passphrase);
+    apply_xdg_env(&mut create, &config_home, &data_home);
+    let create = create.output().expect("run templates create");
+    assert!(create.status.success());
+    let stdout = String::from_utf8_lossy(&create.stdout);
+    assert!(stdout.contains("Set as default template"));
+}
+
+#[test]
+fn test_cli_add_with_template_flag() {
+    let ledger_path = temp_ledger_path("ledger_cli_add_tmpl");
+    let passphrase = "test-passphrase-secure-123";
+    let (config_home, data_home) = temp_xdg_dirs("ledger_cli_add_tmpl");
+
+    // Init ledger
+    let mut init = Command::new(bin());
+    init.arg("init")
+        .arg(&ledger_path)
+        .env("LEDGER_PASSPHRASE", passphrase);
+    apply_xdg_env(&mut init, &config_home, &data_home);
+    let init = init.output().expect("run init");
+    assert!(init.status.success());
+
+    // Create template with defaults
+    let mut create = Command::new(bin());
+    create
+        .arg("templates")
+        .arg("create")
+        .arg("quick-note")
+        .arg("--entry-type")
+        .arg("journal")
+        .arg("--defaults")
+        .arg(r#"{"body": "Quick note default body"}"#)
+        .arg("--ledger")
+        .arg(&ledger_path)
+        .env("LEDGER_PASSPHRASE", passphrase);
+    apply_xdg_env(&mut create, &config_home, &data_home);
+    let create = create.output().expect("run templates create");
+    assert!(create.status.success());
+
+    // Add entry using template (--no-input to skip prompts, use template default)
+    let mut add = Command::new(bin());
+    add.arg("add")
+        .arg("journal")
+        .arg("--template")
+        .arg("quick-note")
+        .arg("--no-input")
+        .arg("--ledger")
+        .arg(&ledger_path)
+        .env("LEDGER_PASSPHRASE", passphrase);
+    apply_xdg_env(&mut add, &config_home, &data_home);
+    let add = add.output().expect("run add with template");
+    assert!(
+        add.status.success(),
+        "add failed: {}",
+        String::from_utf8_lossy(&add.stderr)
+    );
+
+    // Verify entry was created with template default
+    let mut list = Command::new(bin());
+    list.arg("list")
+        .arg("--json")
+        .arg("--ledger")
+        .arg(&ledger_path)
+        .env("LEDGER_PASSPHRASE", passphrase);
+    apply_xdg_env(&mut list, &config_home, &data_home);
+    let list = list.output().expect("run list");
+    let value: serde_json::Value = serde_json::from_slice(&list.stdout).expect("parse json");
+    let array = value.as_array().expect("list output array");
+    assert_eq!(array.len(), 1);
+
+    // Show entry to verify body
+    let entry_id = array[0].get("id").and_then(|v| v.as_str()).unwrap();
+    let mut show = Command::new(bin());
+    show.arg("show")
+        .arg(entry_id)
+        .arg("--json")
+        .arg("--ledger")
+        .arg(&ledger_path)
+        .env("LEDGER_PASSPHRASE", passphrase);
+    apply_xdg_env(&mut show, &config_home, &data_home);
+    let show = show.output().expect("run show");
+    let show_value: serde_json::Value = serde_json::from_slice(&show.stdout).expect("parse json");
+    let body = show_value
+        .get("data")
+        .and_then(|d| d.get("body"))
+        .and_then(|b| b.as_str());
+    assert_eq!(body, Some("Quick note default body"));
+}
+
+#[test]
+fn test_cli_add_with_compose_flag() {
+    let ledger_path = temp_ledger_path("ledger_cli_add_compose");
+    let passphrase = "test-passphrase-secure-123";
+    let (config_home, data_home) = temp_xdg_dirs("ledger_cli_add_compose");
+
+    // Init ledger
+    let mut init = Command::new(bin());
+    init.arg("init")
+        .arg(&ledger_path)
+        .env("LEDGER_PASSPHRASE", passphrase);
+    apply_xdg_env(&mut init, &config_home, &data_home);
+    let init = init.output().expect("run init");
+    assert!(init.status.success());
+
+    // Create composition
+    let mut create = Command::new(bin());
+    create
+        .arg("compositions")
+        .arg("create")
+        .arg("project-x")
+        .arg("--ledger")
+        .arg(&ledger_path)
+        .env("LEDGER_PASSPHRASE", passphrase);
+    apply_xdg_env(&mut create, &config_home, &data_home);
+    let create = create.output().expect("run compositions create");
+    assert!(create.status.success());
+
+    // Add entry with --compose flag
+    let mut add = Command::new(bin());
+    add.arg("add")
+        .arg("journal")
+        .arg("--body")
+        .arg("Project notes")
+        .arg("--compose")
+        .arg("project-x")
+        .arg("--ledger")
+        .arg(&ledger_path)
+        .env("LEDGER_PASSPHRASE", passphrase);
+    apply_xdg_env(&mut add, &config_home, &data_home);
+    let add = add.output().expect("run add with compose");
+    assert!(
+        add.status.success(),
+        "add failed: {}",
+        String::from_utf8_lossy(&add.stderr)
+    );
+
+    // Show composition to verify entry was attached
+    let mut show = Command::new(bin());
+    show.arg("compositions")
+        .arg("show")
+        .arg("project-x")
+        .arg("--ledger")
+        .arg(&ledger_path)
+        .env("LEDGER_PASSPHRASE", passphrase);
+    apply_xdg_env(&mut show, &config_home, &data_home);
+    let show = show.output().expect("run compositions show");
+    let stdout = String::from_utf8_lossy(&show.stdout);
+    assert!(
+        stdout.contains("Entries:     1"),
+        "expected 1 entry, got: {}",
+        stdout
+    );
+}
+
+#[test]
+fn test_cli_add_field_flags_override_defaults() {
+    let ledger_path = temp_ledger_path("ledger_cli_add_field_override");
+    let passphrase = "test-passphrase-secure-123";
+    let (config_home, data_home) = temp_xdg_dirs("ledger_cli_add_field_override");
+
+    // Init ledger
+    let mut init = Command::new(bin());
+    init.arg("init")
+        .arg(&ledger_path)
+        .env("LEDGER_PASSPHRASE", passphrase);
+    apply_xdg_env(&mut init, &config_home, &data_home);
+    let init = init.output().expect("run init");
+    assert!(init.status.success());
+
+    // Create template with defaults
+    let mut create = Command::new(bin());
+    create
+        .arg("templates")
+        .arg("create")
+        .arg("with-defaults")
+        .arg("--entry-type")
+        .arg("journal")
+        .arg("--defaults")
+        .arg(r#"{"body": "Template default body"}"#)
+        .arg("--set-default")
+        .arg("--ledger")
+        .arg(&ledger_path)
+        .env("LEDGER_PASSPHRASE", passphrase);
+    apply_xdg_env(&mut create, &config_home, &data_home);
+    let create = create.output().expect("run templates create");
+    assert!(create.status.success());
+
+    // Add entry with --field flag (should override template default)
+    let mut add = Command::new(bin());
+    add.arg("add")
+        .arg("journal")
+        .arg("--field")
+        .arg("body=Explicit body value")
+        .arg("--ledger")
+        .arg(&ledger_path)
+        .env("LEDGER_PASSPHRASE", passphrase);
+    apply_xdg_env(&mut add, &config_home, &data_home);
+    let add = add.output().expect("run add with field");
+    assert!(
+        add.status.success(),
+        "add failed: {}",
+        String::from_utf8_lossy(&add.stderr)
+    );
+
+    // Verify entry has explicit value, not template default
+    let mut list = Command::new(bin());
+    list.arg("list")
+        .arg("--json")
+        .arg("--ledger")
+        .arg(&ledger_path)
+        .env("LEDGER_PASSPHRASE", passphrase);
+    apply_xdg_env(&mut list, &config_home, &data_home);
+    let list = list.output().expect("run list");
+    let value: serde_json::Value = serde_json::from_slice(&list.stdout).expect("parse json");
+    let entry_id = value.as_array().unwrap()[0]
+        .get("id")
+        .and_then(|v| v.as_str())
+        .unwrap();
+
+    let mut show = Command::new(bin());
+    show.arg("show")
+        .arg(entry_id)
+        .arg("--json")
+        .arg("--ledger")
+        .arg(&ledger_path)
+        .env("LEDGER_PASSPHRASE", passphrase);
+    apply_xdg_env(&mut show, &config_home, &data_home);
+    let show = show.output().expect("run show");
+    let show_value: serde_json::Value = serde_json::from_slice(&show.stdout).expect("parse json");
+    let body = show_value
+        .get("data")
+        .and_then(|d| d.get("body"))
+        .and_then(|b| b.as_str());
+    assert_eq!(body, Some("Explicit body value"));
+}

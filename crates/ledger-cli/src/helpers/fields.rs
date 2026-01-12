@@ -149,7 +149,8 @@ pub fn prompt_for_fields(
     for field in fields {
         // Check if value was provided via CLI
         if let Some(cli_value) = cli_values.get(&field.name) {
-            let value = parse_field_value(&field.field_type, cli_value, &field.values)?;
+            let value =
+                parse_field_value(&field.field_type, cli_value, &field.values, field.multiple)?;
             data.insert(field.name.clone(), value);
             continue;
         }
@@ -165,11 +166,19 @@ pub fn prompt_for_fields(
             .or_else(|| field.prompt.clone())
             .unwrap_or_else(|| capitalize(&field.name));
 
-        // Determine if we need to prompt:
-        // - Required fields without defaults must always prompt
-        // - All fields prompt when no CLI values provided (interactive mode)
-        let needs_prompt =
-            (field.required && default_value.is_none()) || (cli_values.is_empty() && !no_input);
+        // Determine prompting behavior based on whether CLI values were provided:
+        // - No CLI values: prompt for all fields (template defaults pre-filled)
+        // - Some CLI values: only prompt for required fields not provided; apply defaults only for required fields
+        // - All fields optional + flags: store only flag values (no extra defaults)
+        let has_cli_values = !cli_values.is_empty();
+
+        let needs_prompt = if has_cli_values {
+            // CLI values present - only prompt for required fields without values or defaults
+            field.required && default_value.is_none()
+        } else {
+            // No CLI values - prompt for all fields (unless --no-input)
+            !no_input
+        };
 
         if needs_prompt {
             // Text fields can use editor even without a TTY
@@ -196,10 +205,18 @@ pub fn prompt_for_fields(
             if let Some(v) = value {
                 data.insert(field.name.clone(), v);
             }
-        } else if let Some(default) = default_value {
-            // Use template default
-            data.insert(field.name.clone(), default.clone());
+        } else if !has_cli_values {
+            // No CLI values provided - apply all template defaults
+            if let Some(default) = default_value {
+                data.insert(field.name.clone(), default.clone());
+            }
+        } else if field.required {
+            // CLI values present but this required field not provided - use default if available
+            if let Some(default) = default_value {
+                data.insert(field.name.clone(), default.clone());
+            }
         }
+        // Optional field not provided via CLI when other flags present - skip (per M5 spec)
     }
 
     Ok(data)
@@ -248,11 +265,25 @@ fn prompt_single_field(
                 return Ok(None);
             }
 
-            parse_field_value(&field.field_type, &result, &field.values).map(Some)
+            parse_field_value(&field.field_type, &result, &field.values, field.multiple).map(Some)
         }
 
         "text" => {
-            // Use editor for multiline text (works even without TTY)
+            // Text fields need editor - check if we can use one
+            if !interactive && editor_override.is_none() {
+                // Non-interactive mode without editor - use default or fail
+                if let Some(default) = default_value {
+                    return Ok(Some(default.clone()));
+                }
+                if field.required {
+                    return Err(anyhow::anyhow!(
+                        "Required text field '{}' needs an editor (set $EDITOR or use --editor)",
+                        field.name
+                    ));
+                }
+                return Ok(None);
+            }
+            // Use editor for multiline text (works even without TTY if editor is set)
             let initial = default_value.and_then(|v| v.as_str());
             let body = super::read_entry_body(false, None, editor_override, initial)?;
             Ok(Some(Value::String(body)))
@@ -385,6 +416,7 @@ fn parse_field_value(
     field_type: &str,
     value: &str,
     enum_values: &Option<Vec<String>>,
+    multiple: bool,
 ) -> anyhow::Result<Value> {
     match field_type {
         "string" | "text" | "date" | "datetime" => Ok(Value::String(value.to_string())),
@@ -417,8 +449,8 @@ fn parse_field_value(
 
         "enum" => {
             if let Some(ref allowed) = enum_values {
-                // Check for multi-select (comma-separated)
-                if value.contains(',') {
+                if multiple {
+                    // Multi-select: accept comma-separated values, store as array
                     let values: Vec<String> =
                         value.split(',').map(|s| s.trim().to_string()).collect();
                     for v in &values {
@@ -434,6 +466,13 @@ fn parse_field_value(
                         values.into_iter().map(Value::String).collect(),
                     ))
                 } else {
+                    // Single-select: reject comma-separated values
+                    if value.contains(',') {
+                        return Err(anyhow::anyhow!(
+                            "Field is single-select but multiple values were provided. Allowed: {:?}",
+                            allowed
+                        ));
+                    }
                     if !allowed.contains(&value.to_string()) {
                         return Err(anyhow::anyhow!(
                             "Invalid enum value '{}'. Allowed: {:?}",

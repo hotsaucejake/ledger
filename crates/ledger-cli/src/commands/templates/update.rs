@@ -18,10 +18,14 @@ pub fn handle_update(ctx: &AppContext, args: &TemplateUpdateArgs) -> anyhow::Res
     let template =
         template.ok_or_else(|| anyhow::anyhow!("Template '{}' not found", args.name_or_id))?;
 
-    let new_defaults: serde_json::Value = serde_json::from_str(&args.defaults)
+    // Wrap user-provided defaults in the proper template JSON structure
+    let user_defaults: serde_json::Value = serde_json::from_str(&args.defaults)
         .map_err(|e| anyhow::anyhow!("Invalid JSON for defaults: {}", e))?;
+    let new_template_json = serde_json::json!({
+        "defaults": user_defaults
+    });
 
-    let new_version = storage.update_template(&template.id, new_defaults)?;
+    let new_version = storage.update_template(&template.id, new_template_json)?;
     storage.close(&passphrase)?;
 
     if !ctx.quiet() {

@@ -9,9 +9,13 @@ pub fn handle_create(ctx: &AppContext, args: &TemplateCreateArgs) -> anyhow::Res
     let entry_type = require_entry_type(&storage, &args.entry_type)?;
     let metadata = storage.metadata()?;
 
+    // Wrap user-provided defaults in the proper template JSON structure
     let template_json: serde_json::Value = if let Some(ref defaults) = args.defaults {
-        serde_json::from_str(defaults)
-            .map_err(|e| anyhow::anyhow!("Invalid JSON for defaults: {}", e))?
+        let user_defaults: serde_json::Value = serde_json::from_str(defaults)
+            .map_err(|e| anyhow::anyhow!("Invalid JSON for defaults: {}", e))?;
+        serde_json::json!({
+            "defaults": user_defaults
+        })
     } else {
         serde_json::json!({})
     };
