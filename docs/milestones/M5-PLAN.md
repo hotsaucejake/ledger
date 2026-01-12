@@ -1,7 +1,7 @@
 
 # Milestone 5: Compositions & Templates (Phase 0.2)
 
-**Status**: Draft  
+**Status**: Complete
 **Target**: Add compositions and templates as first-class data while keeping the CLI and storage model stable.
 
 ---
@@ -34,14 +34,14 @@
 
 ## Exit Criteria
 
-- [ ] Compositions can be created, listed, shown, renamed, deleted
-- [ ] Templates can be created, listed, shown, updated (new version), deleted
-- [ ] `ledger add <type>` applies default template automatically
-- [ ] `--template` overrides default template
-- [ ] Required fields always prompt if missing
-- [ ] Enums reject unknown values; multi-select stored as arrays
-- [ ] Storage + CLI integration tests pass
-- [ ] Docs updated (format spec, templates spec, RFCs as needed)
+- [x] Compositions can be created, listed, shown, renamed, deleted
+- [x] Templates can be created, listed, shown, updated (new version), deleted
+- [x] `ledger add <type>` applies default template automatically
+- [x] `--template` overrides default template
+- [x] Required fields always prompt if missing
+- [x] Enums reject unknown values; multi-select stored as arrays
+- [x] Storage + CLI integration tests pass
+- [x] Docs updated (format spec, templates spec, RFCs as needed)
 
 ---
 
@@ -49,27 +49,27 @@
 
 ### 1. Data Model (ledger-core)
 
-- [ ] `compositions` table
-- [ ] `entry_compositions` join table
-- [ ] `templates` table
-- [ ] `template_versions` table (append-only)
-- [ ] `entry_type_templates` mapping table (single active default)
-- [ ] Migration to add tables and indexes
+- [x] `compositions` table
+- [x] `entry_compositions` join table
+- [x] `templates` table
+- [x] `template_versions` table (append-only)
+- [x] `entry_type_templates` mapping table (single active default)
+- [x] Migration to add tables and indexes
 
 ### 2. Storage APIs (ledger-core)
 
-- [ ] CRUD for compositions
-- [ ] CRUD for templates + versions
-- [ ] Attach/detach entries to compositions
-- [ ] Lookup default template for entry type
+- [x] CRUD for compositions
+- [x] CRUD for templates + versions
+- [x] Attach/detach entries to compositions
+- [x] Lookup default template for entry type
 
 ### 3. CLI Commands (ledger-cli)
 
-- [ ] `ledger compositions create/list/show/rename/delete`
-- [ ] `ledger templates create/list/show/update/delete`
-- [ ] `ledger attach/detach`
-- [ ] `ledger add` uses template-first prompting
-- [ ] `--template`, `--compose`, `--no-compose` behavior aligned with specs
+- [x] `ledger compositions create/list/show/rename/delete`
+- [x] `ledger templates create/list/show/update/delete`
+- [x] `ledger attach/detach`
+- [x] `ledger add` uses template-first prompting
+- [x] `--template`, `--compose`, `--no-compose` behavior aligned with specs
 
 ### 3.1 Composition Semantics (Theme Associations)
 
@@ -89,16 +89,16 @@ This keeps tagging light while allowing deeper thematic grouping across multiple
 
 ### 4. UX & Prompting Rules
 
-- [ ] No flags: prompt for all fields (template defaults pre-filled)
-- [ ] Some flags: prompt for missing required fields; optional fields with defaults skip prompts
-- [ ] All fields optional + flags present: store only flag values, no prompts
+- [x] No flags: prompt for all fields (template defaults pre-filled)
+- [x] Some flags: prompt for missing required fields; optional fields with defaults skip prompts
+- [x] All fields optional + flags present: store only flag values, no prompts
 
 ### 5. Tests
 
-- [ ] Composition CRUD + attach/detach
-- [ ] Template versioning and default mapping
-- [ ] `ledger add` prompting rules + enum validation
-- [ ] Export includes templates/compositions (if updated in M3)
+- [x] Composition CRUD + attach/detach
+- [x] Template versioning and default mapping
+- [x] `ledger add` prompting rules + enum validation
+- [ ] Export includes templates/compositions (deferred to export enhancement)
 
 ---
 

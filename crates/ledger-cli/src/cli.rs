@@ -79,6 +79,22 @@ pub struct AddArgs {
     /// Disable interactive prompts
     #[arg(long)]
     pub no_input: bool,
+
+    /// Use a specific template instead of the default
+    #[arg(long, value_name = "TEMPLATE")]
+    pub template: Option<String>,
+
+    /// Attach entry to composition(s)
+    #[arg(long, value_name = "COMPOSITION")]
+    pub compose: Vec<String>,
+
+    /// Skip automatic composition attachment from template defaults
+    #[arg(long)]
+    pub no_compose: bool,
+
+    /// Set field values (format: field=value, can be repeated)
+    #[arg(long = "field", short = 'f', value_name = "FIELD=VALUE")]
+    pub fields: Vec<String>,
 }
 
 /// Arguments for the `edit` command

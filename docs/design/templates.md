@@ -1,7 +1,7 @@
 # Templates Specification
 
-**Status:** Draft  
-**Applies to:** Ledger v0.2+  
+**Status:** Implemented
+**Applies to:** Ledger v0.2+
 **Purpose:** Define how templates work, how they are stored, and how they apply during entry creation.
 
 ---
@@ -170,16 +170,56 @@ Example:
 
 ---
 
-## 6. CLI Surface (Planned)
+## 6. CLI Surface
+
+### 6.1 Template Management
 
 ```bash
+# List all templates
 ledger templates list
-ledger templates show gas_fillup
-ledger templates create gas_fillup
-ledger templates update gas_fillup
-ledger templates delete gas_fillup
+ledger templates list --entry-type journal
+ledger templates list --json
 
+# Show template details
+ledger templates show gas_fillup
+ledger templates show gas_fillup --json
+
+# Create a template
+ledger templates create gas_fillup --entry-type gas
+ledger templates create gas_fillup --entry-type gas --description "Gas fillup defaults"
+ledger templates create gas_fillup --entry-type gas --defaults '{"car": "civic"}'
+ledger templates create gas_fillup --entry-type gas --set-default
+
+# Update template (creates new version)
+ledger templates update gas_fillup --defaults '{"car": "4runner"}'
+
+# Delete template
+ledger templates delete gas_fillup
+ledger templates delete gas_fillup --force
+
+# Set/clear default template for entry type
+ledger templates set-default gas gas_fillup
+ledger templates clear-default gas
+```
+
+### 6.2 Using Templates with Add
+
+```bash
+# Use default template (if set for entry type)
+ledger add gas
+
+# Override with specific template
 ledger add gas --template gas_fillup
+
+# Set field values directly
+ledger add gas --field car=civic --field octane=regular
+ledger add gas -f car=civic -f octane=regular
+
+# Attach to composition
+ledger add gas --compose fleet_ops
+
+# Skip template default compositions
+ledger add gas --no-compose
 ```
 
 ---
