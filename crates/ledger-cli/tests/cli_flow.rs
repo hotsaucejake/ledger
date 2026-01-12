@@ -2259,3 +2259,421 @@ fn test_cli_add_field_flags_override_defaults() {
         .and_then(|b| b.as_str());
     assert_eq!(body, Some("Explicit body value"));
 }
+
+// ============================================================================
+// CLI Error Case Tests (M5)
+// ============================================================================
+
+#[test]
+fn test_cli_composition_not_found() {
+    let ledger_path = temp_ledger_path("ledger_cli_comp_nf");
+    let passphrase = "test-passphrase-secure-123";
+    let (config_home, data_home) = temp_xdg_dirs("ledger_cli_comp_nf");
+
+    let mut init = Command::new(bin());
+    init.arg("init")
+        .arg(&ledger_path)
+        .env("LEDGER_PASSPHRASE", passphrase);
+    apply_xdg_env(&mut init, &config_home, &data_home);
+    let init = init.output().expect("run init");
+    assert!(init.status.success());
+
+    // Show non-existent composition
+    let mut show = Command::new(bin());
+    show.arg("compositions")
+        .arg("show")
+        .arg("nonexistent")
+        .arg("--ledger")
+        .arg(&ledger_path)
+        .env("LEDGER_PASSPHRASE", passphrase);
+    apply_xdg_env(&mut show, &config_home, &data_home);
+    let show = show.output().expect("run compositions show");
+    assert!(!show.status.success());
+    let stderr = String::from_utf8_lossy(&show.stderr);
+    assert!(stderr.contains("not found"), "stderr: {}", stderr);
+
+    // Rename non-existent
+    let mut rename = Command::new(bin());
+    rename
+        .arg("compositions")
+        .arg("rename")
+        .arg("nonexistent")
+        .arg("new-name")
+        .arg("--ledger")
+        .arg(&ledger_path)
+        .env("LEDGER_PASSPHRASE", passphrase);
+    apply_xdg_env(&mut rename, &config_home, &data_home);
+    let rename = rename.output().expect("run compositions rename");
+    assert!(!rename.status.success());
+
+    // Delete non-existent
+    let mut delete = Command::new(bin());
+    delete
+        .arg("compositions")
+        .arg("delete")
+        .arg("nonexistent")
+        .arg("--force")
+        .arg("--ledger")
+        .arg(&ledger_path)
+        .env("LEDGER_PASSPHRASE", passphrase);
+    apply_xdg_env(&mut delete, &config_home, &data_home);
+    let delete = delete.output().expect("run compositions delete");
+    assert!(!delete.status.success());
+}
+
+#[test]
+fn test_cli_template_not_found() {
+    let ledger_path = temp_ledger_path("ledger_cli_tmpl_nf");
+    let passphrase = "test-passphrase-secure-123";
+    let (config_home, data_home) = temp_xdg_dirs("ledger_cli_tmpl_nf");
+
+    let mut init = Command::new(bin());
+    init.arg("init")
+        .arg(&ledger_path)
+        .env("LEDGER_PASSPHRASE", passphrase);
+    apply_xdg_env(&mut init, &config_home, &data_home);
+    let init = init.output().expect("run init");
+    assert!(init.status.success());
+
+    // Show non-existent template
+    let mut show = Command::new(bin());
+    show.arg("templates")
+        .arg("show")
+        .arg("nonexistent")
+        .arg("--ledger")
+        .arg(&ledger_path)
+        .env("LEDGER_PASSPHRASE", passphrase);
+    apply_xdg_env(&mut show, &config_home, &data_home);
+    let show = show.output().expect("run templates show");
+    assert!(!show.status.success());
+    let stderr = String::from_utf8_lossy(&show.stderr);
+    assert!(stderr.contains("not found"), "stderr: {}", stderr);
+
+    // Update non-existent
+    let mut update = Command::new(bin());
+    update
+        .arg("templates")
+        .arg("update")
+        .arg("nonexistent")
+        .arg("--defaults")
+        .arg("{}")
+        .arg("--ledger")
+        .arg(&ledger_path)
+        .env("LEDGER_PASSPHRASE", passphrase);
+    apply_xdg_env(&mut update, &config_home, &data_home);
+    let update = update.output().expect("run templates update");
+    assert!(!update.status.success());
+
+    // Delete non-existent
+    let mut delete = Command::new(bin());
+    delete
+        .arg("templates")
+        .arg("delete")
+        .arg("nonexistent")
+        .arg("--force")
+        .arg("--ledger")
+        .arg(&ledger_path)
+        .env("LEDGER_PASSPHRASE", passphrase);
+    apply_xdg_env(&mut delete, &config_home, &data_home);
+    let delete = delete.output().expect("run templates delete");
+    assert!(!delete.status.success());
+}
+
+#[test]
+fn test_cli_attach_invalid_entry() {
+    let ledger_path = temp_ledger_path("ledger_cli_att_inv");
+    let passphrase = "test-passphrase-secure-123";
+    let (config_home, data_home) = temp_xdg_dirs("ledger_cli_att_inv");
+
+    let mut init = Command::new(bin());
+    init.arg("init")
+        .arg(&ledger_path)
+        .env("LEDGER_PASSPHRASE", passphrase);
+    apply_xdg_env(&mut init, &config_home, &data_home);
+    let init = init.output().expect("run init");
+    assert!(init.status.success());
+
+    // Create composition
+    let mut create = Command::new(bin());
+    create
+        .arg("compositions")
+        .arg("create")
+        .arg("test-comp")
+        .arg("--ledger")
+        .arg(&ledger_path)
+        .env("LEDGER_PASSPHRASE", passphrase);
+    apply_xdg_env(&mut create, &config_home, &data_home);
+    let create = create.output().expect("run compositions create");
+    assert!(create.status.success());
+
+    // Attach non-existent entry
+    let mut attach = Command::new(bin());
+    attach
+        .arg("attach")
+        .arg("00000000-0000-0000-0000-000000000000")
+        .arg("test-comp")
+        .arg("--ledger")
+        .arg(&ledger_path)
+        .env("LEDGER_PASSPHRASE", passphrase);
+    apply_xdg_env(&mut attach, &config_home, &data_home);
+    let attach = attach.output().expect("run attach");
+    assert!(!attach.status.success());
+    let stderr = String::from_utf8_lossy(&attach.stderr);
+    assert!(stderr.contains("not found"), "stderr: {}", stderr);
+}
+
+#[test]
+fn test_cli_attach_invalid_composition() {
+    let ledger_path = temp_ledger_path("ledger_cli_att_bc");
+    let passphrase = "test-passphrase-secure-123";
+    let (config_home, data_home) = temp_xdg_dirs("ledger_cli_att_bc");
+
+    let mut init = Command::new(bin());
+    init.arg("init")
+        .arg(&ledger_path)
+        .env("LEDGER_PASSPHRASE", passphrase);
+    apply_xdg_env(&mut init, &config_home, &data_home);
+    let init = init.output().expect("run init");
+    assert!(init.status.success());
+
+    // Add entry
+    let mut add = Command::new(bin());
+    add.arg("add")
+        .arg("journal")
+        .arg("--body")
+        .arg("test")
+        .arg("--ledger")
+        .arg(&ledger_path)
+        .env("LEDGER_PASSPHRASE", passphrase);
+    apply_xdg_env(&mut add, &config_home, &data_home);
+    let add = add.output().expect("run add");
+    assert!(add.status.success());
+
+    // Get entry ID
+    let mut list = Command::new(bin());
+    list.arg("list")
+        .arg("--json")
+        .arg("--ledger")
+        .arg(&ledger_path)
+        .env("LEDGER_PASSPHRASE", passphrase);
+    apply_xdg_env(&mut list, &config_home, &data_home);
+    let list = list.output().expect("run list");
+    let value: serde_json::Value = serde_json::from_slice(&list.stdout).expect("parse json");
+    let entry_id = value.as_array().unwrap()[0]
+        .get("id")
+        .and_then(|v| v.as_str())
+        .unwrap();
+
+    // Attach to non-existent composition
+    let mut attach = Command::new(bin());
+    attach
+        .arg("attach")
+        .arg(entry_id)
+        .arg("nonexistent-comp")
+        .arg("--ledger")
+        .arg(&ledger_path)
+        .env("LEDGER_PASSPHRASE", passphrase);
+    apply_xdg_env(&mut attach, &config_home, &data_home);
+    let attach = attach.output().expect("run attach");
+    assert!(!attach.status.success());
+    let stderr = String::from_utf8_lossy(&attach.stderr);
+    assert!(stderr.contains("not found"), "stderr: {}", stderr);
+}
+
+#[test]
+fn test_cli_detach_when_not_attached() {
+    let ledger_path = temp_ledger_path("ledger_cli_det_na");
+    let passphrase = "test-passphrase-secure-123";
+    let (config_home, data_home) = temp_xdg_dirs("ledger_cli_det_na");
+
+    let mut init = Command::new(bin());
+    init.arg("init")
+        .arg(&ledger_path)
+        .env("LEDGER_PASSPHRASE", passphrase);
+    apply_xdg_env(&mut init, &config_home, &data_home);
+    let init = init.output().expect("run init");
+    assert!(init.status.success());
+
+    // Create composition
+    let mut create = Command::new(bin());
+    create
+        .arg("compositions")
+        .arg("create")
+        .arg("test-comp")
+        .arg("--ledger")
+        .arg(&ledger_path)
+        .env("LEDGER_PASSPHRASE", passphrase);
+    apply_xdg_env(&mut create, &config_home, &data_home);
+    let create = create.output().expect("run compositions create");
+    assert!(create.status.success());
+
+    // Add entry without attachment
+    let mut add = Command::new(bin());
+    add.arg("add")
+        .arg("journal")
+        .arg("--body")
+        .arg("test")
+        .arg("--no-compose")
+        .arg("--ledger")
+        .arg(&ledger_path)
+        .env("LEDGER_PASSPHRASE", passphrase);
+    apply_xdg_env(&mut add, &config_home, &data_home);
+    let add = add.output().expect("run add");
+    assert!(add.status.success());
+
+    // Get entry ID
+    let mut list = Command::new(bin());
+    list.arg("list")
+        .arg("--json")
+        .arg("--ledger")
+        .arg(&ledger_path)
+        .env("LEDGER_PASSPHRASE", passphrase);
+    apply_xdg_env(&mut list, &config_home, &data_home);
+    let list = list.output().expect("run list");
+    let value: serde_json::Value = serde_json::from_slice(&list.stdout).expect("parse json");
+    let entry_id = value.as_array().unwrap()[0]
+        .get("id")
+        .and_then(|v| v.as_str())
+        .unwrap();
+
+    // Detach entry that wasn't attached
+    let mut detach = Command::new(bin());
+    detach
+        .arg("detach")
+        .arg(entry_id)
+        .arg("test-comp")
+        .arg("--ledger")
+        .arg(&ledger_path)
+        .env("LEDGER_PASSPHRASE", passphrase);
+    apply_xdg_env(&mut detach, &config_home, &data_home);
+    let detach = detach.output().expect("run detach");
+    assert!(!detach.status.success());
+    let stderr = String::from_utf8_lossy(&detach.stderr);
+    assert!(
+        stderr.contains("not attached") || stderr.contains("NotFound"),
+        "stderr: {}",
+        stderr
+    );
+}
+
+#[test]
+fn test_cli_add_with_invalid_template() {
+    let ledger_path = temp_ledger_path("ledger_cli_add_bt");
+    let passphrase = "test-passphrase-secure-123";
+    let (config_home, data_home) = temp_xdg_dirs("ledger_cli_add_bt");
+
+    let mut init = Command::new(bin());
+    init.arg("init")
+        .arg(&ledger_path)
+        .env("LEDGER_PASSPHRASE", passphrase);
+    apply_xdg_env(&mut init, &config_home, &data_home);
+    let init = init.output().expect("run init");
+    assert!(init.status.success());
+
+    // Add with non-existent template
+    let mut add = Command::new(bin());
+    add.arg("add")
+        .arg("journal")
+        .arg("--template")
+        .arg("nonexistent-template")
+        .arg("--body")
+        .arg("test")
+        .arg("--ledger")
+        .arg(&ledger_path)
+        .env("LEDGER_PASSPHRASE", passphrase);
+    apply_xdg_env(&mut add, &config_home, &data_home);
+    let add = add.output().expect("run add with invalid template");
+    assert!(!add.status.success());
+    let stderr = String::from_utf8_lossy(&add.stderr);
+    assert!(stderr.contains("not found"), "stderr: {}", stderr);
+}
+
+#[test]
+fn test_cli_add_with_invalid_composition() {
+    let ledger_path = temp_ledger_path("ledger_cli_add_bc");
+    let passphrase = "test-passphrase-secure-123";
+    let (config_home, data_home) = temp_xdg_dirs("ledger_cli_add_bc");
+
+    let mut init = Command::new(bin());
+    init.arg("init")
+        .arg(&ledger_path)
+        .env("LEDGER_PASSPHRASE", passphrase);
+    apply_xdg_env(&mut init, &config_home, &data_home);
+    let init = init.output().expect("run init");
+    assert!(init.status.success());
+
+    // Add with non-existent composition
+    let mut add = Command::new(bin());
+    add.arg("add")
+        .arg("journal")
+        .arg("--body")
+        .arg("test")
+        .arg("--compose")
+        .arg("nonexistent-comp")
+        .arg("--ledger")
+        .arg(&ledger_path)
+        .env("LEDGER_PASSPHRASE", passphrase);
+    apply_xdg_env(&mut add, &config_home, &data_home);
+    let add = add.output().expect("run add with invalid composition");
+    assert!(!add.status.success());
+    let stderr = String::from_utf8_lossy(&add.stderr);
+    assert!(stderr.contains("not found"), "stderr: {}", stderr);
+}
+
+// Note: test_cli_template_wrong_entry_type skipped - only "journal" entry type supported in Phase 0.1
+// Note: test_cli_add_required_field_missing_error skipped - journal has no required fields
+
+#[test]
+fn test_cli_no_compose_prevents_attachment() {
+    let ledger_path = temp_ledger_path("ledger_cli_nc_pa");
+    let passphrase = "test-passphrase-secure-123";
+    let (config_home, data_home) = temp_xdg_dirs("ledger_cli_nc_pa");
+
+    let mut init = Command::new(bin());
+    init.arg("init")
+        .arg(&ledger_path)
+        .env("LEDGER_PASSPHRASE", passphrase);
+    apply_xdg_env(&mut init, &config_home, &data_home);
+    let init = init.output().expect("run init");
+    assert!(init.status.success());
+
+    // Create composition
+    let mut create_comp = Command::new(bin());
+    create_comp
+        .arg("compositions")
+        .arg("create")
+        .arg("no-auto")
+        .arg("--ledger")
+        .arg(&ledger_path)
+        .env("LEDGER_PASSPHRASE", passphrase);
+    apply_xdg_env(&mut create_comp, &config_home, &data_home);
+    let create_comp = create_comp.output().expect("run compositions create");
+    assert!(create_comp.status.success());
+
+    // Add entry with --no-compose
+    let mut add = Command::new(bin());
+    add.arg("add")
+        .arg("journal")
+        .arg("--body")
+        .arg("not attached")
+        .arg("--no-compose")
+        .arg("--ledger")
+        .arg(&ledger_path)
+        .env("LEDGER_PASSPHRASE", passphrase);
+    apply_xdg_env(&mut add, &config_home, &data_home);
+    let add = add.output().expect("run add with no-compose");
+    assert!(add.status.success());
+
+    // Verify composition has no entries
+    let mut show = Command::new(bin());
+    show.arg("compositions")
+        .arg("show")
+        .arg("no-auto")
+        .arg("--ledger")
+        .arg(&ledger_path)
+        .env("LEDGER_PASSPHRASE", passphrase);
+    apply_xdg_env(&mut show, &config_home, &data_home);
+    let show = show.output().expect("run compositions show");
+    let stdout = String::from_utf8_lossy(&show.stdout);
+    assert!(stdout.contains("Entries:     0"), "stdout: {}", stdout);
+}

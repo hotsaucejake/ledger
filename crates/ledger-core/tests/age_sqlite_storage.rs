@@ -1706,3 +1706,185 @@ fn test_composition_persistence() {
 
     storage.close(passphrase).expect("close should succeed");
 }
+
+// ============================================================================
+// Edge Case Tests (M5)
+// ============================================================================
+
+#[test]
+fn test_detach_entry_not_attached_fails() {
+    let temp = TempFile::new("ledger_detach_not_attached");
+    let passphrase = "test-passphrase-secure-123";
+
+    AgeSqliteStorage::create(&temp.path, passphrase).expect("create should succeed");
+    let mut storage = AgeSqliteStorage::open(&temp.path, passphrase).expect("open should succeed");
+
+    let device_id = Uuid::new_v4();
+    let entry_type_id = create_basic_entry_type(&mut storage);
+    let comp_id = storage
+        .create_composition(&NewComposition::new("project", device_id))
+        .expect("create comp should succeed");
+
+    let entry_id = storage
+        .insert_entry(&NewEntry::new(
+            entry_type_id,
+            1,
+            serde_json::json!({"body": "test"}),
+            device_id,
+        ))
+        .expect("insert entry should succeed");
+
+    // Try to detach entry that was never attached
+    let result = storage.detach_entry_from_composition(&entry_id, &comp_id);
+    assert!(result.is_err());
+
+    storage.close(passphrase).expect("close should succeed");
+}
+
+#[test]
+fn test_get_default_template_returns_latest_version() {
+    let temp = TempFile::new("ledger_default_latest_version");
+    let passphrase = "test-passphrase-secure-123";
+
+    AgeSqliteStorage::create(&temp.path, passphrase).expect("create should succeed");
+    let mut storage = AgeSqliteStorage::open(&temp.path, passphrase).expect("open should succeed");
+
+    let entry_type_id = create_basic_entry_type(&mut storage);
+    let device_id = Uuid::new_v4();
+
+    let template_id = storage
+        .create_template(&NewTemplate::new(
+            "versioned",
+            entry_type_id,
+            serde_json::json!({"defaults": {"body": "v1"}}),
+            device_id,
+        ))
+        .expect("create should succeed");
+
+    storage
+        .set_default_template(&entry_type_id, &template_id)
+        .expect("set default should succeed");
+
+    // Update template to v2
+    storage
+        .update_template(
+            &template_id,
+            serde_json::json!({"defaults": {"body": "v2"}}),
+        )
+        .expect("update should succeed");
+
+    // Update template to v3
+    storage
+        .update_template(
+            &template_id,
+            serde_json::json!({"defaults": {"body": "v3"}}),
+        )
+        .expect("update should succeed");
+
+    // get_default_template should return v3
+    let default = storage
+        .get_default_template(&entry_type_id)
+        .expect("get default should succeed")
+        .expect("default should exist");
+
+    assert_eq!(default.version, 3);
+    assert_eq!(default.template_json["defaults"]["body"], "v3");
+
+    storage.close(passphrase).expect("close should succeed");
+}
+
+#[test]
+fn test_delete_template_allows_new_default() {
+    let temp = TempFile::new("ledger_delete_allows_new");
+    let passphrase = "test-passphrase-secure-123";
+
+    AgeSqliteStorage::create(&temp.path, passphrase).expect("create should succeed");
+    let mut storage = AgeSqliteStorage::open(&temp.path, passphrase).expect("open should succeed");
+
+    let entry_type_id = create_basic_entry_type(&mut storage);
+    let device_id = Uuid::new_v4();
+
+    let template1_id = storage
+        .create_template(&NewTemplate::new(
+            "first",
+            entry_type_id,
+            serde_json::json!({}),
+            device_id,
+        ))
+        .expect("create first should succeed");
+
+    let template2_id = storage
+        .create_template(&NewTemplate::new(
+            "second",
+            entry_type_id,
+            serde_json::json!({}),
+            device_id,
+        ))
+        .expect("create second should succeed");
+
+    // Set first as default
+    storage
+        .set_default_template(&entry_type_id, &template1_id)
+        .expect("set should succeed");
+
+    // Delete first template
+    storage
+        .delete_template(&template1_id)
+        .expect("delete should succeed");
+
+    // Should be able to set second as default without issues
+    storage
+        .set_default_template(&entry_type_id, &template2_id)
+        .expect("set new default should succeed");
+
+    let default = storage
+        .get_default_template(&entry_type_id)
+        .expect("get default should succeed")
+        .expect("default should exist");
+    assert_eq!(default.id, template2_id);
+
+    storage.close(passphrase).expect("close should succeed");
+}
+
+#[test]
+fn test_list_templates_returns_latest_versions_only() {
+    let temp = TempFile::new("ledger_list_latest_only");
+    let passphrase = "test-passphrase-secure-123";
+
+    AgeSqliteStorage::create(&temp.path, passphrase).expect("create should succeed");
+    let mut storage = AgeSqliteStorage::open(&temp.path, passphrase).expect("open should succeed");
+
+    let entry_type_id = create_basic_entry_type(&mut storage);
+    let device_id = Uuid::new_v4();
+
+    let template_id = storage
+        .create_template(&NewTemplate::new(
+            "multi_version",
+            entry_type_id,
+            serde_json::json!({"defaults": {"body": "v1"}}),
+            device_id,
+        ))
+        .expect("create should succeed");
+
+    // Create multiple versions
+    storage
+        .update_template(
+            &template_id,
+            serde_json::json!({"defaults": {"body": "v2"}}),
+        )
+        .expect("update v2 should succeed");
+    storage
+        .update_template(
+            &template_id,
+            serde_json::json!({"defaults": {"body": "v3"}}),
+        )
+        .expect("update v3 should succeed");
+
+    // list_templates should only return one entry with version 3
+    let templates = storage.list_templates().expect("list should succeed");
+    assert_eq!(templates.len(), 1);
+    assert_eq!(templates[0].version, 3);
+    assert_eq!(templates[0].template_json["defaults"]["body"], "v3");
+
+    storage.close(passphrase).expect("close should succeed");
+}
