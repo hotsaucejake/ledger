@@ -6,6 +6,7 @@
 //! - **Theme**: Badge tokens, color palette, symbols
 //! - **Render**: Tables, headers, receipts, hints, formatted text
 //! - **Progress**: Spinners, progress bars, step lists
+//! - **Prompt**: Wizard flows and guided interactive prompts
 //! - **Format**: String utilities (truncate, wrap, align)
 //!
 //! # Usage
@@ -30,6 +31,7 @@ mod context;
 pub mod format;
 mod mode;
 pub mod progress;
+pub mod prompt;
 pub mod render;
 pub mod theme;
 
@@ -45,6 +47,13 @@ pub use render::{
 
 // Re-export progress types
 pub use progress::{ProgressBar, Spinner, StepList};
+
+// Re-export prompt types and functions
+pub use prompt::{
+    add_wizard, init_wizard, print_cancelled, prompt_confirm, prompt_input, prompt_passphrase,
+    prompt_select, AddWizardField, AddWizardResult, InitWizardResult, TemplateChoice, Wizard,
+    WizardStep,
+};
 
 // Re-export commonly used format functions
 pub use format::{format_bytes, format_datetime, format_duration_secs, short_id, truncate};
