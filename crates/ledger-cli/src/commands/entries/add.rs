@@ -10,6 +10,7 @@ use crate::helpers::{
     parse_cli_fields, parse_datetime, prompt_for_fields, require_entry_type, FieldDef,
     TemplateDefaults,
 };
+use crate::ui::{badge, print, short_id, Badge, OutputMode};
 
 pub fn handle_add(ctx: &AppContext, args: &AddArgs) -> anyhow::Result<()> {
     let (mut storage, passphrase) = ctx.open_storage(args.no_input)?;
@@ -136,7 +137,24 @@ pub fn handle_add(ctx: &AppContext, args: &AddArgs) -> anyhow::Result<()> {
     storage.close(&passphrase)?;
 
     if !ctx.quiet() {
-        println!("Added entry {}", entry_id);
+        let ui_ctx = ctx.ui_context(false, None);
+        match ui_ctx.mode {
+            OutputMode::Pretty => {
+                print(
+                    &ui_ctx,
+                    &badge(
+                        &ui_ctx,
+                        Badge::Ok,
+                        &format!("Added {} entry {}", args.entry_type, short_id(&entry_id)),
+                    ),
+                );
+            }
+            OutputMode::Plain | OutputMode::Json => {
+                println!("status=ok");
+                println!("entry_id={}", entry_id);
+                println!("entry_type={}", args.entry_type);
+            }
+        }
     }
     Ok(())
 }

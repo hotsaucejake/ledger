@@ -6,6 +6,7 @@ use crate::app::{exit_not_found_with_hint, AppContext};
 use crate::cli::EditArgs;
 use crate::helpers::{ensure_journal_type_name, read_entry_body};
 use crate::output::entry_type_name_map;
+use crate::ui::{badge, print, short_id, Badge, OutputMode};
 
 pub fn handle_edit(ctx: &AppContext, args: &EditArgs) -> anyhow::Result<()> {
     let (mut storage, passphrase) = ctx.open_storage(args.no_input)?;
@@ -55,7 +56,24 @@ pub fn handle_edit(ctx: &AppContext, args: &EditArgs) -> anyhow::Result<()> {
     storage.close(&passphrase)?;
 
     if !ctx.quiet() {
-        println!("Edited entry {}", entry_id);
+        let ui_ctx = ctx.ui_context(false, None);
+        match ui_ctx.mode {
+            OutputMode::Pretty => {
+                print(
+                    &ui_ctx,
+                    &badge(
+                        &ui_ctx,
+                        Badge::Ok,
+                        &format!("Edited entry {}", short_id(&entry_id)),
+                    ),
+                );
+            }
+            OutputMode::Plain | OutputMode::Json => {
+                println!("status=ok");
+                println!("entry_id={}", entry_id);
+                println!("supersedes={}", entry.id);
+            }
+        }
     }
     Ok(())
 }

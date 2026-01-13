@@ -12,7 +12,4 @@ mod parsing;
 // Re-export public API
 pub use fields::{parse_cli_fields, prompt_for_fields, FieldDef, TemplateDefaults};
 pub use input::{prompt_init_passphrase, prompt_passphrase, read_entry_body};
-pub use parsing::{
-    ensure_journal_type_name, parse_datetime, parse_duration, parse_output_format,
-    require_entry_type, OutputFormat,
-};
+pub use parsing::{ensure_journal_type_name, parse_datetime, parse_duration, require_entry_type};

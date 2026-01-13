@@ -4,6 +4,7 @@ use ledger_core::storage::StorageEngine;
 
 use crate::app::AppContext;
 use crate::cli::AttachArgs;
+use crate::ui::{badge, print, Badge, OutputMode};
 
 pub fn handle_attach(ctx: &AppContext, args: &AttachArgs) -> anyhow::Result<()> {
     let (mut storage, passphrase) = ctx.open_storage(false)?;
@@ -32,10 +33,25 @@ pub fn handle_attach(ctx: &AppContext, args: &AttachArgs) -> anyhow::Result<()> 
     storage.close(&passphrase)?;
 
     if !ctx.quiet() {
-        println!(
-            "Attached entry {} to composition '{}'",
-            args.entry_id, composition.name
-        );
+        let ui_ctx = ctx.ui_context(false, None);
+        match ui_ctx.mode {
+            OutputMode::Pretty => {
+                print(
+                    &ui_ctx,
+                    &badge(
+                        &ui_ctx,
+                        Badge::Ok,
+                        &format!("Attached entry to '{}'", composition.name),
+                    ),
+                );
+            }
+            OutputMode::Plain | OutputMode::Json => {
+                println!("status=ok");
+                println!("entry_id={}", entry_id);
+                println!("composition={}", composition.name);
+                println!("composition_id={}", composition.id);
+            }
+        }
     }
     Ok(())
 }

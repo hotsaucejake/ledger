@@ -3,6 +3,7 @@ use ledger_core::storage::{NewTemplate, StorageEngine};
 use crate::app::AppContext;
 use crate::cli::TemplateCreateArgs;
 use crate::helpers::require_entry_type;
+use crate::ui::{badge, print, short_id, Badge, OutputMode};
 
 pub fn handle_create(ctx: &AppContext, args: &TemplateCreateArgs) -> anyhow::Result<()> {
     let (mut storage, passphrase) = ctx.open_storage(false)?;
@@ -35,9 +36,41 @@ pub fn handle_create(ctx: &AppContext, args: &TemplateCreateArgs) -> anyhow::Res
     storage.close(&passphrase)?;
 
     if !ctx.quiet() {
-        println!("Created template '{}' ({})", args.name, template_id);
-        if args.set_default {
-            println!("Set as default template for '{}'", args.entry_type);
+        let ui_ctx = ctx.ui_context(false, None);
+        match ui_ctx.mode {
+            OutputMode::Pretty => {
+                print(
+                    &ui_ctx,
+                    &badge(
+                        &ui_ctx,
+                        Badge::Ok,
+                        &format!(
+                            "Created template '{}' ({})",
+                            args.name,
+                            short_id(&template_id)
+                        ),
+                    ),
+                );
+                if args.set_default {
+                    print(
+                        &ui_ctx,
+                        &badge(
+                            &ui_ctx,
+                            Badge::Info,
+                            &format!("Set as default for '{}'", args.entry_type),
+                        ),
+                    );
+                }
+            }
+            OutputMode::Plain | OutputMode::Json => {
+                println!("status=ok");
+                println!("template_id={}", template_id);
+                println!("name={}", args.name);
+                if args.set_default {
+                    println!("set_default=true");
+                    println!("entry_type={}", args.entry_type);
+                }
+            }
         }
     }
     Ok(())

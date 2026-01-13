@@ -221,7 +221,8 @@ fn test_cli_init_add_list_show() {
     assert!(show.status.success());
     let output = String::from_utf8_lossy(&show.stdout);
     assert!(output.contains("Hello from CLI"));
-    assert!(output.contains("Type: journal"));
+    // Plain mode output: type=journal
+    assert!(output.contains("type=journal"));
 }
 
 #[test]
@@ -669,7 +670,8 @@ fn test_cli_search_empty_message() {
     let search = search.output().expect("run search");
     assert!(search.status.success());
     let stdout = String::from_utf8_lossy(&search.stdout);
-    assert!(stdout.contains("No entries found."));
+    // In Plain mode (non-TTY), empty search shows count=0
+    assert!(stdout.contains("count=0"));
 }
 
 #[test]
@@ -1646,7 +1648,9 @@ fn test_cli_compositions_crud() {
         String::from_utf8_lossy(&create.stderr)
     );
     let stdout = String::from_utf8_lossy(&create.stdout);
-    assert!(stdout.contains("Created composition 'my-project'"));
+    // Plain mode output: status=ok, name=my-project
+    assert!(stdout.contains("status=ok"));
+    assert!(stdout.contains("name=my-project"));
 
     // List compositions
     let mut list = Command::new(bin());
@@ -1833,8 +1837,9 @@ fn test_cli_attach_detach_entry() {
     let show = show.output().expect("run compositions show");
     assert!(show.status.success());
     let stdout = String::from_utf8_lossy(&show.stdout);
+    // Plain mode output: entry_count=1
     assert!(
-        stdout.contains("Entries:     1"),
+        stdout.contains("entry_count=1"),
         "expected 1 entry, got: {}",
         stdout
     );
@@ -1864,8 +1869,9 @@ fn test_cli_attach_detach_entry() {
     apply_xdg_env(&mut show2, &config_home, &data_home);
     let show2 = show2.output().expect("run compositions show");
     let stdout = String::from_utf8_lossy(&show2.stdout);
+    // Plain mode output: entry_count=0
     assert!(
-        stdout.contains("Entries:     0"),
+        stdout.contains("entry_count=0"),
         "expected 0 entries, got: {}",
         stdout
     );
@@ -1913,7 +1919,9 @@ fn test_cli_templates_crud() {
         String::from_utf8_lossy(&create.stderr)
     );
     let stdout = String::from_utf8_lossy(&create.stdout);
-    assert!(stdout.contains("Created template 'daily-journal'"));
+    // Plain mode output: status=ok, name=daily-journal
+    assert!(stdout.contains("status=ok"));
+    assert!(stdout.contains("name=daily-journal"));
 
     // List templates
     let mut list = Command::new(bin());
@@ -2031,7 +2039,8 @@ fn test_cli_template_set_default() {
     let create = create.output().expect("run templates create");
     assert!(create.status.success());
     let stdout = String::from_utf8_lossy(&create.stdout);
-    assert!(stdout.contains("Set as default template"));
+    // Plain mode output: set_default=true
+    assert!(stdout.contains("set_default=true"));
 }
 
 #[test]
@@ -2174,8 +2183,9 @@ fn test_cli_add_with_compose_flag() {
     apply_xdg_env(&mut show, &config_home, &data_home);
     let show = show.output().expect("run compositions show");
     let stdout = String::from_utf8_lossy(&show.stdout);
+    // Plain mode output: entry_count=1
     assert!(
-        stdout.contains("Entries:     1"),
+        stdout.contains("entry_count=1"),
         "expected 1 entry, got: {}",
         stdout
     );
@@ -2678,5 +2688,6 @@ fn test_cli_no_compose_prevents_attachment() {
     apply_xdg_env(&mut show, &config_home, &data_home);
     let show = show.output().expect("run compositions show");
     let stdout = String::from_utf8_lossy(&show.stdout);
-    assert!(stdout.contains("Entries:     0"), "stdout: {}", stdout);
+    // Plain mode output: entry_count=0
+    assert!(stdout.contains("entry_count=0"), "stdout: {}", stdout);
 }

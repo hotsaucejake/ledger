@@ -51,26 +51,6 @@ pub fn parse_duration(value: &str) -> anyhow::Result<Duration> {
     }
 }
 
-/// Output format for list/search commands.
-#[derive(Clone, Copy)]
-pub enum OutputFormat {
-    Table,
-    Plain,
-}
-
-/// Parse output format string.
-pub fn parse_output_format(value: Option<&str>) -> anyhow::Result<Option<OutputFormat>> {
-    match value {
-        None => Ok(None),
-        Some("table") => Ok(Some(OutputFormat::Table)),
-        Some("plain") => Ok(Some(OutputFormat::Plain)),
-        Some(other) => Err(anyhow::anyhow!(
-            "Unsupported format: {} (use table or plain)",
-            other
-        )),
-    }
-}
-
 /// Ensure entry type is "journal" (only supported type in Phase 0.1).
 pub fn ensure_journal_type_name(entry_type: &str) -> anyhow::Result<()> {
     if entry_type != "journal" {

@@ -5,6 +5,7 @@ use ledger_core::storage::StorageEngine;
 
 use crate::app::AppContext;
 use crate::cli::CompositionDeleteArgs;
+use crate::ui::{badge, print, Badge, OutputMode};
 
 pub fn handle_delete(ctx: &AppContext, args: &CompositionDeleteArgs) -> anyhow::Result<()> {
     let (mut storage, passphrase) = ctx.open_storage(false)?;
@@ -40,7 +41,15 @@ pub fn handle_delete(ctx: &AppContext, args: &CompositionDeleteArgs) -> anyhow::
 
         if !confirmed {
             if !ctx.quiet() {
-                println!("Cancelled.");
+                let ui_ctx = ctx.ui_context(false, None);
+                match ui_ctx.mode {
+                    OutputMode::Pretty => {
+                        print(&ui_ctx, &badge(&ui_ctx, Badge::Info, "Cancelled"));
+                    }
+                    OutputMode::Plain | OutputMode::Json => {
+                        println!("status=cancelled");
+                    }
+                }
             }
             return Ok(());
         }
@@ -51,7 +60,23 @@ pub fn handle_delete(ctx: &AppContext, args: &CompositionDeleteArgs) -> anyhow::
     storage.close(&passphrase)?;
 
     if !ctx.quiet() {
-        println!("Deleted composition '{}'", name);
+        let ui_ctx = ctx.ui_context(false, None);
+        match ui_ctx.mode {
+            OutputMode::Pretty => {
+                print(
+                    &ui_ctx,
+                    &badge(
+                        &ui_ctx,
+                        Badge::Ok,
+                        &format!("Deleted composition '{}'", name),
+                    ),
+                );
+            }
+            OutputMode::Plain | OutputMode::Json => {
+                println!("status=ok");
+                println!("deleted={}", name);
+            }
+        }
     }
     Ok(())
 }

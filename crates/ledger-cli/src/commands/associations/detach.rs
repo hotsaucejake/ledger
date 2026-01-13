@@ -4,6 +4,7 @@ use ledger_core::storage::StorageEngine;
 
 use crate::app::AppContext;
 use crate::cli::DetachArgs;
+use crate::ui::{badge, print, Badge, OutputMode};
 
 pub fn handle_detach(ctx: &AppContext, args: &DetachArgs) -> anyhow::Result<()> {
     let (mut storage, passphrase) = ctx.open_storage(false)?;
@@ -32,10 +33,24 @@ pub fn handle_detach(ctx: &AppContext, args: &DetachArgs) -> anyhow::Result<()> 
     storage.close(&passphrase)?;
 
     if !ctx.quiet() {
-        println!(
-            "Detached entry {} from composition '{}'",
-            args.entry_id, composition.name
-        );
+        let ui_ctx = ctx.ui_context(false, None);
+        match ui_ctx.mode {
+            OutputMode::Pretty => {
+                print(
+                    &ui_ctx,
+                    &badge(
+                        &ui_ctx,
+                        Badge::Ok,
+                        &format!("Detached entry from '{}'", composition.name),
+                    ),
+                );
+            }
+            OutputMode::Plain | OutputMode::Json => {
+                println!("status=ok");
+                println!("entry_id={}", entry_id);
+                println!("composition={}", composition.name);
+            }
+        }
     }
     Ok(())
 }

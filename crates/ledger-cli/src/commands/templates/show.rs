@@ -4,6 +4,7 @@ use ledger_core::storage::StorageEngine;
 
 use crate::app::AppContext;
 use crate::cli::TemplateShowArgs;
+use crate::ui::{blank_line, divider, header, kv, print, OutputMode};
 
 pub fn handle_show(ctx: &AppContext, args: &TemplateShowArgs) -> anyhow::Result<()> {
     let (storage, _passphrase) = ctx.open_storage(false)?;
@@ -26,7 +27,11 @@ pub fn handle_show(ctx: &AppContext, args: &TemplateShowArgs) -> anyhow::Result<
         .map(|et| et.name.clone())
         .unwrap_or_else(|| "unknown".to_string());
 
-    if args.json {
+    // Create UI context
+    let ui_ctx = ctx.ui_context(args.json, None);
+
+    // Handle JSON output
+    if ui_ctx.mode.is_json() {
         let json_output = serde_json::json!({
             "id": template.id.to_string(),
             "name": template.name,
@@ -39,20 +44,52 @@ pub fn handle_show(ctx: &AppContext, args: &TemplateShowArgs) -> anyhow::Result<
             "template_json": template.template_json,
         });
         println!("{}", serde_json::to_string_pretty(&json_output)?);
-    } else {
-        println!("Name:        {}", template.name);
-        println!("ID:          {}", template.id);
-        println!("Entry Type:  {}", entry_type_name);
-        println!("Version:     {}", template.version);
-        if let Some(ref desc) = template.description {
-            println!("Description: {}", desc);
+        return Ok(());
+    }
+
+    match ui_ctx.mode {
+        OutputMode::Pretty => {
+            print(&ui_ctx, &header(&ui_ctx, "template", None));
+            blank_line(&ui_ctx);
+            print(&ui_ctx, &kv(&ui_ctx, "Name", &template.name));
+            print(&ui_ctx, &kv(&ui_ctx, "ID", &template.id.to_string()));
+            print(&ui_ctx, &kv(&ui_ctx, "Entry Type", &entry_type_name));
+            print(
+                &ui_ctx,
+                &kv(&ui_ctx, "Version", &template.version.to_string()),
+            );
+            if let Some(ref desc) = template.description {
+                print(&ui_ctx, &kv(&ui_ctx, "Description", desc));
+            }
+            print(
+                &ui_ctx,
+                &kv(
+                    &ui_ctx,
+                    "Created",
+                    &template.created_at.format("%Y-%m-%d %H:%M UTC").to_string(),
+                ),
+            );
+            blank_line(&ui_ctx);
+            print(&ui_ctx, &divider(&ui_ctx));
+            blank_line(&ui_ctx);
+            println!("{}", serde_json::to_string_pretty(&template.template_json)?);
         }
-        println!(
-            "Created:     {}",
-            template.created_at.format("%Y-%m-%d %H:%M:%S")
-        );
-        println!("Defaults:");
-        println!("{}", serde_json::to_string_pretty(&template.template_json)?);
+        OutputMode::Plain | OutputMode::Json => {
+            println!("name={}", template.name);
+            println!("id={}", template.id);
+            println!("entry_type={}", entry_type_name);
+            println!("entry_type_id={}", template.entry_type_id);
+            println!("version={}", template.version);
+            if let Some(ref desc) = template.description {
+                println!("description={}", desc);
+            }
+            println!("created_at={}", template.created_at.to_rfc3339());
+            println!("device_id={}", template.device_id);
+            println!(
+                "template_json={}",
+                serde_json::to_string(&template.template_json)?
+            );
+        }
     }
 
     Ok(())
