@@ -34,7 +34,8 @@ pub fn handle_doctor(ctx: &AppContext, args: &DoctorArgs) -> anyhow::Result<()> 
             println!("{}", header(&ui_ctx, "doctor", None));
             println!();
 
-            let mut steps = StepList::new(&ui_ctx, &["Config file", "Ledger file", "Integrity check"]);
+            let mut steps =
+                StepList::new(&ui_ctx, &["Config file", "Ledger file", "Integrity check"]);
 
             // Config check (already passed if we got here)
             steps.ok();
@@ -49,7 +50,13 @@ pub fn handle_doctor(ctx: &AppContext, args: &DoctorArgs) -> anyhow::Result<()> 
                 println!("{}", badge(&ui_ctx, Badge::Err, "Doctor failed"));
                 println!("  {}", kv(&ui_ctx, "Error", &err.to_string()));
                 println!();
-                println!("{}", hint(&ui_ctx, "Restore from a backup or export data before retrying."));
+                println!(
+                    "{}",
+                    hint(
+                        &ui_ctx,
+                        "Restore from a backup or export data before retrying."
+                    )
+                );
                 return Err(anyhow::anyhow!("Doctor failed"));
             }
             steps.ok();

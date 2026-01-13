@@ -1,5 +1,7 @@
 //! Theme definitions for colors, symbols, and badges.
 
+use owo_colors::{OwoColorize, Style};
+
 /// Symbol pair for ASCII and Unicode variants.
 #[derive(Debug, Clone)]
 pub struct SymbolPair {
@@ -75,24 +77,60 @@ impl Badge {
             }
         }
     }
+
+    /// Get the owo-colors style for this badge type.
+    pub fn style(&self) -> Style {
+        match self {
+            Self::Ok => Style::new().green(),
+            Self::Warn => Style::new().yellow(),
+            Self::Err => Style::new().red(),
+            Self::Info => Style::new().cyan(),
+        }
+    }
 }
 
-/// Color definitions using ANSI escape codes.
-pub mod colors {
-    /// Dim text (for labels, metadata)
-    pub const DIM: &str = "\x1b[2m";
-    /// Bright/bold text (for values)
-    pub const BRIGHT: &str = "\x1b[1m";
-    /// Green (success)
-    pub const GREEN: &str = "\x1b[32m";
-    /// Yellow (warning)
-    pub const YELLOW: &str = "\x1b[33m";
-    /// Red (error)
-    pub const RED: &str = "\x1b[31m";
-    /// Cyan (info)
-    pub const CYAN: &str = "\x1b[36m";
-    /// Reset all styles
-    pub const RESET: &str = "\x1b[0m";
+/// Style helpers using owo-colors.
+pub mod styles {
+    use owo_colors::Style;
+
+    /// Dim text style (for labels, metadata)
+    pub fn dim() -> Style {
+        Style::new().dimmed()
+    }
+
+    /// Bold text style (for emphasis)
+    pub fn bold() -> Style {
+        Style::new().bold()
+    }
+
+    /// Success style (green)
+    pub fn success() -> Style {
+        Style::new().green()
+    }
+
+    /// Warning style (yellow)
+    pub fn warning() -> Style {
+        Style::new().yellow()
+    }
+
+    /// Error style (red)
+    pub fn error() -> Style {
+        Style::new().red()
+    }
+
+    /// Info style (cyan)
+    pub fn info() -> Style {
+        Style::new().cyan()
+    }
+}
+
+/// Apply a style to text, returning a styled string.
+pub fn styled(text: &str, style: Style, color_enabled: bool) -> String {
+    if color_enabled {
+        text.style(style).to_string()
+    } else {
+        text.to_string()
+    }
 }
 
 /// Theme configuration for UI rendering.
@@ -171,5 +209,17 @@ mod tests {
         let theme = Theme::default();
         assert_eq!(theme.spinner_frames(false).len(), 4);
         assert_eq!(theme.spinner_frames(true).len(), 10);
+    }
+
+    #[test]
+    fn test_styled_with_color() {
+        let text = styled("hello", styles::success(), true);
+        assert!(text.contains("hello"));
+    }
+
+    #[test]
+    fn test_styled_without_color() {
+        let text = styled("hello", styles::success(), false);
+        assert_eq!(text, "hello");
     }
 }

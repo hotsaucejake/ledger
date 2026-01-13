@@ -1,98 +1,93 @@
-//! Progress indicators for long-running operations.
+//! Progress indicators for long-running operations using indicatif.
 
-use std::io::{self, Write};
+use indicatif::{ProgressBar as IndicatifBar, ProgressStyle};
+use std::time::Duration;
 
 use super::context::UiContext;
 use super::render::badge;
-use super::theme::{Badge, Theme};
+use super::theme::Badge;
 
 /// A spinner for indeterminate progress.
 pub struct Spinner<'a> {
     ctx: &'a UiContext,
-    message: String,
-    frame: usize,
+    bar: Option<IndicatifBar>,
 }
 
 impl<'a> Spinner<'a> {
     /// Create a new spinner with the given message.
     pub fn new(ctx: &'a UiContext, message: &str) -> Self {
-        Self {
-            ctx,
-            message: message.to_string(),
-            frame: 0,
-        }
+        let bar = if ctx.allows_animation() {
+            let pb = IndicatifBar::new_spinner();
+            let template = if ctx.unicode {
+                "{spinner:.cyan} {msg}..."
+            } else {
+                "{spinner} {msg}..."
+            };
+            pb.set_style(
+                ProgressStyle::default_spinner()
+                    .template(template)
+                    .unwrap()
+                    .tick_strings(if ctx.unicode {
+                        &["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏", ""]
+                    } else {
+                        &["|", "/", "-", "\\", ""]
+                    }),
+            );
+            pb.set_message(message.to_string());
+            Some(pb)
+        } else {
+            None
+        };
+
+        Self { ctx, bar }
     }
 
-    /// Start the spinner (prints initial line).
+    /// Start the spinner (prints initial line or begins animation).
     pub fn start(&self) {
-        if !self.ctx.allows_animation() {
+        if let Some(bar) = &self.bar {
+            bar.enable_steady_tick(Duration::from_millis(80));
+        } else {
             // Non-TTY: print static message
-            println!("{}...", self.message);
-            return;
+            if let Some(bar) = &self.bar {
+                println!("{}...", bar.message());
+            }
         }
-        self.render();
     }
 
     /// Update spinner with new message.
     pub fn update(&mut self, message: &str) {
-        self.message = message.to_string();
-        if self.ctx.allows_animation() {
-            self.advance();
+        if let Some(bar) = &self.bar {
+            bar.set_message(message.to_string());
         }
     }
 
     /// Advance to next frame (call this in a loop for animation).
     pub fn tick(&mut self) {
-        if self.ctx.allows_animation() {
-            self.advance();
+        if let Some(bar) = &self.bar {
+            bar.tick();
         }
-    }
-
-    /// Advance to next frame.
-    fn advance(&mut self) {
-        let theme = Theme::default();
-        let frames = theme.spinner_frames(self.ctx.unicode);
-        self.frame = (self.frame + 1) % frames.len();
-        self.render();
-    }
-
-    /// Render current spinner state.
-    fn render(&self) {
-        if !self.ctx.allows_animation() {
-            return;
-        }
-        let theme = Theme::default();
-        let frames = theme.spinner_frames(self.ctx.unicode);
-        let frame_char = frames[self.frame];
-
-        // Clear line and render
-        print!("\r\x1b[K{} {}...", frame_char, self.message);
-        let _ = io::stdout().flush();
     }
 
     /// Finish spinner with success message.
     pub fn finish(&self, message: &str) {
-        if self.ctx.allows_animation() {
-            print!("\r\x1b[K");
-            let _ = io::stdout().flush();
+        if let Some(bar) = &self.bar {
+            bar.finish_and_clear();
         }
         println!("{}", badge(self.ctx, Badge::Ok, message));
     }
 
     /// Finish spinner with error message.
     pub fn finish_err(&self, message: &str) {
-        if self.ctx.allows_animation() {
-            print!("\r\x1b[K");
-            let _ = io::stdout().flush();
+        if let Some(bar) = &self.bar {
+            bar.finish_and_clear();
         }
         eprintln!("{}", badge(self.ctx, Badge::Err, message));
     }
 
     /// Finish spinner with warning message.
     pub fn finish_warn(&self, message: &str) {
-        if self.ctx.allows_animation() {
-            print!("\r\x1b[K");
-            let _ = io::stdout().flush();
+        if let Some(bar) = &self.bar {
+            bar.finish_and_clear();
         }
         println!("{}", badge(self.ctx, Badge::Warn, message));
     }
@@ -101,39 +96,62 @@ impl<'a> Spinner<'a> {
 /// A progress bar for determinate progress.
 pub struct ProgressBar<'a> {
     ctx: &'a UiContext,
+    bar: Option<IndicatifBar>,
     total: u64,
     current: u64,
-    message: String,
-    width: usize,
 }
 
 impl<'a> ProgressBar<'a> {
     /// Create a new progress bar.
     pub fn new(ctx: &'a UiContext, total: u64, message: &str) -> Self {
+        let bar = if ctx.allows_animation() {
+            let pb = IndicatifBar::new(total);
+            let template = if ctx.unicode {
+                "{msg} [{bar:20.cyan/dim}] {percent}%"
+            } else {
+                "{msg} [{bar:20}] {percent}%"
+            };
+            pb.set_style(
+                ProgressStyle::default_bar()
+                    .template(template)
+                    .unwrap()
+                    .progress_chars(if ctx.unicode { "━━─" } else { "=>-" }),
+            );
+            pb.set_message(message.to_string());
+            Some(pb)
+        } else {
+            None
+        };
+
         Self {
             ctx,
+            bar,
             total,
             current: 0,
-            message: message.to_string(),
-            width: 20,
         }
     }
 
-    /// Set the bar width (default is 20).
-    pub fn with_width(mut self, width: usize) -> Self {
-        self.width = width;
+    /// Set the bar width (default is 20). Note: with indicatif, width is set in template.
+    pub fn with_width(self, _width: usize) -> Self {
+        // Width is controlled by the template in indicatif
+        // This method is kept for API compatibility
         self
     }
 
     /// Set current progress value.
     pub fn set(&mut self, current: u64) {
         self.current = current.min(self.total);
-        self.render();
+        if let Some(bar) = &self.bar {
+            bar.set_position(self.current);
+        }
     }
 
     /// Increment progress by amount.
     pub fn inc(&mut self, amount: u64) {
-        self.set(self.current.saturating_add(amount));
+        self.current = self.current.saturating_add(amount).min(self.total);
+        if let Some(bar) = &self.bar {
+            bar.inc(amount);
+        }
     }
 
     /// Get current percentage.
@@ -145,33 +163,18 @@ impl<'a> ProgressBar<'a> {
         }
     }
 
-    /// Render progress bar.
-    fn render(&self) {
-        if !self.ctx.allows_animation() {
-            return;
-        }
-
-        let percent = self.percent();
-        let filled = (self.width as f64 * self.current as f64 / self.total.max(1) as f64) as usize;
-        let empty = self.width.saturating_sub(filled);
-
-        let bar = format!("[{}{}]", "=".repeat(filled), " ".repeat(empty));
-
-        print!("\r\x1b[K{} {} {}%", self.message, bar, percent);
-        let _ = io::stdout().flush();
-    }
-
     /// Finish progress bar (clears the line).
     pub fn finish(&self) {
-        if self.ctx.allows_animation() {
-            print!("\r\x1b[K");
-            let _ = io::stdout().flush();
+        if let Some(bar) = &self.bar {
+            bar.finish_and_clear();
         }
     }
 
     /// Finish progress bar with a message.
     pub fn finish_with_message(&self, message: &str) {
-        self.finish();
+        if let Some(bar) = &self.bar {
+            bar.finish_and_clear();
+        }
         println!("{}", badge(self.ctx, Badge::Ok, message));
     }
 }

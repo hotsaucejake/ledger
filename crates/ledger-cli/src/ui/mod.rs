@@ -39,7 +39,9 @@ pub use mode::OutputMode;
 pub use theme::Badge;
 
 // Re-export commonly used render functions
-pub use render::{badge, blank_line, divider, header, hint, kv, print, receipt, table, Column};
+pub use render::{
+    badge, blank_line, divider, header, hint, kv, print, receipt, simple_table, table, Column,
+};
 
 // Re-export progress types
 pub use progress::{ProgressBar, Spinner, StepList};

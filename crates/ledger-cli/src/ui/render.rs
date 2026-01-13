@@ -1,9 +1,12 @@
 //! Rendering primitives for CLI output.
 
+use comfy_table::modifiers::UTF8_ROUND_CORNERS;
+use comfy_table::presets::UTF8_FULL;
+use comfy_table::{ContentArrangement, Table as ComfyTable};
+
 use super::context::UiContext;
-use super::format::{pad_right, truncate};
 use super::mode::OutputMode;
-use super::theme::{colors, Badge};
+use super::theme::{styled, styles, Badge};
 
 /// Render a header line for a command.
 ///
@@ -12,16 +15,8 @@ use super::theme::{colors, Badge};
 pub fn header(ctx: &UiContext, command: &str, path: Option<&str>) -> String {
     match ctx.mode {
         OutputMode::Pretty => {
-            let mut out = if ctx.color {
-                format!(
-                    "{}Ledger{} \u{00B7} {}",
-                    colors::BRIGHT,
-                    colors::RESET,
-                    command
-                )
-            } else {
-                format!("Ledger \u{00B7} {}", command)
-            };
+            let title = styled("Ledger", styles::bold(), ctx.color);
+            let mut out = format!("{} \u{00B7} {}", title, command);
             if let Some(p) = path {
                 out.push_str(&format!("\nPath: {}", p));
             }
@@ -37,7 +32,7 @@ pub fn header(ctx: &UiContext, command: &str, path: Option<&str>) -> String {
 /// Render a divider line.
 pub fn divider(ctx: &UiContext) -> String {
     if ctx.mode.is_pretty() {
-        "-".repeat(ctx.width.min(60))
+        "\u{2500}".repeat(ctx.width.min(60))
     } else {
         "---".to_string()
     }
@@ -46,18 +41,7 @@ pub fn divider(ctx: &UiContext) -> String {
 /// Render a badge with optional message.
 pub fn badge(ctx: &UiContext, kind: Badge, message: &str) -> String {
     let badge_text = kind.display(ctx.unicode);
-
-    let colored_badge = if ctx.color {
-        let color = match kind {
-            Badge::Ok => colors::GREEN,
-            Badge::Warn => colors::YELLOW,
-            Badge::Err => colors::RED,
-            Badge::Info => colors::CYAN,
-        };
-        format!("{}{}{}", color, badge_text, colors::RESET)
-    } else {
-        badge_text.to_string()
-    };
+    let colored_badge = styled(badge_text, kind.style(), ctx.color);
 
     if message.is_empty() {
         colored_badge
@@ -72,11 +56,8 @@ pub fn badge(ctx: &UiContext, kind: Badge, message: &str) -> String {
 /// Plain mode: "key=value"
 pub fn kv(ctx: &UiContext, key: &str, value: &str) -> String {
     if ctx.mode.is_pretty() {
-        if ctx.color {
-            format!("{}{}:{} {}", colors::DIM, key, colors::RESET, value)
-        } else {
-            format!("{}: {}", key, value)
-        }
+        let styled_key = styled(&format!("{}:", key), styles::dim(), ctx.color);
+        format!("{} {}", styled_key, value)
     } else {
         format!("{}={}", key.to_lowercase().replace(' ', "_"), value)
     }
@@ -88,11 +69,8 @@ pub fn kv(ctx: &UiContext, key: &str, value: &str) -> String {
 /// Plain mode: "hint=text"
 pub fn hint(ctx: &UiContext, text: &str) -> String {
     if ctx.mode.is_pretty() {
-        if ctx.color {
-            format!("{}Hint:{} {}", colors::DIM, colors::RESET, text)
-        } else {
-            format!("Hint: {}", text)
-        }
+        let label = styled("Hint:", styles::dim(), ctx.color);
+        format!("{} {}", label, text)
     } else {
         format!("hint={}", text)
     }
@@ -124,61 +102,100 @@ pub fn receipt(ctx: &UiContext, title: &str, items: &[(&str, &str)]) -> String {
 #[derive(Debug, Clone)]
 pub struct Column {
     pub header: &'static str,
-    pub width: usize,
+    pub width: Option<usize>,
 }
 
 impl Column {
-    pub const fn new(header: &'static str, width: usize) -> Self {
-        Self { header, width }
+    pub const fn new(header: &'static str) -> Self {
+        Self {
+            header,
+            width: None,
+        }
+    }
+
+    pub const fn with_width(header: &'static str, width: usize) -> Self {
+        Self {
+            header,
+            width: Some(width),
+        }
     }
 }
 
-/// Render a table.
+/// Render a table using comfy-table for pretty mode.
 ///
-/// Pretty mode: Header row + aligned data rows with spacing
+/// Pretty mode: Styled table with borders
 /// Plain mode: Space-separated values (no header)
 pub fn table(ctx: &UiContext, columns: &[Column], rows: &[Vec<String>]) -> String {
-    let mut lines = Vec::new();
-
     if ctx.mode.is_pretty() {
-        // Header row
-        let header_line: Vec<String> = columns
-            .iter()
-            .map(|c| {
-                if ctx.color {
-                    format!(
-                        "{}{}{}",
-                        colors::DIM,
-                        pad_right(c.header, c.width),
-                        colors::RESET
-                    )
-                } else {
-                    pad_right(c.header, c.width)
-                }
-            })
-            .collect();
-        lines.push(header_line.join("  "));
+        let mut table = ComfyTable::new();
 
-        // Data rows
-        for row in rows {
-            let formatted: Vec<String> = row
-                .iter()
-                .zip(columns.iter())
-                .map(|(cell, col)| {
-                    let truncated = truncate(cell, col.width);
-                    pad_right(&truncated, col.width)
-                })
-                .collect();
-            lines.push(formatted.join("  "));
+        // Configure table style
+        if ctx.unicode {
+            table
+                .load_preset(UTF8_FULL)
+                .apply_modifier(UTF8_ROUND_CORNERS);
+        } else {
+            table.load_preset(comfy_table::presets::ASCII_MARKDOWN);
         }
+
+        table.set_content_arrangement(ContentArrangement::Dynamic);
+
+        // Set headers
+        let headers: Vec<&str> = columns.iter().map(|c| c.header).collect();
+        table.set_header(headers);
+
+        // Add rows
+        for row in rows {
+            table.add_row(row);
+        }
+
+        // Apply column widths if specified
+        for (i, col) in columns.iter().enumerate() {
+            if let Some(width) = col.width {
+                table.set_width(width as u16);
+                let _ = table
+                    .column_mut(i)
+                    .map(|c| c.set_constraint(comfy_table::ColumnConstraint::ContentWidth));
+            }
+        }
+
+        table.to_string()
     } else {
         // Plain mode: space-separated values, no header
-        for row in rows {
-            lines.push(row.join(" "));
-        }
+        rows.iter()
+            .map(|row| row.join(" "))
+            .collect::<Vec<_>>()
+            .join("\n")
     }
+}
 
-    lines.join("\n")
+/// Render a simple table without borders (for lists like entries).
+pub fn simple_table(ctx: &UiContext, columns: &[Column], rows: &[Vec<String>]) -> String {
+    if ctx.mode.is_pretty() {
+        let mut table = ComfyTable::new();
+        table.load_preset(comfy_table::presets::NOTHING);
+        table.set_content_arrangement(ContentArrangement::Dynamic);
+
+        // Set headers with dim styling
+        let headers: Vec<String> = columns
+            .iter()
+            .map(|c| styled(c.header, styles::dim(), ctx.color))
+            .collect();
+        table.set_header(headers);
+
+        // Add rows
+        for row in rows {
+            table.add_row(row);
+        }
+
+        table.to_string()
+    } else {
+        // Plain mode: space-separated values, no header
+        rows.iter()
+            .map(|row| row.join(" "))
+            .collect::<Vec<_>>()
+            .join("\n")
+    }
 }
 
 /// Print a message to stdout with proper mode handling.
@@ -249,7 +266,8 @@ mod tests {
     fn test_kv_pretty() {
         let ctx = pretty_ctx();
         let line = kv(&ctx, "Name", "test");
-        assert_eq!(line, "Name: test");
+        assert!(line.contains("Name:"));
+        assert!(line.contains("test"));
     }
 
     #[test]
@@ -263,7 +281,8 @@ mod tests {
     fn test_hint_pretty() {
         let ctx = pretty_ctx();
         let h = hint(&ctx, "try this");
-        assert_eq!(h, "Hint: try this");
+        assert!(h.contains("Hint:"));
+        assert!(h.contains("try this"));
     }
 
     #[test]
@@ -276,7 +295,7 @@ mod tests {
     #[test]
     fn test_table_plain() {
         let ctx = plain_ctx();
-        let columns = [Column::new("ID", 8), Column::new("Name", 10)];
+        let columns = [Column::new("ID"), Column::new("Name")];
         let rows = vec![vec!["abc".to_string(), "test".to_string()]];
         let t = table(&ctx, &columns, &rows);
         assert_eq!(t, "abc test");
@@ -285,7 +304,7 @@ mod tests {
     #[test]
     fn test_table_pretty() {
         let ctx = pretty_ctx();
-        let columns = [Column::new("ID", 8), Column::new("Name", 10)];
+        let columns = [Column::new("ID"), Column::new("Name")];
         let rows = vec![vec!["abc".to_string(), "test".to_string()]];
         let t = table(&ctx, &columns, &rows);
         assert!(t.contains("ID"));

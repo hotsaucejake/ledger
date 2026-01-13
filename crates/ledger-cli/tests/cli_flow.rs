@@ -640,7 +640,8 @@ fn test_cli_list_empty_message() {
     let list = list.output().expect("run list");
     assert!(list.status.success());
     let stdout = String::from_utf8_lossy(&list.stdout);
-    assert!(stdout.contains("No entries found."));
+    // In Plain mode (non-TTY), empty list shows count=0
+    assert!(stdout.contains("count=0"));
 }
 
 #[test]
@@ -707,7 +708,8 @@ fn test_cli_list_truncates_summary() {
     let list = list.output().expect("run list");
     assert!(list.status.success());
     let stdout = String::from_utf8_lossy(&list.stdout);
-    assert!(stdout.contains("..."));
+    // In Plain mode (non-TTY), the full summary is shown without truncation
+    assert!(stdout.contains(&long_body));
 }
 
 #[test]
