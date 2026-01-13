@@ -88,6 +88,35 @@ Avoid rainbow tables. Fewer colors signal quality.
 - Align columns when possible.
 - Keep headers small (no ASCII art banners).
 
+### Animation and progress (TTY only)
+
+Animations are optional polish and must never interfere with automation.
+
+- Only show spinners/progress bars when stdout is a TTY.
+- Never show animated output in `--plain`, `--json`, `--no-color`, or `TERM=dumb`.
+- Prefer low‑motion patterns (8–12 fps) to reduce flicker over SSH.
+- Always fall back to a single static line on non‑TTY.
+
+Recommended patterns:
+
+- **Spinner + status** for indeterminate work:
+  - `Checking...` with a spinner and short status text.
+- **Progress bar** for known work:
+  - `Writing backup... 65%` with ETA if available.
+- **Step list** that updates in place:
+  - `- Schema integrity: [OK]` as each step completes.
+- **Subtle dots** for short waits:
+  - `Unlocking...` with 1–3 dots cycling.
+
+Never animate multi‑line output. Keep updates to a single line unless the command is explicitly in progress mode.
+
+Default animation palette (pretty mode):
+
+- Spinner frames (Unicode): `⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏`
+- Spinner frames (ASCII): `|/-\\`
+- Progress bar: `[{bar}] {percent}%` with a compact width (20–30 cols)
+- Step status markers: `[OK]`, `[WARN]`, `[ERR]`
+
 ## Output Primitives
 
 Provide reusable primitives so command output stays consistent.
