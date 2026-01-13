@@ -4,6 +4,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::app::{missing_ledger_message, resolve_ledger_path, AppContext};
 use crate::cli::BackupArgs;
+use crate::ui::{badge, format_bytes, print, Badge, OutputMode};
 
 pub fn handle_backup(ctx: &AppContext, args: &BackupArgs) -> anyhow::Result<()> {
     let source = resolve_ledger_path(ctx.cli())?;
@@ -11,21 +12,54 @@ pub fn handle_backup(ctx: &AppContext, args: &BackupArgs) -> anyhow::Result<()> 
     if !source_path.exists() {
         return Err(anyhow::anyhow!(missing_ledger_message(source_path)));
     }
+
+    let ui_ctx = ctx.ui_context(false, None);
+
     if std::io::stdin().is_terminal() && !ctx.quiet() {
         let proceed = dialoguer::Confirm::new()
             .with_prompt(format!("Back up ledger to {}?", args.destination))
             .default(true)
             .interact()?;
         if !proceed {
+            match ui_ctx.mode {
+                OutputMode::Pretty => {
+                    print(&ui_ctx, &badge(&ui_ctx, Badge::Warn, "Backup cancelled"));
+                }
+                OutputMode::Plain | OutputMode::Json => {
+                    println!("status=cancelled");
+                }
+            }
             return Err(anyhow::anyhow!("Backup cancelled"));
         }
     }
-    let count = backup_atomic_copy(source_path, Path::new(&args.destination))?;
-    if count == 0 {
+
+    let bytes = backup_atomic_copy(source_path, Path::new(&args.destination))?;
+    if bytes == 0 {
         return Err(anyhow::anyhow!("Backup failed: zero bytes written"));
     }
+
     if !ctx.quiet() {
-        println!("Backed up ledger to {}", args.destination);
+        match ui_ctx.mode {
+            OutputMode::Pretty => {
+                print(
+                    &ui_ctx,
+                    &badge(
+                        &ui_ctx,
+                        Badge::Ok,
+                        &format!(
+                            "Backed up ledger to {} ({})",
+                            args.destination,
+                            format_bytes(bytes)
+                        ),
+                    ),
+                );
+            }
+            OutputMode::Plain | OutputMode::Json => {
+                println!("status=ok");
+                println!("destination={}", args.destination);
+                println!("bytes={}", bytes);
+            }
+        }
     }
     Ok(())
 }

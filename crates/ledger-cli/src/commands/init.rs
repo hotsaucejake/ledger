@@ -16,6 +16,7 @@ use crate::security::{
     generate_key_bytes, key_bytes_to_passphrase, keychain_set, write_keyfile_encrypted,
     write_keyfile_plain,
 };
+use crate::ui::{badge, hint, print, Badge, OutputMode};
 
 pub fn handle_init(ctx: &AppContext, args: &InitArgs) -> anyhow::Result<()> {
     let interactive = std::io::stdin().is_terminal();
@@ -218,13 +219,46 @@ pub fn handle_init(ctx: &AppContext, args: &InitArgs) -> anyhow::Result<()> {
     }
 
     if !ctx.quiet() {
-        println!("Ledger created at {}", ledger_path.to_string_lossy());
-        println!("Config written to {}", config_path.to_string_lossy());
-        if passphrase_cache_ttl_seconds > 0 {
-            println!(
-                "Note: Passphrase caching keeps your passphrase in memory for {} seconds.",
-                passphrase_cache_ttl_seconds
-            );
+        let ui_ctx = ctx.ui_context(false, None);
+        match ui_ctx.mode {
+            OutputMode::Pretty => {
+                print(
+                    &ui_ctx,
+                    &badge(
+                        &ui_ctx,
+                        Badge::Ok,
+                        &format!("Ledger created at {}", ledger_path.to_string_lossy()),
+                    ),
+                );
+                print(
+                    &ui_ctx,
+                    &badge(
+                        &ui_ctx,
+                        Badge::Ok,
+                        &format!("Config written to {}", config_path.to_string_lossy()),
+                    ),
+                );
+                if passphrase_cache_ttl_seconds > 0 {
+                    print(
+                        &ui_ctx,
+                        &hint(
+                            &ui_ctx,
+                            &format!(
+                                "Passphrase caching keeps your passphrase in memory for {} seconds.",
+                                passphrase_cache_ttl_seconds
+                            ),
+                        ),
+                    );
+                }
+            }
+            OutputMode::Plain | OutputMode::Json => {
+                println!("status=ok");
+                println!("ledger_path={}", ledger_path.to_string_lossy());
+                println!("config_path={}", config_path.to_string_lossy());
+                if passphrase_cache_ttl_seconds > 0 {
+                    println!("passphrase_cache_ttl={}", passphrase_cache_ttl_seconds);
+                }
+            }
         }
     }
 

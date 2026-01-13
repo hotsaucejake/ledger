@@ -340,8 +340,9 @@ fn test_cli_check_failure() {
     let check = check.output().expect("run check");
     assert!(!check.status.success());
     let output = String::from_utf8_lossy(&check.stderr);
-    assert!(output.contains("Integrity check: FAILED"));
-    assert!(output.contains("Hint:"));
+    // Plain mode output format
+    assert!(output.contains("status=failed"));
+    assert!(output.contains("error="));
 }
 
 #[test]
