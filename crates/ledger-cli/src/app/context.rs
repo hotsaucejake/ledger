@@ -8,6 +8,7 @@ use once_cell::unsync::OnceCell;
 use ledger_core::storage::AgeSqliteStorage;
 
 use crate::cli::Cli;
+use crate::ui::UiContext;
 
 use super::passphrase::open_storage_with_retry;
 use super::security_config::{load_security_config, SecurityConfig};
@@ -57,5 +58,18 @@ impl<'a> AppContext<'a> {
     /// `open_storage_with_retry` function.
     pub fn open_storage(&self, no_input: bool) -> anyhow::Result<(AgeSqliteStorage, String)> {
         open_storage_with_retry(self.cli, no_input)
+    }
+
+    /// Create a UI context for the current environment.
+    ///
+    /// This builds the UI context using global CLI flags and environment
+    /// variables. Commands should call this once and pass it to UI functions.
+    ///
+    /// # Arguments
+    /// * `json_flag` - Whether `--json` was passed to the command
+    /// * `format_flag` - Value of `--format` if provided
+    #[allow(dead_code)] // Will be used during command migration
+    pub fn ui_context(&self, json_flag: bool, format_flag: Option<&str>) -> UiContext {
+        UiContext::from_env(json_flag, format_flag, self.cli.no_color, self.cli.ascii)
     }
 }

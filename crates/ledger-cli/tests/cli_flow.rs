@@ -1602,7 +1602,8 @@ fn test_cli_doctor_ok() {
 
     assert!(doctor.status.success());
     let stdout = String::from_utf8_lossy(&doctor.stdout);
-    assert!(stdout.contains("Doctor: OK"));
+    // Plain mode output (non-TTY) uses key=value format
+    assert!(stdout.contains("status=ok"));
 }
 
 // ============================================================================

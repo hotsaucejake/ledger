@@ -13,6 +13,9 @@ mod errors;
 mod helpers;
 mod output;
 mod security;
+// Allow unused during incremental migration to new UI module
+#[allow(dead_code, unused_imports)]
+mod ui;
 
 use clap::Parser;
 use ledger_core::VERSION;
