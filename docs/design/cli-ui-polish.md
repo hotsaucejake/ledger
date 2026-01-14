@@ -355,17 +355,17 @@ error=...
 
 ## Summary Checklist
 
-### P1 (Should fix)
-- [ ] Table header alignment with dim styling
-- [ ] Missing padding between columns
-- [ ] Add filter context to headers
-- [ ] Add path to headers
-- [ ] Add Type and Tags columns to list/search
-- [ ] Actionable hints with entry IDs
-- [ ] Wire init wizard or add step indicators
-- [ ] Wire add wizard or add step indicators
-- [ ] Migrate `lock` command to UI primitives
-- [ ] Consistent error hint formatting
+### P1 (Should fix) - ✅ COMPLETED
+- [x] Table header alignment with dim styling (use comfy-table's built-in Cell styling)
+- [x] Missing padding between columns (set_padding((0, 2)))
+- [x] Add filter context to headers (header_with_context function)
+- [x] Add path to headers (resolve_ledger_path in list/search)
+- [x] Add Type and Tags columns to list/search
+- [x] Actionable hints with entry IDs
+- [x] Wire init wizard or add step indicators (print_step helper)
+- [x] Wire add wizard or add step indicators (print_step helper)
+- [x] Migrate `lock` command to UI primitives
+- [x] Consistent error hint formatting (print_error in main.rs)
 
 ### P2 (Nice to have)
 - [ ] Column width constraints

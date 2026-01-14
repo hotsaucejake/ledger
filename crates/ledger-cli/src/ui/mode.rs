@@ -63,6 +63,7 @@ impl OutputMode {
     }
 
     /// Check if this mode should output plain text.
+    #[allow(dead_code)]
     pub fn is_plain(&self) -> bool {
         matches!(self, Self::Plain)
     }

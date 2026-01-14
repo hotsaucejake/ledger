@@ -2,7 +2,7 @@
 
 use comfy_table::modifiers::UTF8_ROUND_CORNERS;
 use comfy_table::presets::UTF8_FULL;
-use comfy_table::{ContentArrangement, Table as ComfyTable};
+use comfy_table::{Attribute, Cell, ContentArrangement, Table as ComfyTable};
 
 use super::context::UiContext;
 use super::mode::OutputMode;
@@ -10,15 +10,35 @@ use super::theme::{styled, styles, Badge};
 
 /// Render a header line for a command.
 ///
-/// Pretty mode: "Ledger · command" with optional path
+/// Pretty mode: "Ledger · command (context)" with optional path
 /// Plain mode: "ledger command"
-pub fn header(ctx: &UiContext, command: &str, path: Option<&str>) -> String {
+///
+/// # Arguments
+/// - `command`: The command name (e.g., "list", "search")
+/// - `context`: Optional context shown in parentheses (e.g., "last 7d", query)
+/// - `path`: Optional ledger path to display on second line
+pub fn header_with_context(
+    ctx: &UiContext,
+    command: &str,
+    context: Option<&str>,
+    path: Option<&str>,
+) -> String {
     match ctx.mode {
         OutputMode::Pretty => {
             let title = styled("Ledger", styles::bold(), ctx.color);
-            let mut out = format!("{} \u{00B7} {}", title, command);
+            let mut out = if let Some(c) = context {
+                format!("{} \u{00B7} {} ({})", title, command, c)
+            } else {
+                format!("{} \u{00B7} {}", title, command)
+            };
             if let Some(p) = path {
-                out.push_str(&format!("\nPath: {}", p));
+                // Truncate long paths
+                let display_path = if p.len() > 50 {
+                    format!("...{}", &p[p.len() - 47..])
+                } else {
+                    p.to_string()
+                };
+                out.push_str(&format!("\n{}", kv(ctx, "Path", &display_path)));
             }
             out
         }
@@ -27,6 +47,14 @@ pub fn header(ctx: &UiContext, command: &str, path: Option<&str>) -> String {
         }
         OutputMode::Json => String::new(),
     }
+}
+
+/// Render a header line for a command (simple version).
+///
+/// Pretty mode: "Ledger · command" with optional context in parentheses
+/// Plain mode: "ledger command"
+pub fn header(ctx: &UiContext, command: &str, context: Option<&str>) -> String {
+    header_with_context(ctx, command, context, None)
 }
 
 /// Render a divider line.
@@ -80,6 +108,7 @@ pub fn hint(ctx: &UiContext, text: &str) -> String {
 ///
 /// Pretty mode: Badge + indented key-value pairs
 /// Plain mode: status=ok + key=value lines
+#[allow(dead_code)]
 pub fn receipt(ctx: &UiContext, title: &str, items: &[(&str, &str)]) -> String {
     let mut lines = Vec::new();
 
@@ -102,6 +131,7 @@ pub fn receipt(ctx: &UiContext, title: &str, items: &[(&str, &str)]) -> String {
 #[derive(Debug, Clone)]
 pub struct Column {
     pub header: &'static str,
+    #[allow(dead_code)]
     pub width: Option<usize>,
 }
 
@@ -113,6 +143,7 @@ impl Column {
         }
     }
 
+    #[allow(dead_code)]
     pub const fn with_width(header: &'static str, width: usize) -> Self {
         Self {
             header,
@@ -125,6 +156,7 @@ impl Column {
 ///
 /// Pretty mode: Styled table with borders
 /// Plain mode: Space-separated values (no header)
+#[allow(dead_code)]
 pub fn table(ctx: &UiContext, columns: &[Column], rows: &[Vec<String>]) -> String {
     if ctx.mode.is_pretty() {
         let mut table = ComfyTable::new();
@@ -176,12 +208,26 @@ pub fn simple_table(ctx: &UiContext, columns: &[Column], rows: &[Vec<String>]) -
         table.load_preset(comfy_table::presets::NOTHING);
         table.set_content_arrangement(ContentArrangement::Dynamic);
 
-        // Set headers with dim styling
-        let headers: Vec<String> = columns
+        // Set headers with dim styling using comfy-table's built-in styling
+        // This ensures proper column width calculation
+        let header_cells: Vec<Cell> = columns
             .iter()
-            .map(|c| styled(c.header, styles::dim(), ctx.color))
+            .map(|c| {
+                let mut cell = Cell::new(c.header);
+                if ctx.color {
+                    cell = cell.add_attribute(Attribute::Dim);
+                }
+                cell
+            })
             .collect();
-        table.set_header(headers);
+        table.set_header(header_cells);
+
+        // Add padding between columns
+        for i in 0..columns.len() {
+            if let Some(column) = table.column_mut(i) {
+                column.set_padding((0, 2)); // 0 left, 2 right padding
+            }
+        }
 
         // Add rows
         for row in rows {
@@ -213,6 +259,33 @@ pub fn blank_line(ctx: &UiContext) {
     if ctx.mode.is_pretty() {
         println!();
     }
+}
+
+/// Format an error message with optional hint.
+///
+/// Pretty mode: "[ERR] message" with optional "Hint: ..." on next line
+/// Plain mode: "error=message" with optional "hint=suggestion"
+pub fn error_message(ctx: &UiContext, message: &str, error_hint: Option<&str>) -> String {
+    let mut lines = Vec::new();
+
+    if ctx.mode.is_pretty() {
+        lines.push(badge(ctx, Badge::Err, message));
+        if let Some(h) = error_hint {
+            lines.push(hint(ctx, h));
+        }
+    } else {
+        lines.push(format!("error={}", message));
+        if let Some(h) = error_hint {
+            lines.push(format!("hint={}", h));
+        }
+    }
+
+    lines.join("\n")
+}
+
+/// Print an error message to stderr with optional hint.
+pub fn print_error(ctx: &UiContext, message: &str, error_hint: Option<&str>) {
+    eprintln!("{}", error_message(ctx, message, error_hint));
 }
 
 #[cfg(test)]

@@ -1,6 +1,6 @@
 use std::io::IsTerminal;
 
-use dialoguer::{Confirm, Input, Select};
+use dialoguer::{theme::ColorfulTheme, Confirm, Input, Select};
 use ledger_core::storage::{AgeSqliteStorage, NewEntryType, StorageEngine};
 use uuid::Uuid;
 
@@ -16,14 +16,34 @@ use crate::security::{
     generate_key_bytes, key_bytes_to_passphrase, keychain_set, write_keyfile_encrypted,
     write_keyfile_plain,
 };
-use crate::ui::{badge, hint, print, Badge, OutputMode};
+use crate::ui::theme::{styled, styles};
+use crate::ui::{badge, hint, print, Badge, OutputMode, UiContext};
+
+/// Print a step indicator for the wizard flow.
+fn print_step(ctx: &UiContext, step: usize, total: usize, title: &str) {
+    if !ctx.mode.is_pretty() {
+        return;
+    }
+    let progress = format!("{}/{}", step, total);
+    let progress_styled = styled(&progress, styles::dim(), ctx.color);
+    let title_styled = styled(title, styles::bold(), ctx.color);
+    println!("{}  {}", progress_styled, title_styled);
+}
 
 pub fn handle_init(ctx: &AppContext, args: &InitArgs) -> anyhow::Result<()> {
     let interactive = std::io::stdin().is_terminal();
     let effective_no_input = args.no_input || !interactive;
 
+    // Create UI context for step indicators
+    let ui_ctx = ctx.ui_context(false, None);
+    let total_steps = if args.advanced { 5 } else { 4 };
+
     if !ctx.quiet() && !effective_no_input {
-        println!("Welcome to Ledger.\n");
+        // Print wizard header
+        if ui_ctx.mode.is_pretty() {
+            let header = styled("Ledger", styles::bold(), ui_ctx.color);
+            println!("{} \u{00B7} init\n", header);
+        }
     }
 
     let default_ledger = default_ledger_path()?;
@@ -33,10 +53,13 @@ pub fn handle_init(ctx: &AppContext, args: &InitArgs) -> anyhow::Result<()> {
             if effective_no_input {
                 default_ledger.clone()
             } else {
-                let input: String = Input::new()
+                print_step(&ui_ctx, 1, total_steps, "Choose location");
+                let theme = ColorfulTheme::default();
+                let input: String = Input::with_theme(&theme)
                     .with_prompt("Ledger file location")
                     .default(default_ledger.to_string_lossy().to_string())
                     .interact_text()?;
+                println!();
                 std::path::PathBuf::from(input)
             }
         }
@@ -64,25 +87,33 @@ pub fn handle_init(ctx: &AppContext, args: &InitArgs) -> anyhow::Result<()> {
                 "--no-input requires LEDGER_PASSPHRASE for initialization"
             ));
         } else {
-            prompt_init_passphrase()?
+            print_step(&ui_ctx, 2, total_steps, "Create passphrase");
+            let pp = prompt_init_passphrase()?;
+            println!();
+            pp
         }
     } else if effective_no_input {
         return Err(anyhow::anyhow!(
             "--no-input requires LEDGER_PASSPHRASE for initialization"
         ));
     } else {
-        prompt_init_passphrase()?
+        print_step(&ui_ctx, 2, total_steps, "Create passphrase");
+        let pp = prompt_init_passphrase()?;
+        println!();
+        pp
     };
 
     let mut tier = SecurityTier::Passphrase;
     if !effective_no_input {
+        print_step(&ui_ctx, 3, total_steps, "Security level");
         let options = [
             "Passphrase only (recommended)",
             "Passphrase + OS keychain",
             "Passphrase + encrypted keyfile",
             "Device keyfile only (reduced security)",
         ];
-        let choice = Select::new()
+        let theme = ColorfulTheme::default();
+        let choice = Select::with_theme(&theme)
             .with_prompt("Security level")
             .default(0)
             .items(&options)
@@ -94,6 +125,7 @@ pub fn handle_init(ctx: &AppContext, args: &InitArgs) -> anyhow::Result<()> {
             3 => SecurityTier::DeviceKeyfile,
             _ => SecurityTier::Passphrase,
         };
+        println!();
     }
 
     if matches!(tier, SecurityTier::DeviceKeyfile) && !effective_no_input {
@@ -107,8 +139,11 @@ pub fn handle_init(ctx: &AppContext, args: &InitArgs) -> anyhow::Result<()> {
     }
 
     if args.advanced && !effective_no_input {
+        print_step(&ui_ctx, 4, total_steps, "Advanced settings");
+        let theme = ColorfulTheme::default();
+
         if timezone.is_none() {
-            let tz_input: String = Input::new()
+            let tz_input: String = Input::with_theme(&theme)
                 .with_prompt("Timezone")
                 .default("auto".to_string())
                 .interact_text()?;
@@ -121,7 +156,7 @@ pub fn handle_init(ctx: &AppContext, args: &InitArgs) -> anyhow::Result<()> {
 
         if editor.is_none() {
             let default_editor = default_editor();
-            let editor_input: String = Input::new()
+            let editor_input: String = Input::with_theme(&theme)
                 .with_prompt("Default editor")
                 .default(default_editor)
                 .interact_text()?;
@@ -131,7 +166,7 @@ pub fn handle_init(ctx: &AppContext, args: &InitArgs) -> anyhow::Result<()> {
         }
 
         if args.passphrase_cache_ttl_seconds.is_none() {
-            let ttl_input: String = Input::new()
+            let ttl_input: String = Input::with_theme(&theme)
                 .with_prompt("Passphrase cache (seconds)")
                 .default(passphrase_cache_ttl_seconds.to_string())
                 .interact_text()?;
@@ -148,7 +183,7 @@ pub fn handle_init(ctx: &AppContext, args: &InitArgs) -> anyhow::Result<()> {
             SecurityTier::PassphraseKeyfile | SecurityTier::DeviceKeyfile
         ) && args.keyfile_path.is_none()
         {
-            let input: String = Input::new()
+            let input: String = Input::with_theme(&theme)
                 .with_prompt("Keyfile path")
                 .default(keyfile_path.to_string_lossy().to_string())
                 .interact_text()?;
@@ -156,12 +191,13 @@ pub fn handle_init(ctx: &AppContext, args: &InitArgs) -> anyhow::Result<()> {
         }
 
         if args.config_path.is_none() {
-            let input: String = Input::new()
+            let input: String = Input::with_theme(&theme)
                 .with_prompt("Ledger config path")
                 .default(config_path.to_string_lossy().to_string())
                 .interact_text()?;
             config_path = std::path::PathBuf::from(input);
         }
+        println!();
     }
 
     let (ledger_passphrase, keyfile_mode, keyfile_path_value) = match tier {
@@ -197,6 +233,12 @@ pub fn handle_init(ctx: &AppContext, args: &InitArgs) -> anyhow::Result<()> {
         })?;
     }
 
+    // Print review step before creating
+    if !effective_no_input && ui_ctx.mode.is_pretty() {
+        let review_step = if args.advanced { 5 } else { 4 };
+        print_step(&ui_ctx, review_step, total_steps, "Creating ledger");
+    }
+
     let device_id = AgeSqliteStorage::create(&ledger_path, &ledger_passphrase)?;
     let mut storage = AgeSqliteStorage::open(&ledger_path, &ledger_passphrase)?;
     ensure_journal_entry_type(&mut storage, device_id)?;
@@ -219,9 +261,9 @@ pub fn handle_init(ctx: &AppContext, args: &InitArgs) -> anyhow::Result<()> {
     }
 
     if !ctx.quiet() {
-        let ui_ctx = ctx.ui_context(false, None);
         match ui_ctx.mode {
             OutputMode::Pretty => {
+                println!();
                 print(
                     &ui_ctx,
                     &badge(
@@ -250,6 +292,15 @@ pub fn handle_init(ctx: &AppContext, args: &InitArgs) -> anyhow::Result<()> {
                         ),
                     );
                 }
+                // Next step hints
+                println!();
+                print(
+                    &ui_ctx,
+                    &hint(
+                        &ui_ctx,
+                        "ledger add journal  \u{00B7}  ledger list  \u{00B7}  ledger --help",
+                    ),
+                );
             }
             OutputMode::Plain | OutputMode::Json => {
                 println!("status=ok");

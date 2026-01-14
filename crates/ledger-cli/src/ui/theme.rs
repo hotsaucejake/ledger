@@ -3,12 +3,14 @@
 use owo_colors::{OwoColorize, Style};
 
 /// Symbol pair for ASCII and Unicode variants.
+#[allow(dead_code)]
 #[derive(Debug, Clone)]
 pub struct SymbolPair {
     pub ascii: &'static str,
     pub unicode: &'static str,
 }
 
+#[allow(dead_code)]
 impl SymbolPair {
     pub const fn new(ascii: &'static str, unicode: &'static str) -> Self {
         Self { ascii, unicode }
@@ -35,6 +37,7 @@ pub enum Badge {
 
 impl Badge {
     /// Get badge text (e.g., "[OK]")
+    #[allow(dead_code)]
     pub fn text(&self) -> &'static str {
         match self {
             Self::Ok => "[OK]",
@@ -104,21 +107,25 @@ pub mod styles {
     }
 
     /// Success style (green)
+    #[allow(dead_code)]
     pub fn success() -> Style {
         Style::new().green()
     }
 
     /// Warning style (yellow)
+    #[allow(dead_code)]
     pub fn warning() -> Style {
         Style::new().yellow()
     }
 
     /// Error style (red)
+    #[allow(dead_code)]
     pub fn error() -> Style {
         Style::new().red()
     }
 
     /// Info style (cyan)
+    #[allow(dead_code)]
     pub fn info() -> Style {
         Style::new().cyan()
     }
@@ -134,6 +141,7 @@ pub fn styled(text: &str, style: Style, color_enabled: bool) -> String {
 }
 
 /// Theme configuration for UI rendering.
+#[allow(dead_code)]
 #[derive(Debug, Clone)]
 pub struct Theme {
     /// Spinner frames for unicode mode
@@ -142,6 +150,7 @@ pub struct Theme {
     pub spinner_ascii: &'static [&'static str],
 }
 
+#[allow(dead_code)]
 impl Default for Theme {
     fn default() -> Self {
         Self {
@@ -164,6 +173,7 @@ impl Default for Theme {
     }
 }
 
+#[allow(dead_code)]
 impl Theme {
     /// Get spinner frames based on unicode setting.
     pub fn spinner_frames(&self, unicode: bool) -> &'static [&'static str] {

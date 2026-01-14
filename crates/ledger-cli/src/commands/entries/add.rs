@@ -1,5 +1,7 @@
 //! Add entry command handler with template-first prompting.
 
+use std::io::IsTerminal;
+
 use uuid::Uuid;
 
 use ledger_core::storage::{NewEntry, StorageEngine};
@@ -10,12 +12,29 @@ use crate::helpers::{
     parse_cli_fields, parse_datetime, prompt_for_fields, require_entry_type, FieldDef,
     TemplateDefaults,
 };
-use crate::ui::{badge, print, short_id, Badge, OutputMode};
+use crate::ui::theme::{styled, styles};
+use crate::ui::{badge, hint, print, short_id, Badge, OutputMode, UiContext};
+
+/// Print a step indicator for the add wizard flow.
+fn print_step(ctx: &UiContext, step: usize, total: usize, title: &str) {
+    if !ctx.mode.is_pretty() {
+        return;
+    }
+    let progress = format!("{}/{}", step, total);
+    let progress_styled = styled(&progress, styles::dim(), ctx.color);
+    let title_styled = styled(title, styles::bold(), ctx.color);
+    println!("{}  {}", progress_styled, title_styled);
+}
 
 pub fn handle_add(ctx: &AppContext, args: &AddArgs) -> anyhow::Result<()> {
     let (mut storage, passphrase) = ctx.open_storage(args.no_input)?;
     let entry_type_record = require_entry_type(&storage, &args.entry_type)?;
     let metadata = storage.metadata()?;
+
+    // Create UI context for step indicators
+    let ui_ctx = ctx.ui_context(false, None);
+    let interactive = std::io::stdin().is_terminal() && !args.no_input;
+    let needs_prompting = args.body.is_none() && args.fields.is_empty();
 
     // Get template (explicit or default)
     let template = if let Some(ref template_name) = args.template {
@@ -61,6 +80,13 @@ pub fn handle_add(ctx: &AppContext, args: &AddArgs) -> anyhow::Result<()> {
 
     // Get editor override
     let editor_override = ctx.editor()?;
+
+    // Print wizard header if interactive
+    if interactive && needs_prompting && ui_ctx.mode.is_pretty() {
+        let header = styled("Ledger", styles::bold(), ui_ctx.color);
+        println!("{} \u{00B7} add ({})\n", header, args.entry_type);
+        print_step(&ui_ctx, 1, 2, "Enter fields");
+    }
 
     // Prompt for fields based on schema and template defaults
     let data = prompt_for_fields(
@@ -137,15 +163,32 @@ pub fn handle_add(ctx: &AppContext, args: &AddArgs) -> anyhow::Result<()> {
     storage.close(&passphrase)?;
 
     if !ctx.quiet() {
-        let ui_ctx = ctx.ui_context(false, None);
         match ui_ctx.mode {
             OutputMode::Pretty => {
+                if interactive && needs_prompting {
+                    println!();
+                    print_step(&ui_ctx, 2, 2, "Creating entry");
+                }
+                println!();
                 print(
                     &ui_ctx,
                     &badge(
                         &ui_ctx,
                         Badge::Ok,
                         &format!("Added {} entry {}", args.entry_type, short_id(&entry_id)),
+                    ),
+                );
+                // Next step hints
+                println!();
+                print(
+                    &ui_ctx,
+                    &hint(
+                        &ui_ctx,
+                        &format!(
+                            "ledger show {}  \u{00B7}  ledger list  \u{00B7}  ledger edit {}",
+                            short_id(&entry_id),
+                            short_id(&entry_id)
+                        ),
                     ),
                 );
             }

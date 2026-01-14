@@ -8,6 +8,7 @@ use super::mode::OutputMode;
 #[derive(Debug, Clone)]
 pub struct UiContext {
     /// Whether stdout is a TTY
+    #[allow(dead_code)]
     pub is_tty: bool,
     /// Whether color output is enabled
     pub color: bool,
@@ -59,11 +60,13 @@ impl UiContext {
     }
 
     /// Check if interactive prompts are allowed.
+    #[allow(dead_code)]
     pub fn is_interactive(&self) -> bool {
         self.is_tty && std::io::stdin().is_terminal()
     }
 
     /// Check if animations (spinners, progress) are allowed.
+    #[allow(dead_code)]
     pub fn allows_animation(&self) -> bool {
         self.is_tty && self.mode == OutputMode::Pretty
     }

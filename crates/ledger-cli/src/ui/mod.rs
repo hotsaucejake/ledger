@@ -28,9 +28,12 @@
 //! ```
 
 mod context;
+#[allow(dead_code)]
 pub mod format;
 mod mode;
+#[allow(dead_code)]
 pub mod progress;
+#[allow(dead_code)]
 pub mod prompt;
 pub mod render;
 pub mod theme;
@@ -42,18 +45,12 @@ pub use theme::Badge;
 
 // Re-export commonly used render functions
 pub use render::{
-    badge, blank_line, divider, header, hint, kv, print, receipt, simple_table, table, Column,
+    badge, blank_line, divider, header, header_with_context, hint, kv, print, print_error,
+    simple_table, Column,
 };
 
-// Re-export progress types
-pub use progress::{ProgressBar, Spinner, StepList};
-
-// Re-export prompt types and functions
-pub use prompt::{
-    add_wizard, init_wizard, print_cancelled, prompt_confirm, prompt_input, prompt_passphrase,
-    prompt_select, AddWizardField, AddWizardResult, InitWizardResult, TemplateChoice, Wizard,
-    WizardStep,
-};
+// Re-export progress types (for future P2 use)
+pub use progress::StepList;
 
 // Re-export commonly used format functions
-pub use format::{format_bytes, format_datetime, format_duration_secs, short_id, truncate};
+pub use format::{format_bytes, short_id, truncate};
