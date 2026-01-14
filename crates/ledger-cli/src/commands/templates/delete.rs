@@ -5,6 +5,7 @@ use ledger_core::storage::StorageEngine;
 
 use crate::app::AppContext;
 use crate::cli::TemplateDeleteArgs;
+use crate::ui::{badge, print, Badge, OutputMode};
 
 pub fn handle_delete(ctx: &AppContext, args: &TemplateDeleteArgs) -> anyhow::Result<()> {
     let (mut storage, passphrase) = ctx.open_storage(false)?;
@@ -19,6 +20,8 @@ pub fn handle_delete(ctx: &AppContext, args: &TemplateDeleteArgs) -> anyhow::Res
     let template =
         template.ok_or_else(|| anyhow::anyhow!("Template '{}' not found", args.name_or_id))?;
 
+    let ui_ctx = ctx.ui_context(false, None);
+
     if !args.force {
         let confirmed = Confirm::new()
             .with_prompt(format!("Delete template '{}'?", template.name))
@@ -27,7 +30,14 @@ pub fn handle_delete(ctx: &AppContext, args: &TemplateDeleteArgs) -> anyhow::Res
 
         if !confirmed {
             if !ctx.quiet() {
-                println!("Cancelled.");
+                match ui_ctx.mode {
+                    OutputMode::Pretty => {
+                        print(&ui_ctx, &badge(&ui_ctx, Badge::Info, "Cancelled"));
+                    }
+                    OutputMode::Plain | OutputMode::Json => {
+                        println!("status=cancelled");
+                    }
+                }
             }
             return Ok(());
         }
@@ -38,7 +48,18 @@ pub fn handle_delete(ctx: &AppContext, args: &TemplateDeleteArgs) -> anyhow::Res
     storage.close(&passphrase)?;
 
     if !ctx.quiet() {
-        println!("Deleted template '{}'", name);
+        match ui_ctx.mode {
+            OutputMode::Pretty => {
+                print(
+                    &ui_ctx,
+                    &badge(&ui_ctx, Badge::Ok, &format!("Deleted template '{}'", name)),
+                );
+            }
+            OutputMode::Plain | OutputMode::Json => {
+                println!("status=ok");
+                println!("deleted={}", name);
+            }
+        }
     }
     Ok(())
 }

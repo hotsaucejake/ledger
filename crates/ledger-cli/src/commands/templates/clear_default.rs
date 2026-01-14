@@ -3,6 +3,7 @@ use ledger_core::storage::StorageEngine;
 use crate::app::AppContext;
 use crate::cli::TemplateClearDefaultArgs;
 use crate::helpers::require_entry_type;
+use crate::ui::{badge, print, Badge, OutputMode};
 
 pub fn handle_clear_default(
     ctx: &AppContext,
@@ -15,7 +16,23 @@ pub fn handle_clear_default(
     storage.close(&passphrase)?;
 
     if !ctx.quiet() {
-        println!("Cleared default template for '{}'", args.entry_type);
+        let ui_ctx = ctx.ui_context(false, None);
+        match ui_ctx.mode {
+            OutputMode::Pretty => {
+                print(
+                    &ui_ctx,
+                    &badge(
+                        &ui_ctx,
+                        Badge::Ok,
+                        &format!("Cleared default template for '{}'", args.entry_type),
+                    ),
+                );
+            }
+            OutputMode::Plain | OutputMode::Json => {
+                println!("status=ok");
+                println!("entry_type={}", args.entry_type);
+            }
+        }
     }
     Ok(())
 }

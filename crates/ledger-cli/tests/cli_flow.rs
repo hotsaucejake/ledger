@@ -1977,7 +1977,9 @@ fn test_cli_templates_crud() {
         String::from_utf8_lossy(&update.stderr)
     );
     let stdout = String::from_utf8_lossy(&update.stdout);
-    assert!(stdout.contains("version 2"));
+    // Plain mode output: status=ok, name=..., version=2
+    assert!(stdout.contains("status=ok"));
+    assert!(stdout.contains("version=2"));
 
     // Delete template
     let mut delete = Command::new(bin());
