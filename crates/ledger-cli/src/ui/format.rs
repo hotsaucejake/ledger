@@ -126,6 +126,38 @@ pub fn single_line(s: &str) -> String {
     s.replace('\n', " ").replace('\r', "")
 }
 
+/// Highlight occurrences of a query in text (case-insensitive).
+///
+/// When color is enabled, matches are styled with bold.
+/// Returns the text with ANSI codes for highlighting.
+pub fn highlight_matches(text: &str, query: &str, color: bool) -> String {
+    if query.is_empty() || !color {
+        return text.to_string();
+    }
+
+    let text_lower = text.to_lowercase();
+    let query_lower = query.to_lowercase();
+
+    // Find all match positions
+    let mut result = String::new();
+    let mut last_end = 0;
+
+    for (start, _) in text_lower.match_indices(&query_lower) {
+        // Add text before match
+        result.push_str(&text[last_end..start]);
+        // Add highlighted match (bold)
+        let match_text = &text[start..start + query.len()];
+        result.push_str("\x1b[1m"); // Bold
+        result.push_str(match_text);
+        result.push_str("\x1b[22m"); // Reset bold
+        last_end = start + query.len();
+    }
+
+    // Add remaining text
+    result.push_str(&text[last_end..]);
+    result
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -200,5 +232,44 @@ mod tests {
     fn test_single_line() {
         assert_eq!(single_line("hello\nworld"), "hello world");
         assert_eq!(single_line("no newlines"), "no newlines");
+    }
+
+    #[test]
+    fn test_highlight_matches_basic() {
+        // With color enabled, should add bold markers
+        let result = highlight_matches("hello world", "world", true);
+        assert!(result.contains("\x1b[1m")); // Bold start
+        assert!(result.contains("\x1b[22m")); // Bold end
+        assert!(result.contains("world"));
+    }
+
+    #[test]
+    fn test_highlight_matches_no_color() {
+        // Without color, should return original text
+        let result = highlight_matches("hello world", "world", false);
+        assert_eq!(result, "hello world");
+    }
+
+    #[test]
+    fn test_highlight_matches_case_insensitive() {
+        // Should match case-insensitively
+        let result = highlight_matches("Hello World", "world", true);
+        assert!(result.contains("\x1b[1m")); // Should still highlight
+        assert!(result.contains("World")); // Original case preserved
+    }
+
+    #[test]
+    fn test_highlight_matches_empty_query() {
+        // Empty query should return original text
+        let result = highlight_matches("hello world", "", true);
+        assert_eq!(result, "hello world");
+    }
+
+    #[test]
+    fn test_highlight_matches_multiple() {
+        // Multiple occurrences should all be highlighted
+        let result = highlight_matches("hello hello hello", "hello", true);
+        // Should have 3 bold sequences
+        assert_eq!(result.matches("\x1b[1m").count(), 3);
     }
 }

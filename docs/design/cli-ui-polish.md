@@ -85,12 +85,19 @@ Path: .../ledger.ledger
 Using cached passphrase (expires in 1m40s)
 ```
 
-**Current**: No cache state shown
+**Current**: Shows "Using cached passphrase" on cache hit (implemented in passphrase.rs:38-40)
 
-**Fix**:
-1. Add cache state query to `AppContext`
-2. Add optional cache state line to `header()` or new `status_line()` primitive
-3. Show TTL remaining when cache is active
+**Partial Fix** (implemented):
+- Displays "Using cached passphrase" message when cache is used
+- Message goes to stderr so it doesn't interfere with command output
+
+**Future Enhancement** (requires protocol extension):
+To show TTL remaining would require:
+1. Add a `TTL <ledger-path-hash>` command to cache daemon protocol
+2. Add `cache_ttl_remaining()` client function
+3. Query TTL at storage open time and include in message
+
+The cache daemon currently only supports PING, GET, STORE, CLEAR commands.
 
 ---
 
@@ -368,11 +375,11 @@ error=...
 - [x] Consistent error hint formatting (print_error in main.rs)
 
 ### P2 (Nice to have)
-- [ ] Column width constraints
-- [ ] Cache state line in headers
-- [ ] Search result highlighting
-- [ ] Progress bar for backup
-- [ ] Progress bar for export
+- [x] Column width constraints
+- [x] Cache state line in headers (partial - shows "Using cached passphrase", TTL requires protocol extension)
+- [x] Search result highlighting
+- [x] Progress bar for backup
+- [x] Progress bar for export
 - [x] Enhanced receipts with context
 - [x] Next-step hints after actions
 - [x] Better error messages

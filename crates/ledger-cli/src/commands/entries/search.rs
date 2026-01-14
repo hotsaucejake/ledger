@@ -6,8 +6,8 @@ use crate::cli::SearchArgs;
 use crate::helpers::{parse_duration, require_entry_type};
 use crate::output::{entries_json, entry_type_name_map};
 use crate::ui::{
-    blank_line, entry_summary, header_with_context, hint, print, short_id, simple_table, truncate,
-    Column, OutputMode,
+    blank_line, entry_summary, header_with_context, highlight_matches, hint, print, short_id,
+    simple_table, truncate, Column, OutputMode,
 };
 
 const TABLE_SUMMARY_MAX: usize = 80;
@@ -120,11 +120,15 @@ pub fn handle_search(ctx: &AppContext, args: &SearchArgs) -> anyhow::Result<()> 
                     } else {
                         entry.tags.join(", ")
                     };
+                    // Get summary and highlight matches
+                    let summary = truncate(&entry_summary(entry), TABLE_SUMMARY_MAX);
+                    let highlighted_summary =
+                        highlight_matches(&summary, &args.query, ui_ctx.color);
                     vec![
                         short_id(&entry.id),
                         entry.created_at.format("%Y-%m-%d %H:%M").to_string(),
                         type_name,
-                        truncate(&entry_summary(entry), TABLE_SUMMARY_MAX),
+                        highlighted_summary,
                         tags_display,
                     ]
                 })

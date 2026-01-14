@@ -2,7 +2,9 @@
 
 use comfy_table::modifiers::UTF8_ROUND_CORNERS;
 use comfy_table::presets::UTF8_FULL;
-use comfy_table::{Attribute, Cell, ContentArrangement, Table as ComfyTable};
+use comfy_table::{
+    Attribute, Cell, ColumnConstraint, ContentArrangement, Table as ComfyTable, Width,
+};
 
 use super::context::UiContext;
 use super::mode::OutputMode;
@@ -184,10 +186,9 @@ pub fn table(ctx: &UiContext, columns: &[Column], rows: &[Vec<String>]) -> Strin
         // Apply column widths if specified
         for (i, col) in columns.iter().enumerate() {
             if let Some(width) = col.width {
-                table.set_width(width as u16);
-                let _ = table
-                    .column_mut(i)
-                    .map(|c| c.set_constraint(comfy_table::ColumnConstraint::ContentWidth));
+                if let Some(column) = table.column_mut(i) {
+                    column.set_constraint(ColumnConstraint::Absolute(Width::Fixed(width as u16)));
+                }
             }
         }
 
@@ -222,10 +223,13 @@ pub fn simple_table(ctx: &UiContext, columns: &[Column], rows: &[Vec<String>]) -
             .collect();
         table.set_header(header_cells);
 
-        // Add padding between columns
-        for i in 0..columns.len() {
+        // Add padding and apply column widths if specified
+        for (i, col) in columns.iter().enumerate() {
             if let Some(column) = table.column_mut(i) {
                 column.set_padding((0, 2)); // 0 left, 2 right padding
+                if let Some(width) = col.width {
+                    column.set_constraint(ColumnConstraint::Absolute(Width::Fixed(width as u16)));
+                }
             }
         }
 
@@ -621,5 +625,54 @@ mod tests {
         let e_plain = error_message(&ctx_plain, "Something went wrong", Some("Try again"));
         assert!(e_plain.contains("error=Something went wrong"));
         assert!(e_plain.contains("hint=Try again"));
+    }
+
+    #[test]
+    fn test_column_with_width() {
+        // Verify Column::with_width creates correct constraint
+        let col = Column::with_width("Summary", 20);
+        assert_eq!(col.header, "Summary");
+        assert_eq!(col.width, Some(20));
+    }
+
+    #[test]
+    fn test_table_column_width_constraint() {
+        let ctx = pretty_ctx();
+        let columns = [
+            Column::new("ID"),
+            Column::with_width("Summary", 15), // Force 15 char width
+        ];
+        let rows = vec![
+            vec!["abc".to_string(), "short".to_string()],
+            vec![
+                "def".to_string(),
+                "a very long summary that exceeds the width".to_string(),
+            ],
+        ];
+        let t = table(&ctx, &columns, &rows);
+        // Table should still render with all content
+        assert!(t.contains("ID"));
+        assert!(t.contains("Summary"));
+        assert!(t.contains("abc"));
+        assert!(t.contains("short"));
+        // Long content may be wrapped or truncated due to width constraint
+        // but the table should still be valid
+        assert!(t.lines().count() > 0);
+    }
+
+    #[test]
+    fn test_simple_table_column_width_constraint() {
+        let ctx = pretty_ctx();
+        let columns = [
+            Column::new("ID"),
+            Column::with_width("Summary", 20), // Force 20 char width
+        ];
+        let rows = vec![vec!["abc".to_string(), "test summary".to_string()]];
+        let t = simple_table(&ctx, &columns, &rows);
+        // Table should render with all content
+        assert!(t.contains("ID"));
+        assert!(t.contains("Summary"));
+        assert!(t.contains("abc"));
+        assert!(t.contains("test summary"));
     }
 }

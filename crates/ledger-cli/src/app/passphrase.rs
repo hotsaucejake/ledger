@@ -34,7 +34,12 @@ pub fn open_storage_with_retry(
     if let Some(config) = cache_config.as_ref() {
         if let Ok(Some(passphrase)) = cache_get(config) {
             match AgeSqliteStorage::open(target_path, &passphrase) {
-                Ok(storage) => return Ok((storage, passphrase)),
+                Ok(storage) => {
+                    if interactive && !cli.quiet {
+                        eprintln!("Using cached passphrase");
+                    }
+                    return Ok((storage, passphrase));
+                }
                 Err(err) if is_incorrect_passphrase_error(&err) => {
                     let _ = cache_clear(&config.socket_path);
                 }
