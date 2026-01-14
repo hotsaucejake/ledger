@@ -1,7 +1,18 @@
 //! String formatting utilities for UI rendering.
 
 use chrono::{DateTime, Utc};
+use ledger_core::storage::Entry;
 use uuid::Uuid;
+
+/// Extract a summary from an entry's data, preferring the "body" field.
+pub fn entry_summary(entry: &Entry) -> String {
+    entry
+        .data
+        .get("body")
+        .and_then(|v| v.as_str())
+        .map(String::from)
+        .unwrap_or_else(|| entry.data.to_string())
+}
 
 /// Truncate a string to max length, adding ellipsis if needed.
 pub fn truncate(s: &str, max_len: usize) -> String {

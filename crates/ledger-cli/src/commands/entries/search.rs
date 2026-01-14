@@ -6,21 +6,11 @@ use crate::cli::SearchArgs;
 use crate::helpers::{parse_duration, require_entry_type};
 use crate::output::{entries_json, entry_type_name_map};
 use crate::ui::{
-    blank_line, header_with_context, hint, print, short_id, simple_table, truncate, Column,
-    OutputMode,
+    blank_line, entry_summary, header_with_context, hint, print, short_id, simple_table, truncate,
+    Column, OutputMode,
 };
 
 const TABLE_SUMMARY_MAX: usize = 80;
-
-/// Extract a summary from an entry's data, preferring the "body" field.
-fn entry_summary(entry: &ledger_core::storage::Entry) -> String {
-    entry
-        .data
-        .get("body")
-        .and_then(|v| v.as_str())
-        .map(String::from)
-        .unwrap_or_else(|| entry.data.to_string())
-}
 
 pub fn handle_search(ctx: &AppContext, args: &SearchArgs) -> anyhow::Result<()> {
     let (storage, _passphrase) = ctx.open_storage(false)?;

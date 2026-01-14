@@ -53,4 +53,4 @@ pub use render::{
 pub use progress::StepList;
 
 // Re-export commonly used format functions
-pub use format::{format_bytes, short_id, truncate};
+pub use format::{entry_summary, format_bytes, short_id, truncate};

@@ -40,15 +40,75 @@ fn main() {
     }
 }
 
-/// Extract a hint from an error message if it contains "Hint:" or similar patterns.
+/// Extract a hint from an error message if it contains "Hint:" or similar patterns,
+/// or provide contextual hints for common error types.
 fn extract_error_hint(error: &str) -> Option<String> {
-    // Check for common hint patterns in error messages
+    // Check for explicit hint patterns in error messages
     if let Some(idx) = error.find("\nHint:") {
         return Some(error[idx + 1..].to_string());
     }
     if let Some(idx) = error.find("\nhint:") {
         return Some(error[idx + 1..].to_string());
     }
+
+    // Provide contextual hints for common error patterns
+    let error_lower = error.to_lowercase();
+
+    // Entry not found
+    if error_lower.contains("entry") && error_lower.contains("not found") {
+        return Some("Hint: Run `ledger list --last 7d` to find entry IDs.".to_string());
+    }
+
+    // Template not found
+    if error_lower.contains("template") && error_lower.contains("not found") {
+        return Some("Hint: Run `ledger template list` to see available templates.".to_string());
+    }
+
+    // Composition not found
+    if error_lower.contains("composition") && error_lower.contains("not found") {
+        return Some(
+            "Hint: Run `ledger composition list` to see available compositions.".to_string(),
+        );
+    }
+
+    // Invalid entry ID format
+    if error_lower.contains("invalid entry id") {
+        return Some(
+            "Hint: Entry IDs are UUIDs (e.g., 7a2e3c0b-1234-5678-9abc-def012345678). Use the first 8 characters as a shorthand.".to_string(),
+        );
+    }
+
+    // Ledger not initialized
+    if error_lower.contains("not initialized") || error_lower.contains("config not found") {
+        return Some("Hint: Run `ledger init` to create a new ledger.".to_string());
+    }
+
+    // Wrong passphrase
+    if error_lower.contains("wrong passphrase") || error_lower.contains("decryption failed") {
+        return Some("Hint: Check your passphrase. Set LEDGER_PASSPHRASE env var or use --no-input with a keyfile.".to_string());
+    }
+
+    // Entry type not found
+    if error_lower.contains("entry type") && error_lower.contains("not found") {
+        return Some(
+            "Hint: Valid entry types are 'journal' (built-in). Custom types require manual setup."
+                .to_string(),
+        );
+    }
+
+    // Backup destination issues
+    if error_lower.contains("backup") && error_lower.contains("destination") {
+        return Some(
+            "Hint: Ensure the destination path is writable and the parent directory exists."
+                .to_string(),
+        );
+    }
+
+    // Integrity check failed
+    if error_lower.contains("integrity") && error_lower.contains("failed") {
+        return Some("Hint: Restore from a backup with `ledger backup --restore <file>` or export data first.".to_string());
+    }
+
     None
 }
 

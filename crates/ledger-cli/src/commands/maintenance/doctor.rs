@@ -28,24 +28,22 @@ pub fn handle_doctor(ctx: &AppContext, args: &DoctorArgs) -> anyhow::Result<()> 
         )
     })?;
 
-    // Run checks with step list
-    match ui_ctx.mode {
-        OutputMode::Pretty => {
-            println!("{}", header(&ui_ctx, "doctor", None));
-            println!();
+    // Run integrity check first
+    let integrity_result = storage.check_integrity();
 
-            let mut steps =
-                StepList::new(&ui_ctx, &["Config file", "Ledger file", "Integrity check"]);
+    // Handle errors (always output, regardless of quiet)
+    if let Err(ref err) = integrity_result {
+        match ui_ctx.mode {
+            OutputMode::Pretty => {
+                println!("{}", header(&ui_ctx, "doctor", None));
+                println!();
 
-            // Config check (already passed if we got here)
-            steps.ok();
-
-            // Ledger check (already passed if we got here)
-            steps.ok();
-
-            // Integrity check
-            if let Err(err) = storage.check_integrity() {
+                let mut steps =
+                    StepList::new(&ui_ctx, &["Config file", "Ledger file", "Integrity check"]);
+                steps.ok();
+                steps.ok();
                 steps.err();
+
                 println!();
                 println!("{}", badge(&ui_ctx, Badge::Err, "Doctor failed"));
                 println!("  {}", kv(&ui_ctx, "Error", &err.to_string()));
@@ -57,25 +55,35 @@ pub fn handle_doctor(ctx: &AppContext, args: &DoctorArgs) -> anyhow::Result<()> 
                         "Restore from a backup or export data before retrying."
                     )
                 );
-                return Err(anyhow::anyhow!("Doctor failed"));
             }
-            steps.ok();
-
-            println!();
-            println!("{}", badge(&ui_ctx, Badge::Ok, "Ledger is healthy"));
-        }
-        OutputMode::Plain | OutputMode::Json => {
-            // Plain output for scripts
-            if let Err(err) = storage.check_integrity() {
+            OutputMode::Plain | OutputMode::Json => {
                 println!("check=config ok");
                 println!("check=ledger ok");
                 println!("check=integrity err");
                 println!("error={}", err);
                 println!("status=failed");
-                return Err(anyhow::anyhow!("Doctor failed"));
             }
+        }
+        return Err(anyhow::anyhow!("Doctor failed"));
+    }
 
-            if !ctx.quiet() {
+    // Handle success (respect quiet flag)
+    if !ctx.quiet() {
+        match ui_ctx.mode {
+            OutputMode::Pretty => {
+                println!("{}", header(&ui_ctx, "doctor", None));
+                println!();
+
+                let mut steps =
+                    StepList::new(&ui_ctx, &["Config file", "Ledger file", "Integrity check"]);
+                steps.ok();
+                steps.ok();
+                steps.ok();
+
+                println!();
+                println!("{}", badge(&ui_ctx, Badge::Ok, "Ledger is healthy"));
+            }
+            OutputMode::Plain | OutputMode::Json => {
                 println!("check=config ok");
                 println!("check=ledger ok");
                 println!("check=integrity ok");

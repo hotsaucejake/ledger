@@ -4,7 +4,8 @@ use ledger_core::storage::StorageEngine;
 
 use crate::app::AppContext;
 use crate::cli::DetachArgs;
-use crate::ui::{badge, print, Badge, OutputMode};
+use crate::ui::theme::{styled, styles};
+use crate::ui::{badge, blank_line, hint, print, short_id, Badge, OutputMode};
 
 pub fn handle_detach(ctx: &AppContext, args: &DetachArgs) -> anyhow::Result<()> {
     let (mut storage, passphrase) = ctx.open_storage(false)?;
@@ -38,10 +39,23 @@ pub fn handle_detach(ctx: &AppContext, args: &DetachArgs) -> anyhow::Result<()> 
             OutputMode::Pretty => {
                 print(
                     &ui_ctx,
-                    &badge(
+                    &badge(&ui_ctx, Badge::Ok, "Detached entry from composition"),
+                );
+                // Context line with entry ID and composition name
+                let context = format!(
+                    "Entry: {}  \u{00B7}  Composition: {}",
+                    short_id(&entry_id),
+                    composition.name
+                );
+                let context_styled = styled(&context, styles::dim(), ui_ctx.color);
+                println!("{}", context_styled);
+                // Next step hints
+                blank_line(&ui_ctx);
+                print(
+                    &ui_ctx,
+                    &hint(
                         &ui_ctx,
-                        Badge::Ok,
-                        &format!("Detached entry from '{}'", composition.name),
+                        &format!("ledger show {}  \u{00B7}  ledger list", short_id(&entry_id)),
                     ),
                 );
             }
@@ -49,6 +63,7 @@ pub fn handle_detach(ctx: &AppContext, args: &DetachArgs) -> anyhow::Result<()> 
                 println!("status=ok");
                 println!("entry_id={}", entry_id);
                 println!("composition={}", composition.name);
+                println!("composition_id={}", composition.id);
             }
         }
     }

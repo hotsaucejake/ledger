@@ -13,7 +13,7 @@ use crate::helpers::{
     TemplateDefaults,
 };
 use crate::ui::theme::{styled, styles};
-use crate::ui::{badge, hint, print, short_id, Badge, OutputMode, UiContext};
+use crate::ui::{badge, blank_line, hint, print, short_id, Badge, OutputMode, UiContext};
 
 /// Print a step indicator for the add wizard flow.
 fn print_step(ctx: &UiContext, step: usize, total: usize, title: &str) {
@@ -163,23 +163,40 @@ pub fn handle_add(ctx: &AppContext, args: &AddArgs) -> anyhow::Result<()> {
     storage.close(&passphrase)?;
 
     if !ctx.quiet() {
+        // Get created timestamp for receipt
+        let created_at = new_entry
+            .created_at
+            .unwrap_or_else(chrono::Utc::now)
+            .format("%Y-%m-%d %H:%M UTC")
+            .to_string();
+        let tag_count = new_entry.tags.len();
+
         match ui_ctx.mode {
             OutputMode::Pretty => {
                 if interactive && needs_prompting {
                     println!();
                     print_step(&ui_ctx, 2, 2, "Creating entry");
                 }
-                println!();
+                blank_line(&ui_ctx);
                 print(
                     &ui_ctx,
                     &badge(
                         &ui_ctx,
                         Badge::Ok,
-                        &format!("Added {} entry {}", args.entry_type, short_id(&entry_id)),
+                        &format!("Added {} entry", args.entry_type),
                     ),
                 );
+                // Context line with ID, timestamp, and tag count
+                let context = format!(
+                    "ID: {}  \u{00B7}  {}  \u{00B7}  tags: {}",
+                    short_id(&entry_id),
+                    created_at,
+                    tag_count
+                );
+                let context_styled = styled(&context, styles::dim(), ui_ctx.color);
+                println!("{}", context_styled);
                 // Next step hints
-                println!();
+                blank_line(&ui_ctx);
                 print(
                     &ui_ctx,
                     &hint(
@@ -196,6 +213,8 @@ pub fn handle_add(ctx: &AppContext, args: &AddArgs) -> anyhow::Result<()> {
                 println!("status=ok");
                 println!("entry_id={}", entry_id);
                 println!("entry_type={}", args.entry_type);
+                println!("created_at={}", created_at);
+                println!("tag_count={}", tag_count);
             }
         }
     }

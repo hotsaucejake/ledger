@@ -373,14 +373,14 @@ error=...
 - [ ] Search result highlighting
 - [ ] Progress bar for backup
 - [ ] Progress bar for export
-- [ ] Enhanced receipts with context
-- [ ] Next-step hints after actions
-- [ ] Better error messages
-- [ ] Deduplicate `entry_summary()`
-- [ ] Consistent quiet handling
-- [ ] Remove old output module
-- [ ] Visual regression tests
-- [ ] Table alignment tests
+- [x] Enhanced receipts with context
+- [x] Next-step hints after actions
+- [x] Better error messages
+- [x] Deduplicate `entry_summary()`
+- [x] Consistent quiet handling
+- [x] Remove old output module
+- [x] Visual regression tests
+- [x] Table alignment tests
 
 ### P3 (Future)
 - [ ] (none currently identified)

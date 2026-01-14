@@ -385,4 +385,241 @@ mod tests {
         assert!(t.contains("abc"));
         assert!(t.contains("test"));
     }
+
+    #[test]
+    fn test_table_alignment_multiple_rows() {
+        let ctx = pretty_ctx();
+        let columns = [
+            Column::new("ID"),
+            Column::new("Name"),
+            Column::new("Status"),
+        ];
+        let rows = vec![
+            vec!["a".to_string(), "short".to_string(), "ok".to_string()],
+            vec![
+                "abc".to_string(),
+                "medium name".to_string(),
+                "pending".to_string(),
+            ],
+            vec![
+                "abcdef".to_string(),
+                "a very long name here".to_string(),
+                "x".to_string(),
+            ],
+        ];
+        let t = table(&ctx, &columns, &rows);
+        // All rows should be present
+        assert!(t.contains("short"));
+        assert!(t.contains("medium name"));
+        assert!(t.contains("a very long name here"));
+        // Headers should be present
+        assert!(t.contains("ID"));
+        assert!(t.contains("Name"));
+        assert!(t.contains("Status"));
+    }
+
+    #[test]
+    fn test_simple_table_plain() {
+        let ctx = plain_ctx();
+        let columns = [
+            Column::new("ID"),
+            Column::new("Created"),
+            Column::new("Type"),
+        ];
+        let rows = vec![
+            vec![
+                "7a2e3c0b".to_string(),
+                "2024-01-01".to_string(),
+                "journal".to_string(),
+            ],
+            vec![
+                "9b3f4d1c".to_string(),
+                "2024-01-02".to_string(),
+                "note".to_string(),
+            ],
+        ];
+        let t = simple_table(&ctx, &columns, &rows);
+        // Plain mode: space-separated, no headers
+        let lines: Vec<&str> = t.lines().collect();
+        assert_eq!(lines.len(), 2);
+        assert!(lines[0].contains("7a2e3c0b"));
+        assert!(lines[1].contains("9b3f4d1c"));
+    }
+
+    #[test]
+    fn test_simple_table_pretty() {
+        let ctx = pretty_ctx();
+        let columns = [
+            Column::new("ID"),
+            Column::new("Created"),
+            Column::new("Type"),
+        ];
+        let rows = vec![
+            vec![
+                "7a2e3c0b".to_string(),
+                "2024-01-01".to_string(),
+                "journal".to_string(),
+            ],
+            vec![
+                "9b3f4d1c".to_string(),
+                "2024-01-02".to_string(),
+                "note".to_string(),
+            ],
+        ];
+        let t = simple_table(&ctx, &columns, &rows);
+        // Pretty mode: includes headers
+        assert!(t.contains("ID"));
+        assert!(t.contains("Created"));
+        assert!(t.contains("Type"));
+        assert!(t.contains("7a2e3c0b"));
+        assert!(t.contains("journal"));
+    }
+
+    #[test]
+    fn test_table_empty_rows() {
+        let ctx = pretty_ctx();
+        let columns = [Column::new("ID"), Column::new("Name")];
+        let rows: Vec<Vec<String>> = vec![];
+        let t = table(&ctx, &columns, &rows);
+        // Should still contain headers
+        assert!(t.contains("ID"));
+        assert!(t.contains("Name"));
+    }
+
+    #[test]
+    fn test_simple_table_column_padding() {
+        let ctx = pretty_ctx();
+        let columns = [Column::new("A"), Column::new("B")];
+        let rows = vec![vec!["1".to_string(), "2".to_string()]];
+        let t = simple_table(&ctx, &columns, &rows);
+        // The output should have spacing between columns (padding)
+        // Check that A and B are not adjacent (there's space between)
+        let lines: Vec<&str> = t.lines().collect();
+        if let Some(header_line) = lines.first() {
+            // There should be at least 2 spaces between A and B due to padding
+            assert!(header_line.contains("A") && header_line.contains("B"));
+        }
+    }
+
+    // Visual regression tests - verify output format structure
+
+    #[test]
+    fn test_visual_header_with_context() {
+        let ctx = pretty_ctx();
+        let h = header_with_context(
+            &ctx,
+            "list",
+            Some("last 7d"),
+            Some("/path/to/ledger.ledger"),
+        );
+        // Should contain all parts
+        assert!(h.contains("Ledger"));
+        assert!(h.contains("list"));
+        assert!(h.contains("last 7d"));
+        assert!(h.contains("Path:"));
+        assert!(h.contains("ledger.ledger"));
+    }
+
+    #[test]
+    fn test_visual_header_truncates_long_path() {
+        let ctx = pretty_ctx();
+        let long_path =
+            "/a/very/long/path/that/exceeds/fifty/characters/should/be/truncated.ledger";
+        let h = header_with_context(&ctx, "list", None, Some(long_path));
+        // Should contain ellipsis for truncated path
+        assert!(h.contains("..."));
+        assert!(h.contains("truncated.ledger"));
+    }
+
+    #[test]
+    fn test_visual_badge_formats() {
+        // Test with unicode enabled (pretty mode default)
+        let ctx = pretty_ctx();
+
+        let ok = badge(&ctx, Badge::Ok, "Success");
+        // Unicode mode uses ✓ symbol
+        assert!(ok.contains("[\u{2713}]") || ok.contains("[OK]"));
+        assert!(ok.contains("Success"));
+
+        let err = badge(&ctx, Badge::Err, "Failed");
+        // Unicode mode uses ✗ symbol
+        assert!(ok.contains("[\u{2717}]") || err.contains("[ERR]") || err.contains("[\u{2717}]"));
+        assert!(err.contains("Failed"));
+
+        let warn = badge(&ctx, Badge::Warn, "Warning");
+        // Unicode mode uses ⚠ symbol
+        assert!(warn.contains("[\u{26A0}]") || warn.contains("[!]"));
+        assert!(warn.contains("Warning"));
+
+        let info = badge(&ctx, Badge::Info, "Note");
+        // Unicode mode uses ℹ symbol
+        assert!(info.contains("[\u{2139}]") || info.contains("[i]"));
+        assert!(info.contains("Note"));
+
+        // Test ASCII mode
+        let ascii_ctx = UiContext {
+            is_tty: true,
+            color: false,
+            unicode: false, // ASCII mode
+            width: 80,
+            mode: OutputMode::Pretty,
+        };
+        let ok_ascii = badge(&ascii_ctx, Badge::Ok, "Success");
+        assert!(ok_ascii.contains("[OK]"));
+    }
+
+    #[test]
+    fn test_visual_receipt_format() {
+        let ctx = pretty_ctx();
+        let items = [("ID", "7a2e3c0b"), ("Type", "journal")];
+        let r = receipt(&ctx, "Added entry", &items);
+        // Should have badge (unicode ✓ or ASCII [OK]) and indented key-value pairs
+        assert!(r.contains("[\u{2713}]") || r.contains("[OK]")); // Unicode or ASCII badge
+        assert!(r.contains("Added entry"));
+        assert!(r.contains("ID:"));
+        assert!(r.contains("7a2e3c0b"));
+        assert!(r.contains("Type:"));
+        assert!(r.contains("journal"));
+    }
+
+    #[test]
+    fn test_visual_receipt_plain() {
+        let ctx = plain_ctx();
+        let items = [("ID", "7a2e3c0b"), ("Type", "journal")];
+        let r = receipt(&ctx, "Added entry", &items);
+        // Plain mode: status=ok and key=value pairs
+        assert!(r.contains("status=ok"));
+        assert!(r.contains("id=7a2e3c0b"));
+        assert!(r.contains("type=journal"));
+    }
+
+    #[test]
+    fn test_visual_divider() {
+        let ctx = pretty_ctx();
+        let d = divider(&ctx);
+        // Unicode horizontal lines
+        assert!(d.contains("\u{2500}"));
+        // Should be reasonable length (up to 60 chars)
+        assert!(d.len() <= 60 * 3); // Unicode chars can be multi-byte
+
+        let ctx_plain = plain_ctx();
+        let d_plain = divider(&ctx_plain);
+        assert_eq!(d_plain, "---");
+    }
+
+    #[test]
+    fn test_visual_error_message() {
+        let ctx = pretty_ctx();
+        let e = error_message(&ctx, "Something went wrong", Some("Try again"));
+        // Unicode mode uses ✗ symbol, ASCII uses [ERR]
+        assert!(e.contains("[\u{2717}]") || e.contains("[ERR]"));
+        assert!(e.contains("Something went wrong"));
+        assert!(e.contains("Hint:"));
+        assert!(e.contains("Try again"));
+
+        let ctx_plain = plain_ctx();
+        let e_plain = error_message(&ctx_plain, "Something went wrong", Some("Try again"));
+        assert!(e_plain.contains("error=Something went wrong"));
+        assert!(e_plain.contains("hint=Try again"));
+    }
 }

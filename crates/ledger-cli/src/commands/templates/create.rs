@@ -1,9 +1,12 @@
+use chrono::Utc;
+
 use ledger_core::storage::{NewTemplate, StorageEngine};
 
 use crate::app::AppContext;
 use crate::cli::TemplateCreateArgs;
 use crate::helpers::require_entry_type;
-use crate::ui::{badge, print, short_id, Badge, OutputMode};
+use crate::ui::theme::{styled, styles};
+use crate::ui::{badge, blank_line, hint, print, short_id, Badge, OutputMode};
 
 pub fn handle_create(ctx: &AppContext, args: &TemplateCreateArgs) -> anyhow::Result<()> {
     let (mut storage, passphrase) = ctx.open_storage(false)?;
@@ -37,20 +40,20 @@ pub fn handle_create(ctx: &AppContext, args: &TemplateCreateArgs) -> anyhow::Res
 
     if !ctx.quiet() {
         let ui_ctx = ctx.ui_context(false, None);
+        let created_at = Utc::now().format("%Y-%m-%d %H:%M UTC").to_string();
+
         match ui_ctx.mode {
             OutputMode::Pretty => {
-                print(
-                    &ui_ctx,
-                    &badge(
-                        &ui_ctx,
-                        Badge::Ok,
-                        &format!(
-                            "Created template '{}' ({})",
-                            args.name,
-                            short_id(&template_id)
-                        ),
-                    ),
+                print(&ui_ctx, &badge(&ui_ctx, Badge::Ok, "Created template"));
+                // Context line with name, ID, and entry type
+                let context = format!(
+                    "Name: {}  \u{00B7}  ID: {}  \u{00B7}  type: {}",
+                    args.name,
+                    short_id(&template_id),
+                    args.entry_type
                 );
+                let context_styled = styled(&context, styles::dim(), ui_ctx.color);
+                println!("{}", context_styled);
                 if args.set_default {
                     print(
                         &ui_ctx,
@@ -61,14 +64,27 @@ pub fn handle_create(ctx: &AppContext, args: &TemplateCreateArgs) -> anyhow::Res
                         ),
                     );
                 }
+                // Next step hints
+                blank_line(&ui_ctx);
+                print(
+                    &ui_ctx,
+                    &hint(
+                        &ui_ctx,
+                        &format!(
+                            "ledger add {} --template {}  \u{00B7}  ledger template list",
+                            args.entry_type, args.name
+                        ),
+                    ),
+                );
             }
             OutputMode::Plain | OutputMode::Json => {
                 println!("status=ok");
                 println!("template_id={}", template_id);
                 println!("name={}", args.name);
+                println!("entry_type={}", args.entry_type);
+                println!("created_at={}", created_at);
                 if args.set_default {
                     println!("set_default=true");
-                    println!("entry_type={}", args.entry_type);
                 }
             }
         }
