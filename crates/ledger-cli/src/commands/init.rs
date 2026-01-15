@@ -245,11 +245,7 @@ pub fn handle_init(ctx: &AppContext, args: &InitArgs) -> anyhow::Result<()> {
         }
     };
 
-    let mut config_path = if let Some(ref value) = args.config_path {
-        std::path::PathBuf::from(value)
-    } else {
-        resolve_config_path()?
-    };
+    let config_path = resolve_config_path()?;
     let mut passphrase_cache_ttl_seconds = args.passphrase_cache_ttl_seconds.unwrap_or(0);
     let mut keyfile_path = if let Some(ref value) = args.keyfile_path {
         std::path::PathBuf::from(value)
@@ -436,15 +432,6 @@ pub fn handle_init(ctx: &AppContext, args: &InitArgs) -> anyhow::Result<()> {
             keyfile_path = std::path::PathBuf::from(input);
         }
 
-        if args.config_path.is_none() {
-            print_option_help(&ui_ctx, "Store Ledger settings separately from your data.");
-            let input: String = Input::with_theme(&theme)
-                .with_prompt("Ledger config path")
-                .completion_with(&path_completion)
-                .default(config_path.to_string_lossy().to_string())
-                .interact_text()?;
-            config_path = std::path::PathBuf::from(input);
-        }
         println!();
     }
 

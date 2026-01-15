@@ -73,7 +73,6 @@ Timezone [auto-detect]:
 Default editor [$EDITOR or nano]:
 Passphrase cache (seconds) [0]:
 Keyfile path (if applicable) [~/.config/ledger/ledger.key]:
-Ledger config path [~/.config/ledger/config.toml]:
 ```
 
 ---

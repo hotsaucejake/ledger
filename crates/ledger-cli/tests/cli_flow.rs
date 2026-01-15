@@ -1109,14 +1109,6 @@ fn test_cli_init_ui_fields() {
 fn test_cli_init_flags_skip_prompts() {
     let passphrase = "test-passphrase-secure-123";
     let (config_home, data_home) = temp_xdg_dirs("ledger_cli_init_flags");
-    let config_path = std::env::temp_dir().join(format!(
-        "ledger_config_flags_{}_{}.toml",
-        std::process::id(),
-        SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .expect("system time")
-            .as_nanos()
-    ));
 
     let mut init = Command::new(bin());
     init.arg("init")
@@ -1126,8 +1118,6 @@ fn test_cli_init_flags_skip_prompts() {
         .arg("vim")
         .arg("--passphrase-cache-ttl-seconds")
         .arg("120")
-        .arg("--config-path")
-        .arg(&config_path)
         .env("LEDGER_PASSPHRASE", passphrase);
     apply_xdg_env(&mut init, &config_home, &data_home);
     let init = init
@@ -1146,6 +1136,7 @@ fn test_cli_init_flags_skip_prompts() {
         String::from_utf8_lossy(&output.stderr)
     );
 
+    let config_path = config_home.join("ledger").join("config.toml");
     let contents = std::fs::read_to_string(&config_path).expect("read config");
     let value: toml::Value = contents.parse().expect("parse config");
     let ui = value.get("ui").expect("ui section");

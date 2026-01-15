@@ -55,10 +55,6 @@ pub struct InitArgs {
     /// Keyfile path override
     #[arg(long)]
     pub keyfile_path: Option<String>,
-
-    /// Config path override
-    #[arg(long)]
-    pub config_path: Option<String>,
 }
 
 /// Arguments for the `add` command
