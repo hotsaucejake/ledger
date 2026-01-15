@@ -21,7 +21,7 @@ use crate::ui::theme::{styled, styles};
 use crate::ui::{badge, banner, hint, print, Badge, OutputMode, UiContext};
 
 /// Print a step indicator for the wizard flow.
-fn print_step(ctx: &UiContext, step: usize, total: usize, title: &str) {
+fn print_step(ctx: &UiContext, step: usize, total: usize, title: &str, detail: Option<&str>) {
     if !ctx.mode.is_pretty() {
         return;
     }
@@ -29,6 +29,18 @@ fn print_step(ctx: &UiContext, step: usize, total: usize, title: &str) {
     let progress_styled = styled(&progress, styles::dim(), ctx.color);
     let title_styled = styled(title, styles::bold(), ctx.color);
     println!("{}  {}", progress_styled, title_styled);
+    if let Some(text) = detail {
+        let detail_styled = styled(text, styles::dim(), ctx.color);
+        println!("    {}", detail_styled);
+    }
+}
+
+fn print_option_help(ctx: &UiContext, text: &str) {
+    if !ctx.mode.is_pretty() {
+        return;
+    }
+    let detail_styled = styled(text, styles::dim(), ctx.color);
+    println!("  {}", detail_styled);
 }
 
 fn parse_timezone(value: &str) -> anyhow::Result<Option<String>> {
@@ -214,7 +226,13 @@ pub fn handle_init(ctx: &AppContext, args: &InitArgs) -> anyhow::Result<()> {
             if effective_no_input {
                 default_ledger.clone()
             } else {
-                print_step(&ui_ctx, 1, total_steps, "Choose location");
+                print_step(
+                    &ui_ctx,
+                    1,
+                    total_steps,
+                    "Choose location",
+                    Some("Set where your encrypted ledger file will live."),
+                );
                 let theme = ColorfulTheme::default();
                 let input: String = Input::with_theme(&theme)
                     .with_prompt("Ledger file location")
@@ -249,7 +267,13 @@ pub fn handle_init(ctx: &AppContext, args: &InitArgs) -> anyhow::Result<()> {
                 "--no-input requires LEDGER_PASSPHRASE for initialization"
             ));
         } else {
-            print_step(&ui_ctx, 2, total_steps, "Create passphrase");
+            print_step(
+                &ui_ctx,
+                2,
+                total_steps,
+                "Create passphrase",
+                Some("Used to encrypt and unlock your ledger."),
+            );
             let pp = prompt_init_passphrase()?;
             println!();
             pp
@@ -259,7 +283,13 @@ pub fn handle_init(ctx: &AppContext, args: &InitArgs) -> anyhow::Result<()> {
             "--no-input requires LEDGER_PASSPHRASE for initialization"
         ));
     } else {
-        print_step(&ui_ctx, 2, total_steps, "Create passphrase");
+        print_step(
+            &ui_ctx,
+            2,
+            total_steps,
+            "Create passphrase",
+            Some("Used to encrypt and unlock your ledger."),
+        );
         let pp = prompt_init_passphrase()?;
         println!();
         pp
@@ -267,7 +297,13 @@ pub fn handle_init(ctx: &AppContext, args: &InitArgs) -> anyhow::Result<()> {
 
     let mut tier = SecurityTier::Passphrase;
     if !effective_no_input {
-        print_step(&ui_ctx, 3, total_steps, "Security level");
+        print_step(
+            &ui_ctx,
+            3,
+            total_steps,
+            "Security level",
+            Some("Choose convenience options for unlocking your ledger."),
+        );
         let options = [
             "Passphrase only (recommended)",
             "Passphrase + OS keychain",
@@ -301,10 +337,17 @@ pub fn handle_init(ctx: &AppContext, args: &InitArgs) -> anyhow::Result<()> {
     }
 
     if !effective_no_input {
-        print_step(&ui_ctx, 4, total_steps, "Advanced settings");
+        print_step(
+            &ui_ctx,
+            4,
+            total_steps,
+            "Advanced settings",
+            Some("Set preferences and storage defaults."),
+        );
         let theme = ColorfulTheme::default();
 
         if timezone.is_none() {
+            print_option_help(&ui_ctx, "Select the timezone used for entry timestamps.");
             let tz_options = timezone_options();
             let selection = FuzzySelect::with_theme(&theme)
                 .with_prompt("Timezone")
@@ -319,6 +362,7 @@ pub fn handle_init(ctx: &AppContext, args: &InitArgs) -> anyhow::Result<()> {
         }
 
         if editor.is_none() {
+            print_option_help(&ui_ctx, "Compose entries directly from the terminal.");
             let default_editor = default_editor();
             let mut editor_choices = available_editors();
             if editor_choices.is_empty() {
@@ -362,6 +406,10 @@ pub fn handle_init(ctx: &AppContext, args: &InitArgs) -> anyhow::Result<()> {
         }
 
         if args.passphrase_cache_ttl_seconds.is_none() {
+            print_option_help(
+                &ui_ctx,
+                "Cache the passphrase to avoid re-entering it on each command.",
+            );
             let ttl_input: String = Input::with_theme(&theme)
                 .with_prompt("Passphrase cache (seconds)")
                 .default(passphrase_cache_ttl_seconds.to_string())
@@ -379,6 +427,7 @@ pub fn handle_init(ctx: &AppContext, args: &InitArgs) -> anyhow::Result<()> {
             SecurityTier::PassphraseKeyfile | SecurityTier::DeviceKeyfile
         ) && args.keyfile_path.is_none()
         {
+            print_option_help(&ui_ctx, "Choose where the keyfile will be stored.");
             let input: String = Input::with_theme(&theme)
                 .with_prompt("Keyfile path")
                 .completion_with(&path_completion)
@@ -388,6 +437,7 @@ pub fn handle_init(ctx: &AppContext, args: &InitArgs) -> anyhow::Result<()> {
         }
 
         if args.config_path.is_none() {
+            print_option_help(&ui_ctx, "Store Ledger settings separately from your data.");
             let input: String = Input::with_theme(&theme)
                 .with_prompt("Ledger config path")
                 .completion_with(&path_completion)
@@ -436,7 +486,13 @@ pub fn handle_init(ctx: &AppContext, args: &InitArgs) -> anyhow::Result<()> {
     // Print review step before creating
     if !effective_no_input && ui_ctx.mode.is_pretty() {
         let review_step = 5;
-        print_step(&ui_ctx, review_step, total_steps, "Creating ledger");
+        print_step(
+            &ui_ctx,
+            review_step,
+            total_steps,
+            "Creating ledger",
+            Some("Writing encrypted ledger and config files."),
+        );
     }
 
     let device_id = AgeSqliteStorage::create(&ledger_path, &ledger_passphrase)?;
