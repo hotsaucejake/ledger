@@ -49,7 +49,7 @@ Ledger supports three output modes:
 Each command should follow a predictable rhythm:
 
 1) **Header line**
-- `Ledger` + command + ledger path (or "default")
+- `Ledger` + command + jot path (or "default")
 - Optional status line (lock/cache state) if relevant
 
 2) **Primary result block**
@@ -57,7 +57,7 @@ Each command should follow a predictable rhythm:
 
 3) **Footer hints**
 - 1-3 next-step hints max
-- Include `ledger <cmd> --help` when a user seems stuck
+- Include `jot <cmd> --help` when a user seems stuck
 
 ### Badge language
 
@@ -141,10 +141,10 @@ All commands should compose these primitives.
 
 ## Command UX Specs
 
-### `ledger init`
+### `jot init`
 
 #### Preflight (critical)
-- If the ledger file exists, do this before any prompt.
+- If the jot file exists, do this before any prompt.
 - Show a clear message with safe options:
   - list, check, open, or `--force`.
 
@@ -170,7 +170,7 @@ All commands should compose these primitives.
 
 - Review screen shows resulting config values.
 
-### `ledger add <type>`
+### `jot add <type>`
 
 - If `<type>` missing and interactive, prompt for a selection.
 - Editor-first for body; allow inline `--body`.
@@ -182,25 +182,25 @@ All commands should compose these primitives.
   - short ID, type, timestamp, tags count
 - Validation errors should point to the exact field.
 
-### `ledger list [type]`
+### `jot list [type]`
 
 Pretty mode:
 - Short IDs (first 8-10 chars).
 - Columns: ID, created, type, summary, tags.
 - Header includes scope (e.g., "last 7d") and count.
-- Footer hints: `ledger show <id>`, `ledger search "term"`.
+- Footer hints: `jot show <id>`, `jot search "term"`.
 
 Plain mode:
 - Single line per entry with stable columns.
 
-### `ledger show <id>`
+### `jot show <id>`
 
 Pretty mode:
 - Header with ID, type, created/updated, tags.
 - Body with light spacing.
 - Optional: render markdown lightly; otherwise plain text.
 
-### `ledger search <query>`
+### `jot search <query>`
 
 Pretty mode:
 - Show results with snippet preview.
@@ -208,35 +208,35 @@ Pretty mode:
 - Show applied filters in header.
 - If no results, show tips (fewer terms, quotes, etc.).
 
-### `ledger check`
+### `jot check`
 
 - Step list with progress indicators in pretty mode.
 - On failure, show the check name, a short explanation, and a suggested fix.
 
-### `ledger export` / `ledger backup <dest>`
+### `jot export` / `jot backup <dest>`
 
 - Confirm overwrite unless `--force`.
 - Progress for large operations (entries/bytes).
 - Receipt on completion (path, size, duration).
 
-### `ledger lock`
+### `jot lock`
 
 - Clear success message with cache/TTL state.
 
-### `ledger completions`
+### `jot completions`
 
 - Default output is the raw completion script.
 - Only print help/pretty info when explicitly requested and on TTY.
 
 ## Mocked Outputs (Pretty + Plain)
 
-### `ledger init` (first run)
+### `jot init` (first run)
 
 Pretty (TTY):
 
 ```text
 Ledger · init
-Path: /home/user/.local/share/ledger/ledger.ledger
+Path: /home/user/.local/share/ledger/ledger.jot
 
 1/3  Choose security tier
   > Passphrase only (recommended)
@@ -247,29 +247,29 @@ Passphrase: [hidden]
 Confirm:   [hidden]
 
 3/3  Review
-  Path:   .../ledger.ledger
+  Path:   .../ledger.jot
   Tier:   Passphrase only
   Cache:  100s (in-memory)
 
 [OK] Ledger initialized
-Next: ledger add journal  ·  ledger list  ·  ledger search \"term\"
+Next: jot add journal  ·  jot list  ·  jot search \"term\"
 ```
 
 Plain (non-TTY):
 
 ```text
-ledger init
-path=/home/user/.local/share/ledger/ledger.ledger
+jot init
+path=/home/user/.local/share/ledger/ledger.jot
 status=ok
 ```
 
-### `ledger list --last 7d`
+### `jot list --last 7d`
 
 Pretty (TTY):
 
 ```text
 Ledger · list (last 7d)
-Path: .../ledger.ledger
+Path: .../ledger.jot
 Using cached passphrase (expires in 1m40s)
 
 ID        Created                Type     Summary                 Tags
@@ -277,7 +277,7 @@ ID        Created                Type     Summary                 Tags
 7a94c2b2  2026-01-12 02:19 UTC    journal  hello                   -
 
 2 entries
-Hint: ledger show 7a2e3c0b  ·  ledger search \"hello\"
+Hint: jot show 7a2e3c0b  ·  jot search \"hello\"
 ```
 
 Plain (non-TTY):
@@ -287,33 +287,33 @@ Plain (non-TTY):
 7a94c2b2 2026-01-12T02:19:00Z journal hello -
 ```
 
-### `ledger init` (already exists)
+### `jot init` (already exists)
 
 Pretty (TTY):
 
 ```text
 Ledger · init
-Path: /home/user/.local/share/ledger/ledger.ledger
+Path: /home/user/.local/share/ledger/ledger.jot
 
 [ERR] Ledger already exists
 
 What you can do:
-  - Open it:   ledger list
-  - Verify:    ledger check
-  - Recreate:  ledger init --force   (destroys existing ledger)
+  - Open it:   jot list
+  - Verify:    jot check
+  - Recreate:  jot init --force   (destroys existing ledger)
 
-Hint: Use LEDGER_PATH=/other/path to create a new ledger elsewhere.
+Hint: Use JOT_PATH=/other/path to create a new ledger elsewhere.
 ```
 
 Plain (non-TTY):
 
 ```text
-ledger init
+jot init
 status=error
 error=ledger already exists
 ```
 
-### `ledger add journal` (guided wizard)
+### `jot add journal` (guided wizard)
 
 Pretty (TTY):
 
@@ -349,7 +349,7 @@ error=interactive input required
 hint=use flags or run on a TTY
 ```
 
-### `ledger show <id>`
+### `jot show <id>`
 
 Pretty (TTY):
 
@@ -373,7 +373,7 @@ tags=work
 body=Another entry body goes here.
 ```
 
-### `ledger search \"hello\"`
+### `jot search \"hello\"`
 
 Pretty (TTY):
 
@@ -385,7 +385,7 @@ ID        Created                Summary
 7a94c2b2  2026-01-12 02:19 UTC    hello
 
 1 result
-Hint: ledger show 7a94c2b2
+Hint: jot show 7a94c2b2
 ```
 
 Plain (non-TTY):
@@ -394,13 +394,13 @@ Plain (non-TTY):
 7a94c2b2 2026-01-12T02:19:00Z journal hello
 ```
 
-### `ledger check`
+### `jot check`
 
 Pretty (TTY):
 
 ```text
 Ledger · check
-Path: .../ledger.ledger
+Path: .../ledger.jot
 
 Checking...
 - Schema integrity:     [OK]
@@ -419,37 +419,37 @@ check=fts ok
 status=ok
 ```
 
-### `ledger backup ./backup.ledger`
+### `jot backup ./backup.jot`
 
 Pretty (TTY):
 
 ```text
 Ledger · backup
-Source: .../ledger.ledger
-Destination: ./backup.ledger
+Source: .../ledger.jot
+Destination: ./backup.jot
 
 Writing backup... 100%
 
 [OK] Backup written
-Path: ./backup.ledger  ·  Size: 2.4 MB  ·  Time: 0.8s
+Path: ./backup.jot  ·  Size: 2.4 MB  ·  Time: 0.8s
 ```
 
 Plain (non-TTY):
 
 ```text
 status=ok
-path=./backup.ledger
+path=./backup.jot
 size=2.4MB
 time=0.8s
 ```
 
-### `ledger export`
+### `jot export`
 
 Pretty (TTY):
 
 ```text
 Ledger · export
-Path: .../ledger.ledger
+Path: .../ledger.jot
 
 Exporting... 100%
 
@@ -466,7 +466,7 @@ entries=214
 time=0.6s
 ```
 
-### `ledger lock`
+### `jot lock`
 
 Pretty (TTY):
 
@@ -484,7 +484,7 @@ status=ok
 cache=empty
 ```
 
-### `ledger search "nope"`
+### `jot search "nope"`
 
 Pretty (TTY):
 

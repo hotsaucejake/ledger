@@ -1,15 +1,15 @@
-# Ledger File Format Specification
+# Jot File Format Specification
 
 **Status:** Draft
 **Applies to:** Ledger v0.1+
 **Audience:** Users, contributors, future maintainers
-**Purpose:** Define the stable, long-term on-disk format of a Ledger
+**Purpose:** Define the stable, long-term on-disk format of a Jot
 
 ---
 
 ## 1. Purpose & Scope
 
-This document defines the **Ledger file format** — the data that persists when a Ledger is closed and stored.
+This document defines the **Ledger file format** — the data that persists when a Jot is closed and stored.
 
 It is intentionally:
 
@@ -39,7 +39,7 @@ This spec exists to support Ledger’s long-term goal:
 
 ## 3. High-Level Model (Backend-Agnostic)
 
-At rest, a Ledger consists of:
+At rest, a Jot consists of:
 
 * **Encrypted payload**
 * **Defined decryption parameters**
@@ -95,7 +95,7 @@ Unstable components must be **rebuildable** from stable data.
 
 ### 5.1 Encryption Overview
 
-In Phase 0.1, a Ledger file is:
+In Phase 0.1, a Jot file is:
 
 ```
 age_encrypt(
@@ -161,7 +161,7 @@ Ledger implementations:
 * Perform all operations in-memory
 * Re-serialize and re-encrypt on close
 
-At worst, a crash may lose recent changes, but must never corrupt the ledger.
+At worst, a crash may lose recent changes, but must never corrupt the jot.
 
 ---
 
@@ -388,7 +388,7 @@ In:
 * JSON
 * JSONL
 
-Exported data must be sufficient to reconstruct a Ledger.
+Exported data must be sufficient to reconstruct a Jot.
 
 ### 11.1 Export Schema (Best Practice)
 

@@ -9,7 +9,7 @@
 ## Goals
 
 - Compositions: semantic grouping across entry types
-- Templates: reusable defaults stored in the ledger
+- Templates: reusable defaults stored in the jot
 - Entry creation uses template-first prompting rules
 
 ---
@@ -19,9 +19,9 @@
 ### In Scope
 
 - Data model tables for compositions, templates, and entry type defaults
-- Storage APIs in `ledger-core`
+- Storage APIs in `jot-core`
 - CLI commands for managing compositions and templates
-- `ledger add` uses template defaults and enum prompting rules
+- `jot add` uses template defaults and enum prompting rules
 - Tests for storage + CLI flows
 
 ### Out of Scope
@@ -36,7 +36,7 @@
 
 - [x] Compositions can be created, listed, shown, renamed, deleted
 - [x] Templates can be created, listed, shown, updated (new version), deleted
-- [x] `ledger add <type>` applies default template automatically
+- [x] `jot add <type>` applies default template automatically
 - [x] `--template` overrides default template
 - [x] Required fields always prompt if missing
 - [x] Enums reject unknown values; multi-select stored as arrays
@@ -47,7 +47,7 @@
 
 ## Implementation Steps
 
-### 1. Data Model (ledger-core)
+### 1. Data Model (jot-core)
 
 - [x] `compositions` table
 - [x] `entry_compositions` join table
@@ -56,19 +56,19 @@
 - [x] `entry_type_templates` mapping table (single active default)
 - [x] Migration to add tables and indexes
 
-### 2. Storage APIs (ledger-core)
+### 2. Storage APIs (jot-core)
 
 - [x] CRUD for compositions
 - [x] CRUD for templates + versions
 - [x] Attach/detach entries to compositions
 - [x] Lookup default template for entry type
 
-### 3. CLI Commands (ledger-cli)
+### 3. CLI Commands (jot-cli)
 
-- [x] `ledger compositions create/list/show/rename/delete`
-- [x] `ledger templates create/list/show/update/delete`
-- [x] `ledger attach/detach`
-- [x] `ledger add` uses template-first prompting
+- [x] `jot compositions create/list/show/rename/delete`
+- [x] `jot templates create/list/show/update/delete`
+- [x] `jot attach/detach`
+- [x] `jot add` uses template-first prompting
 - [x] `--template`, `--compose`, `--no-compose` behavior aligned with specs
 
 ### 3.1 Composition Semantics (Theme Associations)
@@ -97,7 +97,7 @@ This keeps tagging light while allowing deeper thematic grouping across multiple
 
 - [x] Composition CRUD + attach/detach
 - [x] Template versioning and default mapping
-- [x] `ledger add` prompting rules + enum validation
+- [x] `jot add` prompting rules + enum validation
 - [ ] Export includes templates/compositions (deferred to export enhancement)
 
 ---

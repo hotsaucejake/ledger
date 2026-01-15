@@ -1369,6 +1369,53 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "92ecc6618181def0457392ccd0ee51198e065e016d1d527a7ac1b6dc7c1f09d2"
 
 [[package]]
+name = "jot-cli"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "base64 0.22.1",
+ "blake3",
+ "chrono",
+ "clap",
+ "clap_complete",
+ "comfy-table",
+ "dialoguer",
+ "getrandom 0.2.17",
+ "indicatif",
+ "jot-core",
+ "keyring",
+ "libc",
+ "once_cell",
+ "owo-colors",
+ "rusqlite",
+ "serde",
+ "serde_json",
+ "toml 0.8.23",
+ "uuid",
+ "zeroize",
+]
+
+[[package]]
+name = "jot-core"
+version = "0.1.0"
+dependencies = [
+ "age",
+ "anyhow",
+ "argon2",
+ "chrono",
+ "hex",
+ "rusqlite",
+ "rust-embed",
+ "secrecy",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror 2.0.17",
+ "uuid",
+ "zeroize",
+]
+
+[[package]]
 name = "js-sys"
 version = "0.3.85"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1397,53 +1444,6 @@ name = "lazy_static"
 version = "1.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bbd2bcb4c963f2ddae06a2efc7e9f3591312473c50c6685e1f298068316e66fe"
-
-[[package]]
-name = "ledger-cli"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "base64 0.22.1",
- "blake3",
- "chrono",
- "clap",
- "clap_complete",
- "comfy-table",
- "dialoguer",
- "getrandom 0.2.17",
- "indicatif",
- "keyring",
- "ledger-core",
- "libc",
- "once_cell",
- "owo-colors",
- "rusqlite",
- "serde",
- "serde_json",
- "toml 0.8.23",
- "uuid",
- "zeroize",
-]
-
-[[package]]
-name = "ledger-core"
-version = "0.1.0"
-dependencies = [
- "age",
- "anyhow",
- "argon2",
- "chrono",
- "hex",
- "rusqlite",
- "rust-embed",
- "secrecy",
- "serde",
- "serde_json",
- "tempfile",
- "thiserror 2.0.17",
- "uuid",
- "zeroize",
-]
 
 [[package]]
 name = "libc"

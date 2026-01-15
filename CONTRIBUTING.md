@@ -1,6 +1,6 @@
-# Contributing to Ledger
+# Contributing to Jot
 
-Thank you for your interest in contributing to Ledger! This guide will help you get started.
+Thank you for your interest in contributing to Jot! This guide will help you get started.
 
 ## Quick Start
 
@@ -12,8 +12,8 @@ Thank you for your interest in contributing to Ledger! This guide will help you 
 2. **Set up your development environment:**
    ```bash
    # Clone the repository
-   git clone https://github.com/hotsaucejake/ledger.git
-   cd ledger
+   git clone https://github.com/hotsaucejake/jot.git
+   cd jot
 
    # Build the project
    cargo build
@@ -27,7 +27,7 @@ Thank you for your interest in contributing to Ledger! This guide will help you 
    ```
 
 3. **Pick an issue or feature:**
-   - Check the [GitHub issues](https://github.com/hotsaucejake/ledger/issues)
+   - Check the [GitHub issues](https://github.com/hotsaucejake/jot/issues)
    - Look for issues tagged `good first issue` or `help wanted`
    - Or propose a new feature (read RFCs first!)
 
@@ -43,7 +43,7 @@ These documents define how we work:
 
 ### Design Principles
 
-Ledger is built on non-negotiable principles:
+Jot is built on non-negotiable principles:
 
 1. **Security by default** — Encryption always, no plaintext modes
 2. **User owns their data** — Local storage, no cloud, no lock-in
@@ -199,16 +199,16 @@ mod tests {
 
 ### Separation of Concerns
 
-#### ledger-core (Library)
+#### jot-core (Library)
 - Domain logic, storage, crypto, validation
 - **No CLI dependencies**
 - **No user interaction** (no prompts, no printing)
 - Deterministic, testable APIs
 
-#### ledger-cli (Binary)
+#### jot-cli (Binary)
 - CLI parsing, user interaction, output formatting
 - **Minimal logic** (orchestrate, don't implement)
-- **All domain logic** delegated to ledger-core
+- **All domain logic** delegated to jot-core
 
 See [docs/DEVELOPMENT.md#architecture-guidelines](docs/DEVELOPMENT.md#architecture-guidelines) for details.
 
@@ -216,7 +216,7 @@ See [docs/DEVELOPMENT.md#architecture-guidelines](docs/DEVELOPMENT.md#architectu
 
 ### Adding a New CLI Command
 
-1. Add to `Commands` enum in `crates/ledger-cli/src/main.rs`
+1. Add to `Commands` enum in `crates/jot-cli/src/main.rs`
 2. Add match arm in `main()`
 3. Extract logic to function in `commands/` module
 4. Call core library for domain logic
@@ -298,7 +298,7 @@ pub fn function(arg: Type) -> Result<ReturnType> {
 ### Asking Questions
 
 - Check [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) first
-- Search existing [GitHub issues](https://github.com/hotsaucejake/ledger/issues)
+- Search existing [GitHub issues](https://github.com/hotsaucejake/jot/issues)
 - Open a new issue with the `question` label
 - Be specific about what you're trying to do
 
@@ -326,11 +326,11 @@ Include:
 - Read [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) — comprehensive guide
 - Check [.claude/CHECKLIST.md](.claude/CHECKLIST.md) — quick reference
 - Review relevant RFCs in [docs/RFC/](docs/RFC/)
-- Open a [GitHub issue](https://github.com/hotsaucejake/ledger/issues) with the `question` label
+- Open a [GitHub issue](https://github.com/hotsaucejake/jot/issues) with the `question` label
 
 ## License
 
-By contributing to Ledger, you agree that your contributions will be licensed under the same terms as the project (MIT or Apache-2.0).
+By contributing to Jot, you agree that your contributions will be licensed under the same terms as the project (MIT or Apache-2.0).
 
 ---
 
@@ -358,4 +358,4 @@ cargo clippy --all-targets --all-features -- -D warnings # Lint
 
 ---
 
-Thank you for contributing to Ledger! 🎉
+Thank you for contributing to Jot!

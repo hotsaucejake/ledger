@@ -25,7 +25,7 @@ The UI module should be dependency-light and safe to call from any command.
 ## Suggested Module Layout
 
 ```
-crates/ledger-cli/src/ui/
+crates/jot-cli/src/ui/
 ├── mod.rs              # Public API exports
 ├── context.rs          # TTY detection, width, color/unicode flags
 ├── mode.rs             # OutputMode and routing rules

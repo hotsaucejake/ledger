@@ -1,4 +1,4 @@
-# Ledger Config Specification
+# Jot Config Specification
 
 **Status:** Draft  
 **Applies to:** Ledger v0.1+  
@@ -12,19 +12,19 @@ On Linux, config lives at:
 ~/.config/ledger/config.toml
 ```
 
-This file is optional. If missing, Ledger will prompt to initialize a ledger.
+This file is optional. If missing, Ledger will prompt to initialize a jot.
 
 You can override the config location with:
 
 ```
-LEDGER_CONFIG=/path/to/config.toml
+JOT_CONFIG=/path/to/config.toml
 ```
 
 ## 2. File Format (TOML)
 
 ```toml
 [ledger]
-path = "/home/user/.local/share/ledger/ledger.ledger"
+path = "/home/user/.local/share/ledger/ledger.jot"
 
 [security]
 tier = "passphrase"
@@ -46,7 +46,7 @@ editor = "vim"
 
 ### 3.1 [ledger]
 
-- `path` (string, required): Default ledger file path
+- `path` (string, required): Default jot file path
 
 ### 3.2 [security]
 

@@ -139,7 +139,7 @@ Ledger must handle these **first-class**:
 ### A. Free-Form Journaling
 
 ```bash
-ledger add journal
+jot add journal
 ```
 
 * Opens `$EDITOR`
@@ -152,7 +152,7 @@ ledger add journal
 Example: daily weight
 
 ```bash
-ledger add weight
+jot add weight
 ```
 
 Prompted input:
@@ -165,8 +165,8 @@ Queryable later.
 ### C. Task / Todo Tracking
 
 ```bash
-ledger add todo
-ledger list todo --open
+jot add todo
+jot list todo --open
 ledger complete todo <id>
 ```
 
@@ -179,8 +179,8 @@ Example:
 ### E. Search & Analysis
 
 ```bash
-ledger search "anxious"
-ledger list weight --last 90d
+jot search "anxious"
+jot list weight --last 90d
 ledger export weight --json
 ```
 
@@ -239,7 +239,7 @@ Note: Some UX and revision features landed early via M2; see `docs/milestones/ar
 * Prompted field input
 * Compositions (semantic entry grouping)
 * Entry type default compositions
-* Templates stored in the ledger (reusable defaults)
+* Templates stored in the jot (reusable defaults)
 * Enum fields (single/multi-select)
 
 ### Phase 0.3 — Query & Analysis
@@ -272,7 +272,7 @@ These must be decided before implementation begins:
    * No in-place mutation
 
 3. **Schema Creation**
-   * Explicit by default (`ledger types create`)
+   * Explicit by default (`jot types create`)
    * Optional schema-on-first-use with guardrails
    * Typo detection / confirmation prompts
 

@@ -25,7 +25,7 @@ Implement Age-encrypted SQLite storage with in-memory operation, enabling:
 
 ### 1. Storage Abstraction (TDD)
 
-**Files**: `crates/ledger-core/src/storage/`
+**Files**: `crates/jot-core/src/storage/`
 
 - [x] Define `StorageEngine` trait
 - [x] Define core types (`NewEntry`, `Entry`, `EntryFilter`)
@@ -40,7 +40,7 @@ fn test_storage_trait_contract() { /* ... */ }
 
 ### 2. Crypto Module (TDD)
 
-**Files**: `crates/ledger-core/src/crypto/`
+**Files**: `crates/jot-core/src/crypto/`
 
 - [x] Key derivation with Argon2id
 - [x] Age encryption/decryption wrappers
@@ -67,7 +67,7 @@ fn test_wrong_passphrase_fails() { /* ... */ }
 
 ### 3. Age-SQLite Backend (TDD)
 
-**Files**: `crates/ledger-core/src/storage/age_sqlite.rs`
+**Files**: `crates/jot-core/src/storage/age_sqlite.rs`
 
 - [x] Implement `StorageEngine` for `AgeSqliteStorage`
 - [x] Schema creation (meta, entry_types, entries, FTS)
@@ -97,7 +97,7 @@ fn test_file_is_encrypted() { /* ... */ }
 
 ### 4. CLI Integration
 
-**Files**: `crates/ledger-cli/src/commands/`
+**Files**: `crates/jot-cli/src/commands/`
 
 - [x] `init.rs` - Create new ledger
 - [x] Passphrase prompting (dialoguer)
@@ -149,7 +149,7 @@ dialoguer = "0.11"
 From RFC-001 threat model:
 
 **We defend against:**
-- Theft of ledger file
+- Theft of jot file
 - Access while app is closed
 - Offline brute-force attacks
 
@@ -187,7 +187,7 @@ Phase 0.1 targets personal use:
 M1 is complete when:
 - [x] All tests pass (`cargo test`)
 - [x] No clippy warnings
-- [x] `ledger init ~/test.ledger` works
+- [x] `jot init ~/test.jot` works
 - [x] File is encrypted (verify manually)
 - [x] Can reopen and verify structure
 - [x] CI passes on Linux + macOS

@@ -8,8 +8,8 @@
 ## Goals
 
 - Define a shared “app layer” that encapsulates UX rules
-- Keep `ledger-core` storage/crypto as the single source of truth
-- Ensure desktop app can read/write the same ledger files safely
+- Keep `jot-core` storage/crypto as the single source of truth
+- Ensure desktop app can read/write the same jot files safely
 
 ---
 
@@ -43,7 +43,7 @@
 
 ### 1. App Layer Definition
 
-- [ ] Create a new crate (e.g., `ledger-app`) or module under `ledger-cli`
+- [ ] Create a new crate (e.g., `ledger-app`) or module under `jot-cli`
 - [ ] Move prompt precedence rules, default handling, and validation helpers
 - [ ] Define interfaces for:
   - `open_ledger(config, passphrase)`

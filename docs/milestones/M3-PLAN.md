@@ -13,8 +13,8 @@
 
 - [ ] JSON export schema versioned and documented (entries, templates, compositions)
 - [ ] JSONL export schema versioned and documented (entries, templates, compositions)
-- [ ] `ledger export` outputs stable fields with metadata header
-- [ ] `ledger list`, `ledger search`, `ledger export` share filter semantics
+- [ ] `jot export` outputs stable fields with metadata header
+- [ ] `jot list`, `jot search`, `jot export` share filter semantics
 - [ ] Golden-file export tests in CI
 - [ ] CLI export tests validate schema
 

@@ -9,9 +9,9 @@
 Without caching, users must enter their passphrase for every Ledger operation. This creates friction for common workflows like:
 
 ```bash
-ledger add journal --body "Quick note"
-ledger list --last 1d
-ledger show @last
+jot add journal --body "Quick note"
+jot list --last 1d
+jot show @last
 ```
 
 Each command requires passphrase entry, which is tedious for rapid, iterative use.
@@ -21,7 +21,7 @@ Each command requires passphrase entry, which is tedious for rapid, iterative us
 1. **Opt-in**: Caching is disabled by default (`passphrase_cache_ttl_seconds = 0`)
 2. **Secure**: Passphrase never written to disk
 3. **Ephemeral**: Cache expires automatically after TTL
-4. **User-controlled**: `ledger lock` clears cache immediately
+4. **User-controlled**: `jot lock` clears cache immediately
 5. **Simple**: No external dependencies (no gpg-agent, no systemd)
 
 ## 3. Architecture
@@ -88,7 +88,7 @@ PONG
 
 ### 3.4 Ledger Path Hash
 
-To support multiple ledgers, the cache keys by a hash of the ledger path:
+To support multiple ledgers, the cache keys by a hash of the jot path:
 
 ```rust
 fn ledger_hash(path: &Path) -> String {
@@ -104,7 +104,7 @@ This prevents accidental cross-ledger passphrase use.
 
 ### 4.1 Startup
 
-When `ledger` needs the passphrase and `passphrase_cache_ttl_seconds > 0`:
+When `jot` needs the passphrase and `passphrase_cache_ttl_seconds > 0`:
 
 1. Check if daemon is running (try `PING`)
 2. If not running, spawn daemon in background
@@ -125,7 +125,7 @@ The daemon exits when:
 
 - All entries expired + 60s idle
 - Receives `SIGTERM` or `SIGINT`
-- User runs `ledger lock`
+- User runs `jot lock`
 
 On exit:
 1. Zeroize all stored passphrases
@@ -169,7 +169,7 @@ re-entering your passphrase during that time.
 
 ## 6. CLI Integration
 
-### 6.1 `ledger lock`
+### 6.1 `jot lock`
 
 Immediately clears the cache:
 
@@ -181,7 +181,7 @@ Passphrase cache cleared.
 ### 6.2 Passphrase Flow with Cache
 
 ```
-ledger add journal
+jot add journal
     │
     ▼
 Is cache enabled? (TTL > 0)
@@ -201,7 +201,7 @@ Is cache enabled? (TTL > 0)
 
 ### 6.3 Failed Passphrase
 
-If the cached passphrase fails (e.g., ledger file changed):
+If the cached passphrase fails (e.g., jot file changed):
 
 1. Clear that entry from cache
 2. Prompt user for passphrase
@@ -234,7 +234,7 @@ Recommended values:
 
 The daemon can be:
 - A separate binary (`ledger-cache`)
-- Or the same binary with a subcommand (`ledger cache-daemon`)
+- Or the same binary with a subcommand (`jot cache-daemon`)
 
 Recommend: Same binary with hidden subcommand for simpler distribution.
 
@@ -254,7 +254,7 @@ If daemon fails to start or socket unavailable:
 
 ### 9.1 Environment Variable
 
-Store passphrase in `LEDGER_PASSPHRASE` after first entry.
+Store passphrase in `JOT_PASSPHRASE` after first entry.
 
 **Rejected**: Visible in `/proc/$pid/environ`, shell history if exported.
 

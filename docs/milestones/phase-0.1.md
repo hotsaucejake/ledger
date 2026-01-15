@@ -71,25 +71,25 @@ Per format-spec.md §7:
 
 | Command | Description |
 |---------|-------------|
-| `ledger init` | Create new encrypted ledger |
-| `ledger add` | Add journal entry (opens $EDITOR) |
-| `ledger add --body "..."` | Add inline entry |
-| `ledger add --tags foo,bar` | Add with tags |
-| `ledger list` | List recent entries |
-| `ledger list --limit N` | List N entries |
-| `ledger list --last 7d` | List recent entries |
-| `ledger list --tag foo` | Filter by tag |
-| `ledger list --json` | Output as JSON |
-| `ledger search "term"` | Full-text search |
-| `ledger search --type journal` | Filter by entry type |
-| `ledger show <id>` | Show single entry |
-| `ledger export --json` | Export all entries as JSON |
-| `ledger export --jsonl` | Export as JSONL |
-| `ledger backup <dest>` | Backup ledger file |
-| `ledger check` | Integrity check |
-| `ledger edit <id>` | Create a revision |
-| `ledger doctor` | Onboarding diagnostics |
-| `ledger lock` | Clear session cache |
+| `jot init` | Create new encrypted ledger |
+| `jot add` | Add journal entry (opens $EDITOR) |
+| `jot add --body "..."` | Add inline entry |
+| `jot add --tags foo,bar` | Add with tags |
+| `jot list` | List recent entries |
+| `jot list --limit N` | List N entries |
+| `jot list --last 7d` | List recent entries |
+| `jot list --tag foo` | Filter by tag |
+| `jot list --json` | Output as JSON |
+| `jot search "term"` | Full-text search |
+| `jot search --type journal` | Filter by entry type |
+| `jot show <id>` | Show single entry |
+| `jot export --json` | Export all entries as JSON |
+| `jot export --jsonl` | Export as JSONL |
+| `jot backup <dest>` | Backup jot file |
+| `jot check` | Integrity check |
+| `jot edit <id>` | Create a revision |
+| `jot doctor` | Onboarding diagnostics |
+| `jot lock` | Clear session cache |
 
 ### Full-Text Search
 
@@ -118,7 +118,7 @@ These are **not bugs** in Phase 0.1. They are intentionally deferred.
 | Feature | Deferred To |
 |---------|-------------|
 | Custom entry types | Phase 0.2 |
-| Schema creation (`ledger types create`) | Phase 0.2 |
+| Schema creation (`jot types create`) | Phase 0.2 |
 | Templates | Phase 0.2 |
 | Compositions | Phase 0.2 |
 | Enum fields | Phase 0.2 |
@@ -142,15 +142,15 @@ The following items landed early during the M2 UX milestone:
 
 Phase 0.1 is complete when:
 
-1. **Init works:** `ledger init` creates a valid encrypted ledger
-2. **Add works:** `ledger add` opens $EDITOR, saves encrypted entry
-3. **List works:** `ledger list` shows entries with timestamps
-4. **Search works:** `ledger search "term"` finds matching entries
-5. **Export works:** `ledger export --json` produces valid JSON
+1. **Init works:** `jot init` creates a valid encrypted ledger
+2. **Add works:** `jot add` opens $EDITOR, saves encrypted entry
+3. **List works:** `jot list` shows entries with timestamps
+4. **Search works:** `jot search "term"` finds matching entries
+5. **Export works:** `jot export --json` produces valid JSON
 6. **Tags work:** Entries can be created and filtered by tag
 7. **Round-trip:** Ledger can be closed, reopened, and queried
 8. **No plaintext leaks:** Verified via testing
-9. **Crash safety:** Interrupted writes don't corrupt the ledger
+9. **Crash safety:** Interrupted writes don't corrupt the jot
 
 ---
 

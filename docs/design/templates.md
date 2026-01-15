@@ -9,7 +9,7 @@
 ## 1. Overview
 
 Templates provide reusable defaults for entry creation. They are stored **inside the encrypted
-ledger** so a shared ledger file carries the same templates across machines.
+ledger** so a shared jot file carries the same templates across machines.
 
 Templates are:
 
@@ -129,7 +129,7 @@ Tags and compositions follow a similar rule:
 
 ### 4.1 Template-First Prompting
 
-When an entry type has a default template, it is used automatically for `ledger add <type>`.
+When an entry type has a default template, it is used automatically for `jot add <type>`.
 Passing `--template` overrides the default template selection.
 
 Prompt behavior:
@@ -176,50 +176,50 @@ Example:
 
 ```bash
 # List all templates
-ledger templates list
-ledger templates list --entry-type journal
-ledger templates list --json
+jot templates list
+jot templates list --entry-type journal
+jot templates list --json
 
 # Show template details
-ledger templates show gas_fillup
-ledger templates show gas_fillup --json
+jot templates show gas_fillup
+jot templates show gas_fillup --json
 
 # Create a template
-ledger templates create gas_fillup --entry-type gas
-ledger templates create gas_fillup --entry-type gas --description "Gas fillup defaults"
-ledger templates create gas_fillup --entry-type gas --defaults '{"car": "civic"}'
-ledger templates create gas_fillup --entry-type gas --set-default
+jot templates create gas_fillup --entry-type gas
+jot templates create gas_fillup --entry-type gas --description "Gas fillup defaults"
+jot templates create gas_fillup --entry-type gas --defaults '{"car": "civic"}'
+jot templates create gas_fillup --entry-type gas --set-default
 
 # Update template (creates new version)
-ledger templates update gas_fillup --defaults '{"car": "4runner"}'
+jot templates update gas_fillup --defaults '{"car": "4runner"}'
 
 # Delete template
-ledger templates delete gas_fillup
-ledger templates delete gas_fillup --force
+jot templates delete gas_fillup
+jot templates delete gas_fillup --force
 
 # Set/clear default template for entry type
-ledger templates set-default gas gas_fillup
-ledger templates clear-default gas
+jot templates set-default gas gas_fillup
+jot templates clear-default gas
 ```
 
 ### 6.2 Using Templates with Add
 
 ```bash
 # Use default template (if set for entry type)
-ledger add gas
+jot add gas
 
 # Override with specific template
-ledger add gas --template gas_fillup
+jot add gas --template gas_fillup
 
 # Set field values directly
-ledger add gas --field car=civic --field octane=regular
-ledger add gas -f car=civic -f octane=regular
+jot add gas --field car=civic --field octane=regular
+jot add gas -f car=civic -f octane=regular
 
 # Attach to composition
-ledger add gas --compose fleet_ops
+jot add gas --compose fleet_ops
 
 # Skip template default compositions
-ledger add gas --no-compose
+jot add gas --no-compose
 ```
 
 ---

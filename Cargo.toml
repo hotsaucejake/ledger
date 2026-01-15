@@ -1,7 +1,7 @@
 [workspace]
 members = [
-    "crates/ledger-core",
-    "crates/ledger-cli",
+    "crates/jot-core",
+    "crates/jot-cli",
 ]
 resolver = "2"
 
@@ -10,7 +10,7 @@ version = "0.1.0"
 edition = "2021"
 authors = ["Jake"]
 license = "MIT OR Apache-2.0"
-repository = "https://github.com/hotsaucejake/ledger"
+repository = "https://github.com/hotsaucejake/jot"
 
 [workspace.dependencies]
 # Core dependencies

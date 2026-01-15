@@ -8,7 +8,7 @@
 
 ## 1. Entry Points
 
-### A) User runs `ledger init`
+### A) User runs `jot init`
 
 Run full wizard.
 
@@ -20,10 +20,10 @@ Print friendly guidance:
 No ledger found at ~/.config/ledger/config.toml
 
 Run:
-  ledger init
+  jot init
 
-Or specify a ledger path:
-  LEDGER_PATH=/path/to/my.ledger ledger init
+Or specify a jot path:
+  JOT_PATH=/path/to/my.jot jot init
 ```
 
 No auto-init.
@@ -36,7 +36,7 @@ No auto-init.
 Welcome to Ledger.
 
 Ledger file location:
-  [~/.local/share/ledger/ledger.ledger]
+  [~/.local/share/ledger/ledger.jot]
 
 Create a passphrase (min 8 chars):
   Passphrase:
@@ -64,7 +64,7 @@ Continue? [no]:
 
 ## 3. Advanced Wizard Flow
 
-Triggered by `ledger init --advanced`.
+Triggered by `jot init --advanced`.
 
 Additional prompts:
 
@@ -83,7 +83,7 @@ Ledger config path [~/.config/ledger/config.toml]:
 On success:
 
 ```
-Ledger created at ~/.local/share/ledger/ledger.ledger
+Ledger created at ~/.local/share/ledger/ledger.jot
 Config written to ~/.config/ledger/config.toml
 ```
 
@@ -116,7 +116,7 @@ Enter passphrase:
 [incorrect]
 
 Error: Too many failed passphrase attempts.
-Hint: If you forgot your passphrase, the ledger cannot be recovered.
+Hint: If you forgot your passphrase, the jot cannot be recovered.
       Backups use the same passphrase.
 
 Exit code: 5
@@ -132,7 +132,7 @@ Exit code: 5
 
 ### 5.3 Scripting Considerations
 
-For scripts using `LEDGER_PASSPHRASE` environment variable:
+For scripts using `JOT_PASSPHRASE` environment variable:
 - Single attempt (no retry loop)
 - Exit code 5 on failure
 - Clear error message to stderr

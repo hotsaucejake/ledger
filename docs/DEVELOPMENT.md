@@ -21,7 +21,7 @@ A secure, encrypted, CLI-first personal journal and logbook combining:
 
 Check `README.md` for milestone status. As of Milestone 1 (in progress):
 - Encrypted storage + schema initialization implemented
-- Entry CRUD + FTS search working in `ledger-core`
+- Entry CRUD + FTS search working in `jot-core`
 - CLI init/add/list/search/show/check/export/backup working for `journal`
 - CLI integration tests in place
 
@@ -61,16 +61,16 @@ Before making changes, read:
 
 ## Environment Variables
 
-- `LEDGER_PATH`: default ledger file path.
-- `LEDGER_PASSPHRASE`: non-interactive passphrase (useful for tests/scripts).
-- `LEDGER_CONFIG`: override config path.
+- `JOT_PATH`: default jot file path.
+- `JOT_PASSPHRASE`: non-interactive passphrase (useful for tests/scripts).
+- `JOT_CONFIG`: override config path.
 
 ## Test Support Feature
 
 Some integration tests rely on test-only hooks. Run them with:
 
 ```bash
-cargo test -p ledger-cli --features test-support
+cargo test -p jot-cli --features test-support
 ```
 
 4. **Fail loudly, never silently**
@@ -94,7 +94,7 @@ cargo test -p ledger-cli --features test-support
 
 ### Testing Strategy
 
-#### Unit Tests (ledger-core)
+#### Unit Tests (jot-core)
 
 ```rust
 // In the same file as the code
@@ -126,12 +126,12 @@ mod tests {
 
 ```rust
 // In tests/integration/
-use ledger_core::storage::StorageEngine;
+use jot_core::storage::StorageEngine;
 
 #[test]
 fn test_round_trip_entry() {
     let temp_dir = tempfile::tempdir().unwrap();
-    let ledger_path = temp_dir.path().join("test.ledger");
+    let ledger_path = temp_dir.path().join("test.jot");
 
     // Create and add entry
     let mut engine = TestStorageEngine::create(&ledger_path).unwrap();
@@ -156,7 +156,7 @@ fn test_round_trip_entry() {
 Create test helpers to reduce boilerplate:
 
 ```rust
-// In ledger-core/src/test_utils.rs (cfg(test) only)
+// In jot-core/src/test_utils.rs (cfg(test) only)
 pub fn test_entry() -> NewEntry { /* ... */ }
 pub fn temp_ledger() -> TempLedger { /* ... */ }
 pub fn mock_storage() -> MockStorage { /* ... */ }
@@ -186,7 +186,7 @@ cargo tarpaulin --out Html --output-dir coverage/
 use thiserror::Error;
 
 #[derive(Debug, Error)]
-pub enum LedgerError {
+pub enum JotError {
     #[error("Entry not found: {0}")]
     NotFound(Uuid),
 
@@ -194,13 +194,13 @@ pub enum LedgerError {
     InvalidSchema { field: String, reason: String },
 }
 
-pub type Result<T> = std::result::Result<T, LedgerError>;
+pub type Result<T> = std::result::Result<T, JotError>;
 
 // Usage
 pub fn get_entry(&self, id: &Uuid) -> Result<Entry> {
     self.entries.get(id)
         .cloned()
-        .ok_or_else(|| LedgerError::NotFound(*id))
+        .ok_or_else(|| JotError::NotFound(*id))
 }
 ```
 
@@ -290,7 +290,7 @@ pub mod entry;
 pub mod schema;
 pub mod error;
 
-pub use error::{LedgerError, Result};
+pub use error::{JotError, Result};
 pub use storage::StorageEngine;
 
 // Keep implementation details private
@@ -330,7 +330,7 @@ mod validation;
 /// # Examples
 ///
 /// ```
-/// use ledger_core::storage::StorageEngine;
+/// use jot_core::storage::StorageEngine;
 ///
 /// let entry = engine.get_entry(&entry_id)?;
 /// assert!(entry.is_some());
@@ -346,7 +346,7 @@ pub fn get_entry(&self, id: &Uuid) -> Result<Option<Entry>> {
 
 ### Separation of Concerns
 
-#### ledger-core (Library)
+#### jot-core (Library)
 
 **Responsibilities:**
 - Storage abstraction and implementations
@@ -362,7 +362,7 @@ pub fn get_entry(&self, id: &Uuid) -> Result<Option<Entry>> {
 - Deterministic, testable APIs
 - All public APIs documented
 
-#### ledger-cli (Binary)
+#### jot-cli (Binary)
 
 **Responsibilities:**
 - CLI argument parsing
@@ -373,7 +373,7 @@ pub fn get_entry(&self, id: &Uuid) -> Result<Option<Entry>> {
 
 **Rules:**
 - Minimal logic (orchestrate, don't implement)
-- All domain logic delegated to `ledger-core`
+- All domain logic delegated to `jot-core`
 - No SQL queries
 - No direct crypto operations
 
@@ -469,7 +469,7 @@ use std::collections::HashMap;
 use uuid::Uuid;
 use serde::{Serialize, Deserialize};
 
-use crate::error::{Result, LedgerError};
+use crate::error::{Result, JotError};
 
 // Public API
 pub struct MyType {
@@ -668,12 +668,12 @@ echo "✅ All checks passed!"
 
 - Minimum length: **8 characters**
 - Must not be empty or whitespace-only
-- Enforced in `ledger-core::crypto::validate_passphrase`
+- Enforced in `jot-core::crypto::validate_passphrase`
 
 ### Crypto Usage Examples
 
 ```rust
-use ledger_core::crypto::{derive_key, validate_passphrase};
+use jot_core::crypto::{derive_key, validate_passphrase};
 
 let passphrase = "example-passphrase-123";
 validate_passphrase(passphrase)?;
@@ -683,9 +683,9 @@ let key = derive_key(passphrase, salt)?;
 ```
 
 ```rust
-use ledger_core::storage::{AgeSqliteStorage, StorageEngine};
+use jot_core::storage::{AgeSqliteStorage, StorageEngine};
 
-let path = std::path::Path::new("example.ledger");
+let path = std::path::Path::new("example.jot");
 let passphrase = "example-passphrase-123";
 
 let device_id = AgeSqliteStorage::create(path, passphrase)?;
@@ -699,14 +699,14 @@ storage.close()?;
 pub fn validate_tag(tag: &str) -> Result<()> {
     // Length check
     if tag.is_empty() || tag.len() > 128 {
-        return Err(LedgerError::InvalidInput(
+        return Err(JotError::InvalidInput(
             "Tag must be 1-128 characters".into()
         ));
     }
 
     // Character check
     if !tag.chars().all(|c| c.is_alphanumeric() || "-_:".contains(c)) {
-        return Err(LedgerError::InvalidInput(
+        return Err(JotError::InvalidInput(
             "Tag contains invalid characters".into()
         ));
     }
@@ -784,7 +784,7 @@ pub fn open_ledger(path: &Path) -> Result<Ledger> {
 
 Enable in CLI:
 ```bash
-RUST_LOG=ledger_core=debug ledger list
+RUST_LOG=jot_core=debug jot list
 ```
 
 ### Common Issues

@@ -71,7 +71,7 @@ print(&ui_ctx, &header(&ui_ctx, "list", scope.as_deref()));
 **Spec shows**:
 ```
 Ledger · list (last 7d)
-Path: .../ledger.ledger
+Path: .../ledger.jot
 ```
 
 **Current**: No path shown
@@ -128,7 +128,7 @@ let columns = [
 
 **Spec shows**:
 ```
-Hint: ledger show 7a2e3c0b  ·  ledger search "hello"
+Hint: jot show 7a2e3c0b  ·  jot search "hello"
 ```
 
 **Current**:
@@ -140,7 +140,7 @@ Hint: Showing 5 entries. Use --limit to see more.
 ```rust
 let first_id = entries.first().map(|e| &e.id.to_string()[..8]);
 let hint_text = format!(
-    "ledger show {}  ·  ledger search \"term\"",
+    "jot show {}  ·  jot search \"term\"",
     first_id.unwrap_or("<id>")
 );
 ```
@@ -283,7 +283,7 @@ ID: 7a2e3c0b  ·  2026-01-12 04:48 UTC  ·  tags: 2
 
 **Spec shows**:
 ```
-Next: ledger add journal  ·  ledger list  ·  ledger search "term"
+Next: jot add journal  ·  jot list  ·  jot search "term"
 ```
 
 **Current**: Most commands don't show next steps

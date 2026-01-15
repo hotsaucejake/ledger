@@ -58,8 +58,8 @@ jobs:
     - name: Run tests
       run: cargo test --verbose
 
-    - name: Run tests (ledger-cli test-support)
-      run: cargo test -p ledger-cli --features test-support --verbose
+    - name: Run tests (jot-cli test-support)
+      run: cargo test -p jot-cli --features test-support --verbose
 
   build-release:
     name: Build Release
@@ -78,4 +78,4 @@ jobs:
       run: cargo build --release --verbose
 
     - name: Test release build
-      run: ./target/release/ledger --version
+      run: ./target/release/jot --version
