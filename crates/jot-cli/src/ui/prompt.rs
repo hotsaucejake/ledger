@@ -62,7 +62,7 @@ impl<'a> Wizard<'a> {
             return;
         }
 
-        let header = styled("Ledger", styles::bold(), self.ctx.color);
+        let header = styled("Jot", styles::bold(), self.ctx.color);
         println!("{} \u{00B7} {}", header, self.title);
         println!();
     }
@@ -246,7 +246,7 @@ pub fn prompt_confirm(_ctx: &UiContext, prompt: &str, default: bool) -> anyhow::
 /// Result of an init wizard.
 #[derive(Debug)]
 pub struct InitWizardResult {
-    pub ledger_path: std::path::PathBuf,
+    pub jot_path: std::path::PathBuf,
     pub config_path: std::path::PathBuf,
     pub passphrase: String,
     pub security_tier: usize, // 0=passphrase, 1=keychain, 2=keyfile, 3=device
@@ -286,7 +286,7 @@ pub fn init_wizard(
 
     // Step 1: Path
     wizard.print_step();
-    let ledger_path = std::path::PathBuf::from(prompt_input(
+    let jot_path = std::path::PathBuf::from(prompt_input(
         ctx,
         "Jot file location",
         Some(&default_jot_path.to_string_lossy()),
@@ -371,7 +371,7 @@ pub fn init_wizard(
     };
 
     let mut review_items: Vec<(&str, String)> = vec![
-        ("Path", ledger_path.to_string_lossy().to_string()),
+        ("Path", jot_path.to_string_lossy().to_string()),
         ("Security", tier_name.to_string()),
     ];
 
@@ -399,13 +399,13 @@ pub fn init_wizard(
         println!();
     }
 
-    let proceed = prompt_confirm(ctx, "Create ledger with these settings?", true)?;
+    let proceed = prompt_confirm(ctx, "Create jot with these settings?", true)?;
     if !proceed {
         return Err(anyhow::anyhow!("Initialization cancelled"));
     }
 
     Ok(InitWizardResult {
-        ledger_path,
+        jot_path,
         config_path,
         passphrase,
         security_tier,

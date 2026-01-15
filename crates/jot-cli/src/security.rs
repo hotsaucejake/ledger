@@ -98,8 +98,7 @@ pub fn keychain_clear(account: &str) -> anyhow::Result<()> {
 }
 
 fn keychain_entry(account: &str) -> anyhow::Result<keyring::Entry> {
-    keyring::Entry::new("ledger", account)
-        .map_err(|e| anyhow::anyhow!("Keychain entry failed: {}", e))
+    keyring::Entry::new("jot", account).map_err(|e| anyhow::anyhow!("Keychain entry failed: {}", e))
 }
 
 fn ensure_parent_dir(path: &Path) -> anyhow::Result<()> {

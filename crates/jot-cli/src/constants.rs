@@ -8,7 +8,7 @@
 /// - 2: Misuse of shell command (reserved by shells)
 /// - 3+: Application-specific errors
 pub mod exit_codes {
-    /// Resource not found (config, ledger, entry, entry type).
+    /// Resource not found (config, jot, entry, entry type).
     pub const NOT_FOUND: i32 = 3;
 
     /// Invalid user input or arguments.

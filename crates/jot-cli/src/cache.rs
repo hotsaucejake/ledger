@@ -23,7 +23,7 @@ pub fn cache_config(path: &Path, ttl_seconds: u64) -> anyhow::Result<Option<Cach
         return Ok(None);
     }
     let socket_path = cache_socket_path()?;
-    let key = ledger_hash(path);
+    let key = jot_hash(path);
     Ok(Some(CacheConfig {
         ttl: Duration::from_secs(ttl_seconds),
         socket_path,
@@ -137,18 +137,18 @@ pub fn cache_socket_path() -> anyhow::Result<PathBuf> {
     #[cfg(target_os = "macos")]
     {
         let base = std::env::var("TMPDIR").unwrap_or_else(|_| "/tmp".to_string());
-        Ok(PathBuf::from(base).join("ledger-cache.sock"))
+        Ok(PathBuf::from(base).join("jot-cache.sock"))
     }
 
     #[cfg(not(target_os = "macos"))]
     {
         if let Ok(value) = std::env::var("XDG_RUNTIME_DIR") {
             if !value.trim().is_empty() {
-                return Ok(PathBuf::from(value).join("ledger").join("cache.sock"));
+                return Ok(PathBuf::from(value).join("jot").join("cache.sock"));
             }
         }
         let uid = unsafe { libc::geteuid() };
-        Ok(PathBuf::from(format!("/tmp/ledger-{}", uid)).join("cache.sock"))
+        Ok(PathBuf::from(format!("/tmp/jot-{}", uid)).join("cache.sock"))
     }
 }
 
@@ -258,7 +258,7 @@ fn ensure_daemon_running(config: &CacheConfig) -> anyhow::Result<()> {
     Err(anyhow::anyhow!("Cache daemon did not become ready in time"))
 }
 
-pub fn ledger_hash(path: &Path) -> String {
+pub fn jot_hash(path: &Path) -> String {
     let canonical = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
     let hash = blake3::hash(canonical.to_string_lossy().as_bytes());
     hash.to_hex()[..16].to_string()

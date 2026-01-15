@@ -1,6 +1,6 @@
 # CLI UI Architecture Guide
 
-This document describes a scalable module layout and implementation plan for Ledger's CLI UI layer. The goal is to build the UI foundation first, then migrate existing commands to the shared primitives.
+This document describes a scalable module layout and implementation plan for Jot's CLI UI layer. The goal is to build the UI foundation first, then migrate existing commands to the shared primitives.
 
 ## Goals
 

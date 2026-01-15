@@ -2,20 +2,20 @@
 
 **Status**: In Progress
 **Started**: 2026-01-08
-**Target**: Complete encryption layer and basic ledger operations
+**Target**: Complete encryption layer and basic jot operations
 
 ## Goals
 
 Implement Age-encrypted SQLite storage with in-memory operation, enabling:
-- Creation of new encrypted ledgers
-- Opening and closing ledgers securely
+- Creation of new encrypted jots
+- Opening and closing jots securely
 - Storing and retrieving test data
 - Verification that encryption works correctly
 
 ## Exit Criteria
 
-- [x] Can create new encrypted ledger
-- [x] Can open existing ledger
+- [x] Can create new encrypted jot
+- [x] Can open existing jot
 - [x] Store and retrieve test data
 - [x] Verify encryption at rest (no plaintext)
 - [x] Tests pass on Linux
@@ -78,10 +78,10 @@ fn test_wrong_passphrase_fails() { /* ... */ }
 **Tests First:**
 ```rust
 #[test]
-fn test_create_new_ledger() { /* ... */ }
+fn test_create_new_jot() { /* ... */ }
 
 #[test]
-fn test_open_existing_ledger() { /* ... */ }
+fn test_open_existing_jot() { /* ... */ }
 
 #[test]
 fn test_round_trip_entry() { /* ... */ }
@@ -99,7 +99,7 @@ fn test_file_is_encrypted() { /* ... */ }
 
 **Files**: `crates/jot-cli/src/commands/`
 
-- [x] `init.rs` - Create new ledger
+- [x] `init.rs` - Create new jot
 - [x] Passphrase prompting (dialoguer)
 - [ ] Error message translation
 - [ ] Progress indicators
@@ -168,7 +168,7 @@ From RFC-001 threat model:
 ## Performance Targets
 
 Phase 0.1 targets personal use:
-- Ledger size: < 100MB typical
+- Jot size: < 100MB typical
 - Open time: < 500ms
 - Close time: < 1s
 - No optimization needed yet (measure first!)

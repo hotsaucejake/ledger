@@ -1,7 +1,7 @@
 # Templates Specification
 
 **Status:** Implemented
-**Applies to:** Ledger v0.2+
+**Applies to:** Jot v0.2+
 **Purpose:** Define how templates work, how they are stored, and how they apply during entry creation.
 
 ---
@@ -9,7 +9,7 @@
 ## 1. Overview
 
 Templates provide reusable defaults for entry creation. They are stored **inside the encrypted
-ledger** so a shared jot file carries the same templates across machines.
+jot** so a shared jot file carries the same templates across machines.
 
 Templates are:
 
@@ -26,7 +26,7 @@ Templates are:
 | Field | Type | Description |
 |-------|------|-------------|
 | `id` | UUID | Globally unique identifier |
-| `name` | string | User-facing name (unique within ledger) |
+| `name` | string | User-facing name (unique within jot) |
 | `entry_type_id` | UUID | Entry type this template applies to |
 | `created_at` | datetime | When this template was created |
 | `device_id` | UUID | Device that created this template |

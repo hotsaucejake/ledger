@@ -12,8 +12,8 @@ use super::theme::{styled, styles, Badge};
 
 /// Render a header line for a command.
 ///
-/// Pretty mode: "Ledger · command (context)" with optional path
-/// Plain mode: "ledger command"
+/// Pretty mode: "Jot · command (context)" with optional path
+/// Plain mode: "jot command"
 ///
 /// # Arguments
 /// - `command`: The command name (e.g., "list", "search")
@@ -27,7 +27,7 @@ pub fn header_with_context(
 ) -> String {
     match ctx.mode {
         OutputMode::Pretty => {
-            let title = styled("Ledger", styles::bold(), ctx.color);
+            let title = styled("Jot", styles::bold(), ctx.color);
             let mut out = if let Some(c) = context {
                 format!("{} \u{00B7} {} ({})", title, command, c)
             } else {
@@ -45,7 +45,7 @@ pub fn header_with_context(
             out
         }
         OutputMode::Plain => {
-            format!("ledger {}", command)
+            format!("jot {}", command)
         }
         OutputMode::Json => String::new(),
     }
@@ -53,8 +53,8 @@ pub fn header_with_context(
 
 /// Render a header line for a command (simple version).
 ///
-/// Pretty mode: "Ledger · command" with optional context in parentheses
-/// Plain mode: "ledger command"
+/// Pretty mode: "Jot · command" with optional context in parentheses
+/// Plain mode: "jot command"
 pub fn header(ctx: &UiContext, command: &str, context: Option<&str>) -> String {
     header_with_context(ctx, command, context, None)
 }
@@ -320,7 +320,7 @@ mod tests {
     fn test_header_pretty() {
         let ctx = pretty_ctx();
         let h = header(&ctx, "list", None);
-        assert!(h.contains("Ledger"));
+        assert!(h.contains("Jot"));
         assert!(h.contains("list"));
     }
 
@@ -328,7 +328,7 @@ mod tests {
     fn test_header_plain() {
         let ctx = plain_ctx();
         let h = header(&ctx, "list", None);
-        assert_eq!(h, "ledger list");
+        assert_eq!(h, "jot list");
     }
 
     #[test]
@@ -510,13 +510,13 @@ mod tests {
     #[test]
     fn test_visual_header_with_context() {
         let ctx = pretty_ctx();
-        let h = header_with_context(&ctx, "list", Some("last 7d"), Some("/path/to/ledger.jot"));
+        let h = header_with_context(&ctx, "list", Some("last 7d"), Some("/path/to/jot.jot"));
         // Should contain all parts
-        assert!(h.contains("Ledger"));
+        assert!(h.contains("Jot"));
         assert!(h.contains("list"));
         assert!(h.contains("last 7d"));
         assert!(h.contains("Path:"));
-        assert!(h.contains("ledger.jot"));
+        assert!(h.contains("jot.jot"));
     }
 
     #[test]

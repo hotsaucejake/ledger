@@ -17,7 +17,7 @@ pub fn resolve_config_path() -> anyhow::Result<PathBuf> {
 }
 
 /// Resolve the jot file path from CLI args or config.
-pub fn resolve_ledger_path(cli: &Cli) -> anyhow::Result<String> {
+pub fn resolve_jot_path(cli: &Cli) -> anyhow::Result<String> {
     if let Some(path) = cli.jot.clone() {
         return Ok(path);
     }
@@ -32,9 +32,9 @@ pub fn resolve_ledger_path(cli: &Cli) -> anyhow::Result<String> {
 }
 
 /// Error message when jot file is missing.
-pub fn missing_ledger_message(path: &Path) -> String {
+pub fn missing_jot_message(path: &Path) -> String {
     format!(
-        "Jot file not found: {}\n\nRun:\n  jot init\n\nOr specify a different path:\n  ledger --ledger /path/to/my.jot init",
+        "Jot file not found: {}\n\nRun:\n  jot init\n\nOr specify a different path:\n  jot --jot /path/to/my.jot init",
         path.display()
     )
 }

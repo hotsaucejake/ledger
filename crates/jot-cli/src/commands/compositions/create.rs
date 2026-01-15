@@ -42,7 +42,7 @@ pub fn handle_create(ctx: &AppContext, args: &CompositionCreateArgs) -> anyhow::
                     &hint(
                         &ui_ctx,
                         &format!(
-                            "ledger attach <entry-id> {}  \u{00B7}  ledger composition list",
+                            "jot attach <entry-id> {}  \u{00B7}  jot composition list",
                             args.name
                         ),
                     ),

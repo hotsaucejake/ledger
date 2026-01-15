@@ -23,7 +23,7 @@ use crate::error::Result;
 ///
 /// See RFC-001 for the complete storage model specification.
 pub trait StorageEngine: Send + Sync {
-    /// Create a new ledger at the specified path.
+    /// Create a new jot at the specified path.
     ///
     /// # Arguments
     ///
@@ -44,7 +44,7 @@ pub trait StorageEngine: Send + Sync {
     where
         Self: Sized;
 
-    /// Open an existing ledger.
+    /// Open an existing jot.
     ///
     /// # Arguments
     ///
@@ -73,7 +73,7 @@ pub trait StorageEngine: Send + Sync {
     /// - Encryption fails
     fn close(self, passphrase: &str) -> Result<()>;
 
-    /// Get ledger metadata.
+    /// Get jot metadata.
     fn metadata(&self) -> Result<JotMetadata>;
 
     // --- Entry operations ---
@@ -299,7 +299,7 @@ pub trait StorageEngine: Send + Sync {
 
     // --- Maintenance operations ---
 
-    /// Check ledger integrity.
+    /// Check jot integrity.
     ///
     /// Verifies:
     /// - Schema consistency
@@ -308,7 +308,7 @@ pub trait StorageEngine: Send + Sync {
     ///
     /// # Returns
     ///
-    /// Returns `Ok(())` if ledger is valid, or an error describing the problem.
+    /// Returns `Ok(())` if jot is valid, or an error describing the problem.
     fn check_integrity(&self) -> Result<()>;
 }
 

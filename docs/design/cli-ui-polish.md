@@ -48,12 +48,12 @@ This document tracks polish items needed to fully align the CLI UI implementatio
 
 **Spec shows**:
 ```
-Ledger · list (last 7d)
+Jot · list (last 7d)
 ```
 
 **Current**:
 ```
-Ledger · list
+Jot · list
 ```
 
 **Files**:
@@ -70,8 +70,8 @@ print(&ui_ctx, &header(&ui_ctx, "list", scope.as_deref()));
 
 **Spec shows**:
 ```
-Ledger · list (last 7d)
-Path: .../ledger.jot
+Jot · list (last 7d)
+Path: .../data.jot
 ```
 
 **Current**: No path shown
@@ -93,7 +93,7 @@ Using cached passphrase (expires in 1m40s)
 
 **Future Enhancement** (requires protocol extension):
 To show TTL remaining would require:
-1. Add a `TTL <ledger-path-hash>` command to cache daemon protocol
+1. Add a `TTL <jot-path-hash>` command to cache daemon protocol
 2. Add `cache_ttl_remaining()` client function
 3. Query TTL at storage open time and include in message
 
@@ -199,7 +199,7 @@ println!("Passphrase cache cleared.");
 
 **Spec shows**:
 ```
-Ledger · lock
+Jot · lock
 
 [OK] Passphrase cache cleared
 Cache: empty
@@ -256,7 +256,7 @@ Writing backup... 65%
 Exporting... 100%
 
 [OK] Export written
-Path: ./ledger-export.json  ·  Entries: 214  ·  Time: 0.6s
+Path: ./jot-export.json  ·  Entries: 214  ·  Time: 0.6s
 ```
 
 **Current**: Just outputs data
@@ -366,7 +366,7 @@ error=...
 - [x] Table header alignment with dim styling (use comfy-table's built-in Cell styling)
 - [x] Missing padding between columns (set_padding((0, 2)))
 - [x] Add filter context to headers (header_with_context function)
-- [x] Add path to headers (resolve_ledger_path in list/search)
+- [x] Add path to headers (resolve_jot_path in list/search)
 - [x] Add Type and Tags columns to list/search
 - [x] Actionable hints with entry IDs
 - [x] Wire init wizard or add step indicators (print_step helper)

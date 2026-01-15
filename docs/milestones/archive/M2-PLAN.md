@@ -10,7 +10,7 @@
 ## North Star
 
 A first-time user should:
-1. install Ledger
+1. install Jot
 2. run a single command
 3. understand what's happening
 4. create their first entry in under 60 seconds
@@ -19,8 +19,8 @@ A first-time user should:
 ## Exit Criteria
 
 - [x] `jot init` wizard with safe defaults
-- [x] XDG config support with default jot path (`~/.local/share/ledger/ledger.jot`)
-- [x] Friendly "no ledger found" message for all commands
+- [x] XDG config support with default jot path (`~/.local/share/jot/data.jot`)
+- [x] Friendly "no jot found" message for all commands
 - [x] `jot` with no args shows quickstart
 - [x] Passphrase retries (3 attempts, then exit with code 5)
 - [x] Optional session cache (in-memory) with TTL (see `docs/design/session-cache.md`)
@@ -38,11 +38,11 @@ A first-time user should:
 ### 1. First-Run UX
 
 - [x] Init wizard (default flow + `--advanced`)
-- [x] Config file generated at `~/.config/ledger/config.toml`
+- [x] Config file generated at `~/.config/jot/config.toml`
 - [x] Config file format matches `docs/design/config-spec.md`
 - [x] XDG config path detection + creation
-- [x] Default jot path: `~/.local/share/ledger/ledger.jot`
-- [x] Clear error when ledger is missing (see RFC-003 §15)
+- [x] Default jot path: `~/.local/share/jot/data.jot`
+- [x] Clear error when jot is missing (see RFC-003 §15)
 - [x] Quickstart output for `jot` (no args)
 - [x] Passphrase retry loop (3 attempts, show remaining)
 - [x] After 3 failures: exit with code 5 (encryption/auth error per RFC-003 §14.2)
@@ -74,7 +74,7 @@ A first-time user should:
 - [x] Tier 3: Passphrase + encrypted keyfile
   - [x] Key generation (random 32 bytes)
   - [x] Keyfile encrypted with passphrase-derived key
-  - [x] Default path: `~/.config/ledger/ledger.key`
+  - [x] Default path: `~/.config/jot/jot.key`
 - [x] Tier 4: Device keyfile only (unencrypted)
   - [x] Display explicit security warning (per `config-spec.md` §5)
   - [x] Require confirmation before proceeding
@@ -92,7 +92,7 @@ See `docs/design/session-cache.md` for design details.
 ### 6. Optional (Still M2-safe)
 
 - [x] `jot edit <id>` implemented as revision (supersedes)
-- [ ] Basic templates for journal (defer to Phase 0.2; stored in ledger as data model entity)
+- [ ] Basic templates for journal (defer to Phase 0.2; stored in jot as data model entity)
 - [x] `jot doctor` onboarding diagnostics (add to RFC-003 if implemented)
 
 ## Non-Goals
@@ -113,15 +113,15 @@ See `docs/design/session-cache.md` for design details.
 
 ### Integration Tests
 
-- [x] Init wizard creates valid config at `~/.config/ledger/config.toml`
-- [x] Init wizard creates ledger at `~/.local/share/ledger/ledger.jot`
+- [x] Init wizard creates valid config at `~/.config/jot/config.toml`
+- [x] Init wizard creates jot at `~/.local/share/jot/data.jot`
 - [x] Init wizard respects `--no-input` flag (errors on missing required values)
 - [x] Init wizard respects `--quiet` flag
 - [x] Prompts skipped when flags provided
 - [x] Passphrase retry shows attempts remaining
 - [x] After 3 failed attempts, exits with code 5
 - [x] `jot` (no args) shows quickstart help
-- [x] "No ledger found" message is clear and actionable
+- [x] "No jot found" message is clear and actionable
 - [x] Config file matches `config-spec.md` format exactly
 
 ### Security Tier Tests
@@ -153,8 +153,8 @@ M2 is complete when:
 - [x] `jot init` completes successfully with wizard
 - [x] `jot init --advanced` exposes all options
 - [x] `jot` (no args) shows quickstart
-- [x] Config written to `~/.config/ledger/config.toml`
-- [x] Ledger created at `~/.local/share/ledger/ledger.jot`
+- [x] Config written to `~/.config/jot/config.toml`
+- [x] Jot created at `~/.local/share/jot/data.jot`
 - [x] All 4 security tiers functional
 - [x] Session cache works with configurable TTL
 - [x] First-time user can complete init in < 60 seconds (manual test)
@@ -166,9 +166,9 @@ M2 is complete when:
 - M2 should not expand the data model.
 - Focus on a "product-ready" feel.
 - Config follows XDG Base Directory Specification:
-  - Config: `~/.config/ledger/config.toml`
-  - Data: `~/.local/share/ledger/ledger.jot`
-  - Keyfile: `~/.config/ledger/ledger.key` (if applicable)
+  - Config: `~/.config/jot/config.toml`
+  - Data: `~/.local/share/jot/data.jot`
+  - Keyfile: `~/.config/jot/jot.key` (if applicable)
 
 ## References
 

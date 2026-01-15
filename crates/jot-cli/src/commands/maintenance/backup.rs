@@ -2,24 +2,24 @@ use std::io::IsTerminal;
 use std::path::Path;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use crate::app::{missing_ledger_message, resolve_ledger_path, AppContext};
+use crate::app::{missing_jot_message, resolve_jot_path, AppContext};
 use crate::cli::BackupArgs;
 use crate::ui::progress::Spinner;
 use crate::ui::theme::{styled, styles};
 use crate::ui::{badge, blank_line, format_bytes, hint, print, Badge, OutputMode};
 
 pub fn handle_backup(ctx: &AppContext, args: &BackupArgs) -> anyhow::Result<()> {
-    let source = resolve_ledger_path(ctx.cli())?;
+    let source = resolve_jot_path(ctx.cli())?;
     let source_path = Path::new(&source);
     if !source_path.exists() {
-        return Err(anyhow::anyhow!(missing_ledger_message(source_path)));
+        return Err(anyhow::anyhow!(missing_jot_message(source_path)));
     }
 
     let ui_ctx = ctx.ui_context(false, None);
 
     if std::io::stdin().is_terminal() && !ctx.quiet() {
         let proceed = dialoguer::Confirm::new()
-            .with_prompt(format!("Back up ledger to {}?", args.destination))
+            .with_prompt(format!("Back up jot to {}?", args.destination))
             .default(true)
             .interact()?;
         if !proceed {
@@ -68,10 +68,7 @@ pub fn handle_backup(ctx: &AppContext, args: &BackupArgs) -> anyhow::Result<()> 
                 println!("{}", context_styled);
                 // Next step hints
                 blank_line(&ui_ctx);
-                print(
-                    &ui_ctx,
-                    &hint(&ui_ctx, "jot doctor  \u{00B7}  ledger check"),
-                );
+                print(&ui_ctx, &hint(&ui_ctx, "jot doctor  \u{00B7}  jot check"));
             }
             OutputMode::Plain | OutputMode::Json => {
                 println!("status=ok");
@@ -103,7 +100,7 @@ fn backup_atomic_copy(source: &Path, destination: &Path) -> anyhow::Result<u64> 
 
     let bytes = std::fs::copy(source, &temp_path).map_err(|e| {
         anyhow::anyhow!(
-            "Failed to copy ledger from {} to {}: {}",
+            "Failed to copy jot from {} to {}: {}",
             source.display(),
             destination.display(),
             e

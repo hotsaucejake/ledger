@@ -79,7 +79,7 @@ fn validate_security_config(config: &SecurityConfig) -> anyhow::Result<()> {
 
 /// Warning message for device keyfile security tier.
 pub fn device_keyfile_warning() -> &'static str {
-    "WARNING: You selected device_keyfile. This stores an unencrypted key on disk.\nIf your device is compromised, your ledger can be decrypted without a passphrase.\nContinue?"
+    "WARNING: You selected device_keyfile. This stores an unencrypted key on disk.\nIf your device is compromised, your jot can be decrypted without a passphrase.\nContinue?"
 }
 
 #[cfg(test)]

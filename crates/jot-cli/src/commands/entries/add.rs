@@ -83,7 +83,7 @@ pub fn handle_add(ctx: &AppContext, args: &AddArgs) -> anyhow::Result<()> {
 
     // Print wizard header if interactive
     if interactive && needs_prompting && ui_ctx.mode.is_pretty() {
-        let header = styled("Ledger", styles::bold(), ui_ctx.color);
+        let header = styled("Jot", styles::bold(), ui_ctx.color);
         println!("{} \u{00B7} add ({})\n", header, args.entry_type);
         print_step(&ui_ctx, 1, 2, "Enter fields");
     }
@@ -202,7 +202,7 @@ pub fn handle_add(ctx: &AppContext, args: &AddArgs) -> anyhow::Result<()> {
                     &hint(
                         &ui_ctx,
                         &format!(
-                            "ledger show {}  \u{00B7}  ledger list  \u{00B7}  ledger edit {}",
+                            "jot show {}  \u{00B7}  jot list  \u{00B7}  jot edit {}",
                             short_id(&entry_id),
                             short_id(&entry_id)
                         ),

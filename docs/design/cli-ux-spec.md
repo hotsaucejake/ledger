@@ -1,6 +1,6 @@
 # CLI UX Spec
 
-This document defines a consistent, polished CLI UX for Ledger. It is intended as a standalone guide for design and implementation decisions across commands.
+This document defines a consistent, polished CLI UX for Jot. It is intended as a standalone guide for design and implementation decisions across commands.
 
 ## Goals
 
@@ -17,7 +17,7 @@ This document defines a consistent, polished CLI UX for Ledger. It is intended a
 
 ## Output Modes
 
-Ledger supports three output modes:
+Jot supports three output modes:
 
 1) **json**
 - Always machine-only.
@@ -49,7 +49,7 @@ Ledger supports three output modes:
 Each command should follow a predictable rhythm:
 
 1) **Header line**
-- `Ledger` + command + jot path (or "default")
+- `Jot` + command + jot path (or "default")
 - Optional status line (lock/cache state) if relevant
 
 2) **Primary result block**
@@ -235,8 +235,8 @@ Pretty mode:
 Pretty (TTY):
 
 ```text
-Ledger · init
-Path: /home/user/.local/share/ledger/ledger.jot
+Jot · init
+Path: /home/user/.local/share/jot/data.jot
 
 1/3  Choose security tier
   > Passphrase only (recommended)
@@ -247,11 +247,11 @@ Passphrase: [hidden]
 Confirm:   [hidden]
 
 3/3  Review
-  Path:   .../ledger.jot
+  Path:   .../data.jot
   Tier:   Passphrase only
   Cache:  100s (in-memory)
 
-[OK] Ledger initialized
+[OK] Jot initialized
 Next: jot add journal  ·  jot list  ·  jot search \"term\"
 ```
 
@@ -259,7 +259,7 @@ Plain (non-TTY):
 
 ```text
 jot init
-path=/home/user/.local/share/ledger/ledger.jot
+path=/home/user/.local/share/jot/data.jot
 status=ok
 ```
 
@@ -268,8 +268,8 @@ status=ok
 Pretty (TTY):
 
 ```text
-Ledger · list (last 7d)
-Path: .../ledger.jot
+Jot · list (last 7d)
+Path: .../data.jot
 Using cached passphrase (expires in 1m40s)
 
 ID        Created                Type     Summary                 Tags
@@ -292,17 +292,17 @@ Plain (non-TTY):
 Pretty (TTY):
 
 ```text
-Ledger · init
-Path: /home/user/.local/share/ledger/ledger.jot
+Jot · init
+Path: /home/user/.local/share/jot/data.jot
 
-[ERR] Ledger already exists
+[ERR] Jot already exists
 
 What you can do:
   - Open it:   jot list
   - Verify:    jot check
-  - Recreate:  jot init --force   (destroys existing ledger)
+  - Recreate:  jot init --force   (destroys existing jot)
 
-Hint: Use JOT_PATH=/other/path to create a new ledger elsewhere.
+Hint: Use JOT_PATH=/other/path to create a new jot elsewhere.
 ```
 
 Plain (non-TTY):
@@ -310,7 +310,7 @@ Plain (non-TTY):
 ```text
 jot init
 status=error
-error=ledger already exists
+error=jot already exists
 ```
 
 ### `jot add journal` (guided wizard)
@@ -318,7 +318,7 @@ error=ledger already exists
 Pretty (TTY):
 
 ```text
-Ledger · add (journal)
+Jot · add (journal)
 
 1/4  Template
   > morning-journal (default)
@@ -354,7 +354,7 @@ hint=use flags or run on a TTY
 Pretty (TTY):
 
 ```text
-Ledger · show
+Jot · show
 ID: 7a2e3c0b
 Type: journal
 Created: 2026-01-12 04:48 UTC
@@ -378,7 +378,7 @@ body=Another entry body goes here.
 Pretty (TTY):
 
 ```text
-Ledger · search
+Jot · search
 Query: hello
 
 ID        Created                Summary
@@ -399,15 +399,15 @@ Plain (non-TTY):
 Pretty (TTY):
 
 ```text
-Ledger · check
-Path: .../ledger.jot
+Jot · check
+Path: .../data.jot
 
 Checking...
 - Schema integrity:     [OK]
 - Foreign keys:         [OK]
 - Full-text index:      [OK]
 
-[OK] Ledger is healthy
+[OK] Jot is healthy
 ```
 
 Plain (non-TTY):
@@ -424,8 +424,8 @@ status=ok
 Pretty (TTY):
 
 ```text
-Ledger · backup
-Source: .../ledger.jot
+Jot · backup
+Source: .../data.jot
 Destination: ./backup.jot
 
 Writing backup... 100%
@@ -448,20 +448,20 @@ time=0.8s
 Pretty (TTY):
 
 ```text
-Ledger · export
-Path: .../ledger.jot
+Jot · export
+Path: .../data.jot
 
 Exporting... 100%
 
 [OK] Export written
-Path: ./ledger-export.json  ·  Entries: 214  ·  Time: 0.6s
+Path: ./jot-export.json  ·  Entries: 214  ·  Time: 0.6s
 ```
 
 Plain (non-TTY):
 
 ```text
 status=ok
-path=./ledger-export.json
+path=./jot-export.json
 entries=214
 time=0.6s
 ```
@@ -471,7 +471,7 @@ time=0.6s
 Pretty (TTY):
 
 ```text
-Ledger · lock
+Jot · lock
 
 [OK] Passphrase cache cleared
 Cache: empty
@@ -489,7 +489,7 @@ cache=empty
 Pretty (TTY):
 
 ```text
-Ledger · search
+Jot · search
 Query: nope
 
 [INFO] No results

@@ -1,4 +1,4 @@
-//! Application context for the Ledger CLI.
+//! Application context for the Jot CLI.
 //!
 //! Provides a unified context that combines CLI arguments with
 //! lazily-loaded security configuration.

@@ -103,7 +103,7 @@ fn read_body_from_editor(
         .duration_since(UNIX_EPOCH)
         .map_err(|e| anyhow::anyhow!("System time error: {}", e))?
         .as_nanos();
-    let filename = format!("ledger_entry_{}_{}.md", std::process::id(), nanos);
+    let filename = format!("jot_entry_{}_{}.md", std::process::id(), nanos);
     let path = std::env::temp_dir().join(filename);
 
     let initial = initial_body.unwrap_or("");

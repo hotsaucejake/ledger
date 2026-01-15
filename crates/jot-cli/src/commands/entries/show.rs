@@ -14,7 +14,7 @@ pub fn handle_show(ctx: &AppContext, args: &ShowArgs) -> anyhow::Result<()> {
     let entry = storage.get_entry(&parsed)?.unwrap_or_else(|| {
         exit_not_found_with_hint(
             "Entry not found",
-            "Hint: Run `ledger list --last 7d` to find entry IDs.",
+            "Hint: Run `jot list --last 7d` to find entry IDs.",
         )
     });
 

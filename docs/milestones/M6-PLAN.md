@@ -18,7 +18,7 @@
 ### In Scope
 
 - App-layer crate/module for shared UX rules
-- API surface for desktop app (open ledger, add/edit/list/search)
+- API surface for desktop app (open jot, add/edit/list/search)
 - Key management UX guidance (passphrase, keychain, keyfile)
 - Minimal CLI refactor to use shared app layer
 
@@ -43,10 +43,10 @@
 
 ### 1. App Layer Definition
 
-- [ ] Create a new crate (e.g., `ledger-app`) or module under `jot-cli`
+- [ ] Create a new crate (e.g., `jot-app`) or module under `jot-cli`
 - [ ] Move prompt precedence rules, default handling, and validation helpers
 - [ ] Define interfaces for:
-  - `open_ledger(config, passphrase)`
+  - `open_jot(config, passphrase)`
   - `add_entry(entry_type, template, input_fields, tags, compositions)`
   - `list_entries(filters)`
   - `search_entries(query, filters)`

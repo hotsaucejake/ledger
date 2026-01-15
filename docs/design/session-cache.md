@@ -1,12 +1,12 @@
 # Session Cache Design
 
 **Status:** Draft
-**Applies to:** Ledger v0.1+ (M2)
+**Applies to:** Jot v0.1+ (M2)
 **Purpose:** Define the passphrase caching mechanism for improved UX.
 
 ## 1. Problem Statement
 
-Without caching, users must enter their passphrase for every Ledger operation. This creates friction for common workflows like:
+Without caching, users must enter their passphrase for every Jot operation. This creates friction for common workflows like:
 
 ```bash
 jot add journal --body "Quick note"
@@ -28,11 +28,11 @@ Each command requires passphrase entry, which is tedious for rapid, iterative us
 
 ### 3.1 Cache Daemon
 
-When caching is enabled, Ledger spawns a lightweight background process:
+When caching is enabled, Jot spawns a lightweight background process:
 
 ```
 ┌──────────────┐      Unix Socket      ┌──────────────┐
-│  ledger CLI  │ ◄──────────────────► │ ledger-cache │
+│  jot CLI  │ ◄──────────────────► │ jot-cache │
 └──────────────┘                       └──────────────┘
                                               │
                                               ▼
@@ -45,10 +45,10 @@ When caching is enabled, Ledger spawns a lightweight background process:
 The cache daemon listens on a Unix domain socket:
 
 ```
-Linux:  $XDG_RUNTIME_DIR/ledger/cache.sock
-        (fallback: /tmp/ledger-$UID/cache.sock)
+Linux:  $XDG_RUNTIME_DIR/jot/cache.sock
+        (fallback: /tmp/jot-$UID/cache.sock)
 
-macOS:  $TMPDIR/ledger-cache.sock
+macOS:  $TMPDIR/jot-cache.sock
 ```
 
 Socket permissions: `0600` (owner read/write only)
@@ -59,18 +59,18 @@ Simple text-based protocol over Unix socket:
 
 **Store passphrase:**
 ```
-STORE <ledger-path-hash> <passphrase-base64>
+STORE <jot-path-hash> <passphrase-base64>
 OK
 ```
 
 **Retrieve passphrase:**
 ```
-GET <ledger-path-hash>
+GET <jot-path-hash>
 PASSPHRASE <passphrase-base64>
 ```
 or
 ```
-GET <ledger-path-hash>
+GET <jot-path-hash>
 NOT_FOUND
 ```
 
@@ -86,19 +86,19 @@ PING
 PONG
 ```
 
-### 3.4 Ledger Path Hash
+### 3.4 Jot Path Hash
 
-To support multiple ledgers, the cache keys by a hash of the jot path:
+To support multiple jots, the cache keys by a hash of the jot path:
 
 ```rust
-fn ledger_hash(path: &Path) -> String {
+fn jot_hash(path: &Path) -> String {
     let canonical = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
     let hash = blake3::hash(canonical.to_string_lossy().as_bytes());
     hash.to_hex()[..16].to_string()
 }
 ```
 
-This prevents accidental cross-ledger passphrase use.
+This prevents accidental cross-jot passphrase use.
 
 ## 4. Daemon Lifecycle
 
@@ -163,7 +163,7 @@ When user enables caching, show:
 
 ```
 Note: Passphrase caching keeps your passphrase in memory for 5 minutes.
-This improves convenience but means your ledger can be accessed without
+This improves convenience but means your jot can be accessed without
 re-entering your passphrase during that time.
 ```
 
@@ -174,7 +174,7 @@ re-entering your passphrase during that time.
 Immediately clears the cache:
 
 ```bash
-$ ledger lock
+$ jot lock
 Passphrase cache cleared.
 ```
 
@@ -209,7 +209,7 @@ If the cached passphrase fails (e.g., jot file changed):
 
 ## 7. Configuration
 
-In `~/.config/ledger/config.toml`:
+In `~/.config/jot/config.toml`:
 
 ```toml
 [security]
@@ -233,14 +233,14 @@ Recommended values:
 ### 8.2 Daemon Binary
 
 The daemon can be:
-- A separate binary (`ledger-cache`)
+- A separate binary (`jot-cache`)
 - Or the same binary with a subcommand (`jot cache-daemon`)
 
 Recommend: Same binary with hidden subcommand for simpler distribution.
 
 ```bash
 # Spawned internally, not user-facing
-ledger --internal-cache-daemon --ttl 300
+jot --internal-cache-daemon --ttl 300
 ```
 
 ### 8.3 Graceful Degradation
@@ -279,7 +279,7 @@ Use Linux kernel keyring (`keyctl`).
 ## 10. Future Enhancements
 
 - **Activity-based TTL**: Reset timer on each use
-- **Per-ledger TTL**: Different timeouts for different ledgers
+- **Per-jot TTL**: Different timeouts for different jots
 - **Systemd socket activation**: Let systemd manage the daemon lifecycle
 - **macOS Keychain integration**: Store in Keychain with TTL (separate from Tier 2)
 

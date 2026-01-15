@@ -1,7 +1,7 @@
 # Jot Config Specification
 
 **Status:** Draft  
-**Applies to:** Ledger v0.1+  
+**Applies to:** Jot v0.1+  
 **Purpose:** Define the user config file layout and security modes.
 
 ## 1. Location (XDG)
@@ -9,10 +9,10 @@
 On Linux, config lives at:
 
 ```
-~/.config/ledger/config.toml
+~/.config/jot/config.toml
 ```
 
-This file is optional. If missing, Ledger will prompt to initialize a jot.
+This file is optional. If missing, Jot will prompt to initialize a jot.
 
 You can override the config location with:
 
@@ -23,8 +23,8 @@ JOT_CONFIG=/path/to/config.toml
 ## 2. File Format (TOML)
 
 ```toml
-[ledger]
-path = "/home/user/.local/share/ledger/ledger.jot"
+[jot]
+path = "/home/user/.local/share/jot/data.jot"
 
 [security]
 tier = "passphrase"
@@ -35,7 +35,7 @@ enabled = false
 
 [keyfile]
 mode = "none"
-path = "/home/user/.config/ledger/ledger.key"
+path = "/home/user/.config/jot/jot.key"
 
 [ui]
 timezone = "auto"
@@ -44,7 +44,7 @@ editor = "vim"
 
 ## 3. Fields
 
-### 3.1 [ledger]
+### 3.1 [jot]
 
 - `path` (string, required): Default jot file path
 
@@ -61,7 +61,7 @@ editor = "vim"
 ### 3.3 [keychain]
 
 - `enabled` (bool, optional; default `false`)
-  - If enabled, Ledger will try to store the passphrase in the OS keychain.
+  - If enabled, Jot will try to store the passphrase in the OS keychain.
   - Only valid when `tier = "passphrase_keychain"`.
 
 ### 3.4 [keyfile]
@@ -94,11 +94,11 @@ editor = "vim"
 
 ## 5. Warnings
 
-If `tier = device_keyfile`, Ledger must print:
+If `tier = device_keyfile`, Jot must print:
 
 ```
 WARNING: You selected device_keyfile. This stores an unencrypted key on disk.
-If your device is compromised, your ledger can be decrypted without a passphrase.
+If your device is compromised, your jot can be decrypted without a passphrase.
 ```
 
 ## 6. Defaults

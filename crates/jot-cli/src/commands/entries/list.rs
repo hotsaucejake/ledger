@@ -2,7 +2,7 @@ use chrono::Utc;
 
 use jot_core::storage::{EntryFilter, StorageEngine};
 
-use crate::app::{resolve_ledger_path, AppContext};
+use crate::app::{resolve_jot_path, AppContext};
 use crate::cli::ListArgs;
 use crate::helpers::{parse_duration, require_entry_type};
 use crate::output::{entries_json, entry_type_name_map};
@@ -18,7 +18,7 @@ pub fn handle_list(ctx: &AppContext, args: &ListArgs) -> anyhow::Result<()> {
     let (storage, _passphrase) = ctx.open_storage(false)?;
 
     // Get jot path for header
-    let ledger_path = resolve_ledger_path(ctx.cli()).ok();
+    let jot_path = resolve_jot_path(ctx.cli()).ok();
 
     // Build entry type name map for display
     let name_map = entry_type_name_map(&storage)?;
@@ -85,7 +85,7 @@ pub fn handle_list(ctx: &AppContext, args: &ListArgs) -> anyhow::Result<()> {
                             &ui_ctx,
                             "list",
                             filter_context.as_deref(),
-                            ledger_path.as_deref(),
+                            jot_path.as_deref(),
                         ),
                     );
                     blank_line(&ui_ctx);
@@ -114,7 +114,7 @@ pub fn handle_list(ctx: &AppContext, args: &ListArgs) -> anyhow::Result<()> {
                     &ui_ctx,
                     "list",
                     filter_context.as_deref(),
-                    ledger_path.as_deref(),
+                    jot_path.as_deref(),
                 ),
             );
             blank_line(&ui_ctx);
@@ -155,9 +155,9 @@ pub fn handle_list(ctx: &AppContext, args: &ListArgs) -> anyhow::Result<()> {
             // Actionable hints with first entry ID
             let first_id = entries.first().map(|e| short_id(&e.id));
             let hint_text = if let Some(id) = first_id {
-                format!("ledger show {}  \u{00B7}  ledger search \"term\"", id)
+                format!("jot show {}  \u{00B7}  jot search \"term\"", id)
             } else {
-                "ledger search \"term\"".to_string()
+                "jot search \"term\"".to_string()
             };
             print(
                 &ui_ctx,

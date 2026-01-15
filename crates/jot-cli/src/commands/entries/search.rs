@@ -1,7 +1,7 @@
 use chrono::Utc;
 use jot_core::storage::StorageEngine;
 
-use crate::app::{resolve_ledger_path, AppContext};
+use crate::app::{resolve_jot_path, AppContext};
 use crate::cli::SearchArgs;
 use crate::helpers::{parse_duration, require_entry_type};
 use crate::output::{entries_json, entry_type_name_map};
@@ -16,7 +16,7 @@ pub fn handle_search(ctx: &AppContext, args: &SearchArgs) -> anyhow::Result<()> 
     let (storage, _passphrase) = ctx.open_storage(false)?;
 
     // Get jot path for header
-    let ledger_path = resolve_ledger_path(ctx.cli()).ok();
+    let jot_path = resolve_jot_path(ctx.cli()).ok();
 
     // Build entry type name map for display
     let name_map = entry_type_name_map(&storage)?;
@@ -66,7 +66,7 @@ pub fn handle_search(ctx: &AppContext, args: &SearchArgs) -> anyhow::Result<()> 
                             &ui_ctx,
                             "search",
                             filter_context.as_deref(),
-                            ledger_path.as_deref(),
+                            jot_path.as_deref(),
                         ),
                     );
                     blank_line(&ui_ctx);
@@ -95,7 +95,7 @@ pub fn handle_search(ctx: &AppContext, args: &SearchArgs) -> anyhow::Result<()> 
                     &ui_ctx,
                     "search",
                     filter_context.as_deref(),
-                    ledger_path.as_deref(),
+                    jot_path.as_deref(),
                 ),
             );
             blank_line(&ui_ctx);
@@ -141,12 +141,12 @@ pub fn handle_search(ctx: &AppContext, args: &SearchArgs) -> anyhow::Result<()> 
             let first_id = entries.first().map(|e| short_id(&e.id));
             let hint_text = if let Some(id) = first_id {
                 format!(
-                    "{} entries. ledger show {}  \u{00B7}  ledger list",
+                    "{} entries. jot show {}  \u{00B7}  jot list",
                     entries.len(),
                     id
                 )
             } else {
-                format!("{} entries. ledger list", entries.len())
+                format!("{} entries. jot list", entries.len())
             };
             print(&ui_ctx, &hint(&ui_ctx, &hint_text));
         }

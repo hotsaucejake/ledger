@@ -16,7 +16,7 @@ fn bin() -> PathBuf {
     PathBuf::from(env!("CARGO_BIN_EXE_jot"))
 }
 
-fn temp_ledger_path(prefix: &str) -> PathBuf {
+fn temp_jot_path(prefix: &str) -> PathBuf {
     let nanos = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .expect("system time")
@@ -53,7 +53,7 @@ fn apply_xdg_env(cmd: &mut Command, config: &PathBuf, data: &PathBuf) {
 
 fn write_config_file(
     config_home: &Path,
-    ledger_path: &Path,
+    jot_path: &Path,
     tier: &str,
     keyfile_mode: &str,
     keyfile_path: Option<&Path>,
@@ -71,7 +71,7 @@ fn write_config_file(
     let keychain_enabled = tier == "passphrase_keychain";
     let contents = format!(
         "[jot]\npath = \"{}\"\n\n[security]\ntier = \"{}\"\npassphrase_cache_ttl_seconds = {}\n\n[keychain]\nenabled = {}\n\n[keyfile]\nmode = \"{}\"\n{}",
-        ledger_path.to_string_lossy(),
+        jot_path.to_string_lossy(),
         tier,
         cache_ttl_seconds,
         keychain_enabled,
@@ -111,25 +111,25 @@ fn open_sqlite_from_file(path: &PathBuf, passphrase: &str) -> Connection {
     conn
 }
 
-fn create_ledger_with_passphrase(path: &Path, passphrase: &str) {
-    let _ = AgeSqliteStorage::create(path, passphrase).expect("create ledger");
+fn create_jot_with_passphrase(path: &Path, passphrase: &str) {
+    let _ = AgeSqliteStorage::create(path, passphrase).expect("create jot");
 }
 
 fn cache_socket_path(data_home: &Path) -> PathBuf {
     let runtime = data_home.parent().unwrap().join("runtime");
     #[cfg(target_os = "macos")]
     {
-        // macOS uses TMPDIR/ledger-cache.sock (we set TMPDIR to runtime dir)
-        runtime.join("ledger-cache.sock")
+        // macOS uses TMPDIR/jot-cache.sock (we set TMPDIR to runtime dir)
+        runtime.join("jot-cache.sock")
     }
     #[cfg(not(target_os = "macos"))]
     {
-        // Linux uses XDG_RUNTIME_DIR/ledger/cache.sock
+        // Linux uses XDG_RUNTIME_DIR/jot/cache.sock
         runtime.join("jot").join("cache.sock")
     }
 }
 
-fn ledger_hash(path: &Path) -> String {
+fn jot_hash(path: &Path) -> String {
     let canonical = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
     let hash = blake3::hash(canonical.to_string_lossy().as_bytes());
     hash.to_hex()[..16].to_string()
@@ -163,13 +163,13 @@ fn cache_store_raw(socket_path: &Path, key: &str, passphrase: &str) {
 
 #[test]
 fn test_cli_init_add_list_show() {
-    let ledger_path = temp_ledger_path("ledger_cli_flow");
+    let jot_path = temp_jot_path("jot_cli_flow");
     let passphrase = "test-passphrase-secure-123";
-    let (config_home, data_home) = temp_xdg_dirs("ledger_cli_flow");
+    let (config_home, data_home) = temp_xdg_dirs("jot_cli_flow");
 
     let mut init = Command::new(bin());
     init.arg("init")
-        .arg(&ledger_path)
+        .arg(&jot_path)
         .env("JOT_PASSPHRASE", passphrase);
     apply_xdg_env(&mut init, &config_home, &data_home);
     let init = init.output().expect("run init");
@@ -186,7 +186,7 @@ fn test_cli_init_add_list_show() {
         .arg("--body")
         .arg("Hello from CLI")
         .arg("--jot")
-        .arg(&ledger_path)
+        .arg(&jot_path)
         .env("JOT_PASSPHRASE", passphrase);
     apply_xdg_env(&mut add, &config_home, &data_home);
     let add = add.output().expect("run add");
@@ -196,7 +196,7 @@ fn test_cli_init_add_list_show() {
     list.arg("list")
         .arg("--json")
         .arg("--jot")
-        .arg(&ledger_path)
+        .arg(&jot_path)
         .env("JOT_PASSPHRASE", passphrase);
     apply_xdg_env(&mut list, &config_home, &data_home);
     let list = list.output().expect("run list");
@@ -214,7 +214,7 @@ fn test_cli_init_add_list_show() {
     show.arg("show")
         .arg(entry_id)
         .arg("--jot")
-        .arg(&ledger_path)
+        .arg(&jot_path)
         .env("JOT_PASSPHRASE", passphrase);
     apply_xdg_env(&mut show, &config_home, &data_home);
     let show = show.output().expect("run show");
@@ -227,13 +227,13 @@ fn test_cli_init_add_list_show() {
 
 #[test]
 fn test_cli_search_and_show_json() {
-    let ledger_path = temp_ledger_path("ledger_cli_json");
+    let jot_path = temp_jot_path("jot_cli_json");
     let passphrase = "test-passphrase-secure-123";
-    let (config_home, data_home) = temp_xdg_dirs("ledger_cli_json");
+    let (config_home, data_home) = temp_xdg_dirs("jot_cli_json");
 
     let mut init = Command::new(bin());
     init.arg("init")
-        .arg(&ledger_path)
+        .arg(&jot_path)
         .env("JOT_PASSPHRASE", passphrase);
     apply_xdg_env(&mut init, &config_home, &data_home);
     let init = init.output().expect("run init");
@@ -245,7 +245,7 @@ fn test_cli_search_and_show_json() {
         .arg("--body")
         .arg("JSON output")
         .arg("--jot")
-        .arg(&ledger_path)
+        .arg(&jot_path)
         .env("JOT_PASSPHRASE", passphrase);
     apply_xdg_env(&mut add, &config_home, &data_home);
     let add = add.output().expect("run add");
@@ -257,7 +257,7 @@ fn test_cli_search_and_show_json() {
         .arg("JSON")
         .arg("--json")
         .arg("--jot")
-        .arg(&ledger_path)
+        .arg(&jot_path)
         .env("JOT_PASSPHRASE", passphrase);
     apply_xdg_env(&mut search, &config_home, &data_home);
     let search = search.output().expect("run search");
@@ -277,7 +277,7 @@ fn test_cli_search_and_show_json() {
         .arg(entry_id)
         .arg("--json")
         .arg("--jot")
-        .arg(&ledger_path)
+        .arg(&jot_path)
         .env("JOT_PASSPHRASE", passphrase);
     apply_xdg_env(&mut show, &config_home, &data_home);
     let show = show.output().expect("run show");
@@ -292,13 +292,13 @@ fn test_cli_search_and_show_json() {
 
 #[test]
 fn test_cli_check_failure() {
-    let ledger_path = temp_ledger_path("ledger_cli_check_fail");
+    let jot_path = temp_jot_path("jot_cli_check_fail");
     let passphrase = "test-passphrase-secure-123";
-    let (config_home, data_home) = temp_xdg_dirs("ledger_cli_check_fail");
+    let (config_home, data_home) = temp_xdg_dirs("jot_cli_check_fail");
 
     let mut init = Command::new(bin());
     init.arg("init")
-        .arg(&ledger_path)
+        .arg(&jot_path)
         .env("JOT_PASSPHRASE", passphrase);
     apply_xdg_env(&mut init, &config_home, &data_home);
     let init = init.output().expect("run init");
@@ -310,13 +310,13 @@ fn test_cli_check_failure() {
         .arg("--body")
         .arg("Integrity break")
         .arg("--jot")
-        .arg(&ledger_path)
+        .arg(&jot_path)
         .env("JOT_PASSPHRASE", passphrase);
     apply_xdg_env(&mut add, &config_home, &data_home);
     let add = add.output().expect("run add");
     assert!(add.status.success());
 
-    let conn = open_sqlite_from_file(&ledger_path, passphrase);
+    let conn = open_sqlite_from_file(&jot_path, passphrase);
     let entry_id: String = conn
         .query_row("SELECT id FROM entries LIMIT 1", [], |row| {
             row.get::<_, String>(0)
@@ -328,13 +328,13 @@ fn test_cli_check_failure() {
     let data = conn.serialize(DatabaseName::Main).expect("serialize");
     let encrypted =
         jot_core::storage::encryption::encrypt(data.as_ref(), passphrase).expect("encrypt");
-    std::fs::write(&ledger_path, encrypted).expect("write");
+    std::fs::write(&jot_path, encrypted).expect("write");
 
     let mut check = Command::new(bin());
     check
         .arg("check")
         .arg("--jot")
-        .arg(&ledger_path)
+        .arg(&jot_path)
         .env("JOT_PASSPHRASE", passphrase);
     apply_xdg_env(&mut check, &config_home, &data_home);
     let check = check.output().expect("run check");
@@ -348,7 +348,7 @@ fn test_cli_check_failure() {
 #[test]
 fn test_cli_init_writes_default_config() {
     let passphrase = "test-passphrase-secure-123";
-    let (config_home, data_home) = temp_xdg_dirs("ledger_cli_init_config");
+    let (config_home, data_home) = temp_xdg_dirs("jot_cli_init_config");
 
     let mut init = Command::new(bin());
     init.arg("init").env("JOT_PASSPHRASE", passphrase);
@@ -361,8 +361,8 @@ fn test_cli_init_writes_default_config() {
         String::from_utf8_lossy(&init.stderr)
     );
 
-    let ledger_path = data_home.join("jot").join("data.jot");
-    assert!(ledger_path.exists(), "jot file should exist");
+    let jot_path = data_home.join("jot").join("data.jot");
+    assert!(jot_path.exists(), "jot file should exist");
 
     let config_path = config_home.join("jot").join("config.toml");
     assert!(config_path.exists(), "config file should exist");
@@ -383,7 +383,7 @@ fn test_cli_init_writes_default_config() {
             .get("jot")
             .and_then(|section| section.get("path"))
             .and_then(|path| path.as_str()),
-        Some(ledger_path.to_string_lossy().as_ref())
+        Some(jot_path.to_string_lossy().as_ref())
     );
     assert_eq!(
         value
@@ -417,7 +417,7 @@ fn test_cli_init_writes_default_config() {
 
 #[test]
 fn test_cli_missing_config_message() {
-    let (config_home, data_home) = temp_xdg_dirs("ledger_cli_missing_config");
+    let (config_home, data_home) = temp_xdg_dirs("jot_cli_missing_config");
 
     let mut list = Command::new(bin());
     list.arg("list");
@@ -434,9 +434,9 @@ fn test_cli_missing_config_message() {
 
 #[test]
 fn test_cli_missing_config_message_uses_env_override() {
-    let (_config_home, data_home) = temp_xdg_dirs("ledger_cli_missing_config_env");
+    let (_config_home, data_home) = temp_xdg_dirs("jot_cli_missing_config_env");
     let override_path = std::env::temp_dir().join(format!(
-        "ledger_config_{}_{}.toml",
+        "jot_config_{}_{}.toml",
         std::process::id(),
         SystemTime::now()
             .duration_since(UNIX_EPOCH)
@@ -457,9 +457,9 @@ fn test_cli_missing_config_message_uses_env_override() {
 }
 
 #[test]
-fn test_cli_missing_ledger_message() {
-    let (config_home, data_home) = temp_xdg_dirs("ledger_cli_missing_ledger");
-    let missing = temp_ledger_path("ledger_missing");
+fn test_cli_missing_jot_message() {
+    let (config_home, data_home) = temp_xdg_dirs("jot_cli_missing_jot");
+    let missing = temp_jot_path("jot_missing");
 
     let mut list = Command::new(bin());
     list.arg("list")
@@ -477,7 +477,7 @@ fn test_cli_missing_ledger_message() {
 
 #[test]
 fn test_cli_init_no_input_requires_passphrase() {
-    let (config_home, data_home) = temp_xdg_dirs("ledger_cli_init_no_input");
+    let (config_home, data_home) = temp_xdg_dirs("jot_cli_init_no_input");
 
     let mut init = Command::new(bin());
     init.arg("init").arg("--no-input");
@@ -492,7 +492,7 @@ fn test_cli_init_no_input_requires_passphrase() {
 #[test]
 fn test_cli_init_no_input_advanced_uses_defaults() {
     let passphrase = "test-passphrase-secure-123";
-    let (config_home, data_home) = temp_xdg_dirs("ledger_cli_init_advanced_no_input");
+    let (config_home, data_home) = temp_xdg_dirs("jot_cli_init_advanced_no_input");
 
     let mut init = Command::new(bin());
     init.arg("init")
@@ -509,8 +509,8 @@ fn test_cli_init_no_input_advanced_uses_defaults() {
         String::from_utf8_lossy(&init.stderr)
     );
 
-    let ledger_path = data_home.join("jot").join("data.jot");
-    assert!(ledger_path.exists(), "jot file should exist");
+    let jot_path = data_home.join("jot").join("data.jot");
+    assert!(jot_path.exists(), "jot file should exist");
 
     let config_path = config_home.join("jot").join("config.toml");
     assert!(config_path.exists(), "config file should exist");
@@ -519,7 +519,7 @@ fn test_cli_init_no_input_advanced_uses_defaults() {
 #[test]
 fn test_cli_init_quiet_suppresses_output() {
     let passphrase = "test-passphrase-secure-123";
-    let (config_home, data_home) = temp_xdg_dirs("ledger_cli_init_quiet");
+    let (config_home, data_home) = temp_xdg_dirs("jot_cli_init_quiet");
 
     let mut init = Command::new(bin());
     init.arg("init")
@@ -530,13 +530,13 @@ fn test_cli_init_quiet_suppresses_output() {
 
     assert!(init.status.success());
     let stdout = String::from_utf8_lossy(&init.stdout);
-    assert!(!stdout.contains("Welcome to Ledger"));
+    assert!(!stdout.contains("Welcome to Jot"));
     assert!(stdout.trim().is_empty());
 }
 
 #[test]
 fn test_cli_lock_succeeds_without_cache() {
-    let (config_home, data_home) = temp_xdg_dirs("ledger_cli_lock");
+    let (config_home, data_home) = temp_xdg_dirs("jot_cli_lock");
 
     let mut lock = Command::new(bin());
     lock.arg("lock");
@@ -549,7 +549,7 @@ fn test_cli_lock_succeeds_without_cache() {
 #[test]
 fn test_cli_init_writes_ui_defaults() {
     let passphrase = "test-passphrase-secure-123";
-    let (config_home, data_home) = temp_xdg_dirs("ledger_cli_ui_defaults");
+    let (config_home, data_home) = temp_xdg_dirs("jot_cli_ui_defaults");
 
     let mut init = Command::new(bin());
     init.arg("init")
@@ -578,13 +578,13 @@ fn test_cli_init_writes_ui_defaults() {
 
 #[test]
 fn test_cli_list_defaults_to_recent_limit() {
-    let ledger_path = temp_ledger_path("ledger_cli_list_default");
+    let jot_path = temp_jot_path("jot_cli_list_default");
     let passphrase = "test-passphrase-secure-123";
-    let (config_home, data_home) = temp_xdg_dirs("ledger_cli_list_default");
+    let (config_home, data_home) = temp_xdg_dirs("jot_cli_list_default");
 
     let mut init = Command::new(bin());
     init.arg("init")
-        .arg(&ledger_path)
+        .arg(&jot_path)
         .env("JOT_PASSPHRASE", passphrase);
     apply_xdg_env(&mut init, &config_home, &data_home);
     let init = init.output().expect("run init");
@@ -597,7 +597,7 @@ fn test_cli_list_defaults_to_recent_limit() {
             .arg("--body")
             .arg(format!("Entry {}", idx))
             .arg("--jot")
-            .arg(&ledger_path)
+            .arg(&jot_path)
             .env("JOT_PASSPHRASE", passphrase);
         apply_xdg_env(&mut add, &config_home, &data_home);
         let add = add.output().expect("run add");
@@ -608,7 +608,7 @@ fn test_cli_list_defaults_to_recent_limit() {
     list.arg("list")
         .arg("--json")
         .arg("--jot")
-        .arg(&ledger_path)
+        .arg(&jot_path)
         .env("JOT_PASSPHRASE", passphrase);
     apply_xdg_env(&mut list, &config_home, &data_home);
     let list = list.output().expect("run list");
@@ -621,13 +621,13 @@ fn test_cli_list_defaults_to_recent_limit() {
 
 #[test]
 fn test_cli_list_empty_message() {
-    let ledger_path = temp_ledger_path("ledger_cli_list_empty");
+    let jot_path = temp_jot_path("jot_cli_list_empty");
     let passphrase = "test-passphrase-secure-123";
-    let (config_home, data_home) = temp_xdg_dirs("ledger_cli_list_empty");
+    let (config_home, data_home) = temp_xdg_dirs("jot_cli_list_empty");
 
     let mut init = Command::new(bin());
     init.arg("init")
-        .arg(&ledger_path)
+        .arg(&jot_path)
         .env("JOT_PASSPHRASE", passphrase);
     apply_xdg_env(&mut init, &config_home, &data_home);
     let init = init.output().expect("run init");
@@ -636,7 +636,7 @@ fn test_cli_list_empty_message() {
     let mut list = Command::new(bin());
     list.arg("list")
         .arg("--jot")
-        .arg(&ledger_path)
+        .arg(&jot_path)
         .env("JOT_PASSPHRASE", passphrase);
     apply_xdg_env(&mut list, &config_home, &data_home);
     let list = list.output().expect("run list");
@@ -648,13 +648,13 @@ fn test_cli_list_empty_message() {
 
 #[test]
 fn test_cli_search_empty_message() {
-    let ledger_path = temp_ledger_path("ledger_cli_search_empty");
+    let jot_path = temp_jot_path("jot_cli_search_empty");
     let passphrase = "test-passphrase-secure-123";
-    let (config_home, data_home) = temp_xdg_dirs("ledger_cli_search_empty");
+    let (config_home, data_home) = temp_xdg_dirs("jot_cli_search_empty");
 
     let mut init = Command::new(bin());
     init.arg("init")
-        .arg(&ledger_path)
+        .arg(&jot_path)
         .env("JOT_PASSPHRASE", passphrase);
     apply_xdg_env(&mut init, &config_home, &data_home);
     let init = init.output().expect("run init");
@@ -665,7 +665,7 @@ fn test_cli_search_empty_message() {
         .arg("search")
         .arg("missing")
         .arg("--jot")
-        .arg(&ledger_path)
+        .arg(&jot_path)
         .env("JOT_PASSPHRASE", passphrase);
     apply_xdg_env(&mut search, &config_home, &data_home);
     let search = search.output().expect("run search");
@@ -677,13 +677,13 @@ fn test_cli_search_empty_message() {
 
 #[test]
 fn test_cli_list_truncates_summary() {
-    let ledger_path = temp_ledger_path("ledger_cli_list_truncate");
+    let jot_path = temp_jot_path("jot_cli_list_truncate");
     let passphrase = "test-passphrase-secure-123";
-    let (config_home, data_home) = temp_xdg_dirs("ledger_cli_list_truncate");
+    let (config_home, data_home) = temp_xdg_dirs("jot_cli_list_truncate");
 
     let mut init = Command::new(bin());
     init.arg("init")
-        .arg(&ledger_path)
+        .arg(&jot_path)
         .env("JOT_PASSPHRASE", passphrase);
     apply_xdg_env(&mut init, &config_home, &data_home);
     let init = init.output().expect("run init");
@@ -696,7 +696,7 @@ fn test_cli_list_truncates_summary() {
         .arg("--body")
         .arg(&long_body)
         .arg("--jot")
-        .arg(&ledger_path)
+        .arg(&jot_path)
         .env("JOT_PASSPHRASE", passphrase);
     apply_xdg_env(&mut add, &config_home, &data_home);
     let add = add.output().expect("run add");
@@ -705,7 +705,7 @@ fn test_cli_list_truncates_summary() {
     let mut list = Command::new(bin());
     list.arg("list")
         .arg("--jot")
-        .arg(&ledger_path)
+        .arg(&jot_path)
         .env("JOT_PASSPHRASE", passphrase);
     apply_xdg_env(&mut list, &config_home, &data_home);
     let list = list.output().expect("run list");
@@ -717,7 +717,7 @@ fn test_cli_list_truncates_summary() {
 
 #[test]
 fn test_cli_quickstart_output() {
-    let output = Command::new(bin()).output().expect("run ledger");
+    let output = Command::new(bin()).output().expect("run jot");
     assert!(output.status.success());
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(stdout.contains("Quickstart"));
@@ -726,13 +726,13 @@ fn test_cli_quickstart_output() {
 
 #[test]
 fn test_cli_add_body_no_input_skips_prompt() {
-    let ledger_path = temp_ledger_path("ledger_cli_add_no_input");
+    let jot_path = temp_jot_path("jot_cli_add_no_input");
     let passphrase = "test-passphrase-secure-123";
-    let (config_home, data_home) = temp_xdg_dirs("ledger_cli_add_no_input");
+    let (config_home, data_home) = temp_xdg_dirs("jot_cli_add_no_input");
 
     let mut init = Command::new(bin());
     init.arg("init")
-        .arg(&ledger_path)
+        .arg(&jot_path)
         .env("JOT_PASSPHRASE", passphrase);
     apply_xdg_env(&mut init, &config_home, &data_home);
     let init = init.output().expect("run init");
@@ -745,7 +745,7 @@ fn test_cli_add_body_no_input_skips_prompt() {
         .arg("From body")
         .arg("--no-input")
         .arg("--jot")
-        .arg(&ledger_path)
+        .arg(&jot_path)
         .env("JOT_PASSPHRASE", passphrase);
     apply_xdg_env(&mut add, &config_home, &data_home);
     let add = add.output().expect("run add");
@@ -755,13 +755,13 @@ fn test_cli_add_body_no_input_skips_prompt() {
 
 #[test]
 fn test_cli_edit_creates_revision() {
-    let ledger_path = temp_ledger_path("ledger_cli_edit_revision");
+    let jot_path = temp_jot_path("jot_cli_edit_revision");
     let passphrase = "test-passphrase-secure-123";
-    let (config_home, data_home) = temp_xdg_dirs("ledger_cli_edit_revision");
+    let (config_home, data_home) = temp_xdg_dirs("jot_cli_edit_revision");
 
     let mut init = Command::new(bin());
     init.arg("init")
-        .arg(&ledger_path)
+        .arg(&jot_path)
         .env("JOT_PASSPHRASE", passphrase);
     apply_xdg_env(&mut init, &config_home, &data_home);
     let init = init.output().expect("run init");
@@ -773,7 +773,7 @@ fn test_cli_edit_creates_revision() {
         .arg("--body")
         .arg("Original body")
         .arg("--jot")
-        .arg(&ledger_path)
+        .arg(&jot_path)
         .env("JOT_PASSPHRASE", passphrase);
     apply_xdg_env(&mut add, &config_home, &data_home);
     let add = add.output().expect("run add");
@@ -783,7 +783,7 @@ fn test_cli_edit_creates_revision() {
     list.arg("list")
         .arg("--json")
         .arg("--jot")
-        .arg(&ledger_path)
+        .arg(&jot_path)
         .env("JOT_PASSPHRASE", passphrase);
     apply_xdg_env(&mut list, &config_home, &data_home);
     let list = list.output().expect("run list");
@@ -801,7 +801,7 @@ fn test_cli_edit_creates_revision() {
         .arg("--body")
         .arg("Updated body")
         .arg("--jot")
-        .arg(&ledger_path)
+        .arg(&jot_path)
         .env("JOT_PASSPHRASE", passphrase);
     apply_xdg_env(&mut edit, &config_home, &data_home);
     let edit = edit.output().expect("run edit");
@@ -813,7 +813,7 @@ fn test_cli_edit_creates_revision() {
         .arg("--json")
         .arg("--history")
         .arg("--jot")
-        .arg(&ledger_path)
+        .arg(&jot_path)
         .env("JOT_PASSPHRASE", passphrase);
     apply_xdg_env(&mut list_after, &config_home, &data_home);
     let list_after = list_after.output().expect("run list");
@@ -831,13 +831,13 @@ fn test_cli_edit_creates_revision() {
 
 #[test]
 fn test_cli_list_history_includes_superseded() {
-    let ledger_path = temp_ledger_path("ledger_cli_list_history");
+    let jot_path = temp_jot_path("jot_cli_list_history");
     let passphrase = "test-passphrase-secure-123";
-    let (config_home, data_home) = temp_xdg_dirs("ledger_cli_list_history");
+    let (config_home, data_home) = temp_xdg_dirs("jot_cli_list_history");
 
     let mut init = Command::new(bin());
     init.arg("init")
-        .arg(&ledger_path)
+        .arg(&jot_path)
         .env("JOT_PASSPHRASE", passphrase);
     apply_xdg_env(&mut init, &config_home, &data_home);
     let init = init.output().expect("run init");
@@ -849,7 +849,7 @@ fn test_cli_list_history_includes_superseded() {
         .arg("--body")
         .arg("Alpha body")
         .arg("--jot")
-        .arg(&ledger_path)
+        .arg(&jot_path)
         .env("JOT_PASSPHRASE", passphrase);
     apply_xdg_env(&mut add, &config_home, &data_home);
     let add = add.output().expect("run add");
@@ -859,7 +859,7 @@ fn test_cli_list_history_includes_superseded() {
     list.arg("list")
         .arg("--json")
         .arg("--jot")
-        .arg(&ledger_path)
+        .arg(&jot_path)
         .env("JOT_PASSPHRASE", passphrase);
     apply_xdg_env(&mut list, &config_home, &data_home);
     let list = list.output().expect("run list");
@@ -877,7 +877,7 @@ fn test_cli_list_history_includes_superseded() {
         .arg("--body")
         .arg("Alpha body updated")
         .arg("--jot")
-        .arg(&ledger_path)
+        .arg(&jot_path)
         .env("JOT_PASSPHRASE", passphrase);
     apply_xdg_env(&mut edit, &config_home, &data_home);
     let edit = edit.output().expect("run edit");
@@ -888,7 +888,7 @@ fn test_cli_list_history_includes_superseded() {
         .arg("list")
         .arg("--json")
         .arg("--jot")
-        .arg(&ledger_path)
+        .arg(&jot_path)
         .env("JOT_PASSPHRASE", passphrase);
     apply_xdg_env(&mut list_default, &config_home, &data_home);
     let list_default = list_default.output().expect("run list default");
@@ -903,7 +903,7 @@ fn test_cli_list_history_includes_superseded() {
         .arg("--history")
         .arg("--json")
         .arg("--jot")
-        .arg(&ledger_path)
+        .arg(&jot_path)
         .env("JOT_PASSPHRASE", passphrase);
     apply_xdg_env(&mut list_history, &config_home, &data_home);
     let list_history = list_history.output().expect("run list history");
@@ -915,13 +915,13 @@ fn test_cli_list_history_includes_superseded() {
 
 #[test]
 fn test_cli_search_history_includes_superseded() {
-    let ledger_path = temp_ledger_path("ledger_cli_search_history");
+    let jot_path = temp_jot_path("jot_cli_search_history");
     let passphrase = "test-passphrase-secure-123";
-    let (config_home, data_home) = temp_xdg_dirs("ledger_cli_search_history");
+    let (config_home, data_home) = temp_xdg_dirs("jot_cli_search_history");
 
     let mut init = Command::new(bin());
     init.arg("init")
-        .arg(&ledger_path)
+        .arg(&jot_path)
         .env("JOT_PASSPHRASE", passphrase);
     apply_xdg_env(&mut init, &config_home, &data_home);
     let init = init.output().expect("run init");
@@ -933,7 +933,7 @@ fn test_cli_search_history_includes_superseded() {
         .arg("--body")
         .arg("Searchable entry")
         .arg("--jot")
-        .arg(&ledger_path)
+        .arg(&jot_path)
         .env("JOT_PASSPHRASE", passphrase);
     apply_xdg_env(&mut add, &config_home, &data_home);
     let add = add.output().expect("run add");
@@ -943,7 +943,7 @@ fn test_cli_search_history_includes_superseded() {
     list.arg("list")
         .arg("--json")
         .arg("--jot")
-        .arg(&ledger_path)
+        .arg(&jot_path)
         .env("JOT_PASSPHRASE", passphrase);
     apply_xdg_env(&mut list, &config_home, &data_home);
     let list = list.output().expect("run list");
@@ -961,7 +961,7 @@ fn test_cli_search_history_includes_superseded() {
         .arg("--body")
         .arg("Searchable entry updated")
         .arg("--jot")
-        .arg(&ledger_path)
+        .arg(&jot_path)
         .env("JOT_PASSPHRASE", passphrase);
     apply_xdg_env(&mut edit, &config_home, &data_home);
     let edit = edit.output().expect("run edit");
@@ -973,7 +973,7 @@ fn test_cli_search_history_includes_superseded() {
         .arg("Searchable")
         .arg("--json")
         .arg("--jot")
-        .arg(&ledger_path)
+        .arg(&jot_path)
         .env("JOT_PASSPHRASE", passphrase);
     apply_xdg_env(&mut search_default, &config_home, &data_home);
     let search_default = search_default.output().expect("run search");
@@ -990,7 +990,7 @@ fn test_cli_search_history_includes_superseded() {
         .arg("--history")
         .arg("--json")
         .arg("--jot")
-        .arg(&ledger_path)
+        .arg(&jot_path)
         .env("JOT_PASSPHRASE", passphrase);
     apply_xdg_env(&mut search_history, &config_home, &data_home);
     let search_history = search_history.output().expect("run search history");
@@ -1003,20 +1003,20 @@ fn test_cli_search_history_includes_superseded() {
 
 #[test]
 fn test_cli_editor_override_is_used() {
-    let ledger_path = temp_ledger_path("ledger_cli_editor_override");
+    let jot_path = temp_jot_path("jot_cli_editor_override");
     let passphrase = "test-passphrase-secure-123";
-    let (config_home, data_home) = temp_xdg_dirs("ledger_cli_editor_override");
+    let (config_home, data_home) = temp_xdg_dirs("jot_cli_editor_override");
 
     let mut init = Command::new(bin());
     init.arg("init")
-        .arg(&ledger_path)
+        .arg(&jot_path)
         .env("JOT_PASSPHRASE", passphrase);
     apply_xdg_env(&mut init, &config_home, &data_home);
     let init = init.output().expect("run init");
     assert!(init.status.success());
 
     let editor_dir = std::env::temp_dir().join(format!(
-        "ledger_editor_{}_{}",
+        "jot_editor_{}_{}",
         std::process::id(),
         SystemTime::now()
             .duration_since(UNIX_EPOCH)
@@ -1040,7 +1040,7 @@ fn test_cli_editor_override_is_used() {
     let config_path = config_home.join("jot").join("config.toml");
     let contents = format!(
         "[jot]\npath = \"{}\"\n\n[security]\ntier = \"passphrase\"\npassphrase_cache_ttl_seconds = 0\n\n[keychain]\nenabled = false\n\n[keyfile]\nmode = \"none\"\n\n[ui]\neditor = \"{}\"\n",
-        ledger_path.to_string_lossy(),
+        jot_path.to_string_lossy(),
         editor_path.to_string_lossy()
     );
     std::fs::write(&config_path, contents).expect("write config");
@@ -1049,7 +1049,7 @@ fn test_cli_editor_override_is_used() {
     add.arg("add")
         .arg("journal")
         .arg("--jot")
-        .arg(&ledger_path)
+        .arg(&jot_path)
         .env("JOT_PASSPHRASE", passphrase);
     apply_xdg_env(&mut add, &config_home, &data_home);
     let add = add.output().expect("run add");
@@ -1059,7 +1059,7 @@ fn test_cli_editor_override_is_used() {
     list.arg("list")
         .arg("--json")
         .arg("--jot")
-        .arg(&ledger_path)
+        .arg(&jot_path)
         .env("JOT_PASSPHRASE", passphrase);
     apply_xdg_env(&mut list, &config_home, &data_home);
     let list = list.output().expect("run list");
@@ -1077,7 +1077,7 @@ fn test_cli_editor_override_is_used() {
 #[test]
 fn test_cli_init_advanced_ui_fields() {
     let passphrase = "test-passphrase-secure-123";
-    let (config_home, data_home) = temp_xdg_dirs("ledger_cli_init_ui_adv");
+    let (config_home, data_home) = temp_xdg_dirs("jot_cli_init_ui_adv");
 
     let mut init = Command::new(bin());
     init.arg("init")
@@ -1109,9 +1109,9 @@ fn test_cli_init_advanced_ui_fields() {
 #[test]
 fn test_cli_init_flags_skip_prompts() {
     let passphrase = "test-passphrase-secure-123";
-    let (config_home, data_home) = temp_xdg_dirs("ledger_cli_init_flags");
+    let (config_home, data_home) = temp_xdg_dirs("jot_cli_init_flags");
     let config_path = std::env::temp_dir().join(format!(
-        "ledger_config_flags_{}_{}.toml",
+        "jot_config_flags_{}_{}.toml",
         std::process::id(),
         SystemTime::now()
             .duration_since(UNIX_EPOCH)
@@ -1164,14 +1164,14 @@ fn test_cli_init_flags_skip_prompts() {
 
 #[test]
 fn test_cli_passphrase_keyfile_flow() {
-    let ledger_path = temp_ledger_path("ledger_cli_keyfile_encrypted");
+    let jot_path = temp_jot_path("jot_cli_keyfile_encrypted");
     let passphrase = "test-passphrase-secure-123";
-    let (config_home, data_home) = temp_xdg_dirs("ledger_cli_keyfile_encrypted");
-    let keyfile_path = config_home.join("jot").join("ledger.key");
+    let (config_home, data_home) = temp_xdg_dirs("jot_cli_keyfile_encrypted");
+    let keyfile_path = config_home.join("jot").join("jot.key");
 
     let key_bytes = vec![7u8; 32];
     let key_passphrase = STANDARD.encode(&key_bytes);
-    create_ledger_with_passphrase(&ledger_path, &key_passphrase);
+    create_jot_with_passphrase(&jot_path, &key_passphrase);
 
     let encrypted =
         jot_core::storage::encryption::encrypt(&key_bytes, passphrase).expect("encrypt keyfile");
@@ -1181,7 +1181,7 @@ fn test_cli_passphrase_keyfile_flow() {
 
     write_config_file(
         &config_home,
-        &ledger_path,
+        &jot_path,
         "passphrase_keyfile",
         "encrypted",
         Some(&keyfile_path),
@@ -1191,7 +1191,7 @@ fn test_cli_passphrase_keyfile_flow() {
     let mut list = Command::new(bin());
     list.arg("list")
         .arg("--jot")
-        .arg(&ledger_path)
+        .arg(&jot_path)
         .env("JOT_PASSPHRASE", passphrase);
     apply_xdg_env(&mut list, &config_home, &data_home);
     let list = list.output().expect("run list");
@@ -1201,13 +1201,13 @@ fn test_cli_passphrase_keyfile_flow() {
 
 #[test]
 fn test_cli_device_keyfile_flow() {
-    let ledger_path = temp_ledger_path("ledger_cli_keyfile_plain");
-    let (config_home, data_home) = temp_xdg_dirs("ledger_cli_keyfile_plain");
-    let keyfile_path = config_home.join("jot").join("ledger.key");
+    let jot_path = temp_jot_path("jot_cli_keyfile_plain");
+    let (config_home, data_home) = temp_xdg_dirs("jot_cli_keyfile_plain");
+    let keyfile_path = config_home.join("jot").join("jot.key");
 
     let key_bytes = vec![9u8; 32];
     let key_passphrase = STANDARD.encode(&key_bytes);
-    create_ledger_with_passphrase(&ledger_path, &key_passphrase);
+    create_jot_with_passphrase(&jot_path, &key_passphrase);
 
     std::fs::create_dir_all(keyfile_path.parent().expect("keyfile parent"))
         .expect("create keyfile dir");
@@ -1215,7 +1215,7 @@ fn test_cli_device_keyfile_flow() {
 
     write_config_file(
         &config_home,
-        &ledger_path,
+        &jot_path,
         "device_keyfile",
         "plain",
         Some(&keyfile_path),
@@ -1223,7 +1223,7 @@ fn test_cli_device_keyfile_flow() {
     );
 
     let mut list = Command::new(bin());
-    list.arg("list").arg("--jot").arg(&ledger_path);
+    list.arg("list").arg("--jot").arg(&jot_path);
     apply_xdg_env(&mut list, &config_home, &data_home);
     let list = list.output().expect("run list");
 
@@ -1233,11 +1233,11 @@ fn test_cli_device_keyfile_flow() {
 #[cfg(feature = "test-support")]
 #[test]
 fn test_cli_keychain_flow_uses_cached_passphrase() {
-    let ledger_path = temp_ledger_path("ledger_cli_keychain");
+    let jot_path = temp_jot_path("jot_cli_keychain");
     let passphrase = "test-passphrase-secure-123";
-    let (config_home, data_home) = temp_xdg_dirs("ledger_cli_keychain");
+    let (config_home, data_home) = temp_xdg_dirs("jot_cli_keychain");
     let keychain_path = std::env::temp_dir().join(format!(
-        "ledger_keychain_{}_{}",
+        "jot_keychain_{}_{}",
         std::process::id(),
         SystemTime::now()
             .duration_since(UNIX_EPOCH)
@@ -1245,10 +1245,10 @@ fn test_cli_keychain_flow_uses_cached_passphrase() {
             .as_nanos()
     ));
 
-    create_ledger_with_passphrase(&ledger_path, passphrase);
+    create_jot_with_passphrase(&jot_path, passphrase);
     write_config_file(
         &config_home,
-        &ledger_path,
+        &jot_path,
         "passphrase_keychain",
         "none",
         None,
@@ -1258,7 +1258,7 @@ fn test_cli_keychain_flow_uses_cached_passphrase() {
     let mut list = Command::new(bin());
     list.arg("list")
         .arg("--jot")
-        .arg(&ledger_path)
+        .arg(&jot_path)
         .env("JOT_PASSPHRASE", passphrase)
         .env("JOT_TEST_KEYCHAIN_PATH", &keychain_path);
     apply_xdg_env(&mut list, &config_home, &data_home);
@@ -1269,7 +1269,7 @@ fn test_cli_keychain_flow_uses_cached_passphrase() {
     list_cached
         .arg("list")
         .arg("--jot")
-        .arg(&ledger_path)
+        .arg(&jot_path)
         .env("JOT_TEST_KEYCHAIN_PATH", &keychain_path);
     apply_xdg_env(&mut list_cached, &config_home, &data_home);
     let list_cached = list_cached.output().expect("run list cached");
@@ -1279,24 +1279,24 @@ fn test_cli_keychain_flow_uses_cached_passphrase() {
 
 #[test]
 fn test_cli_invalid_keyfile_mode_errors() {
-    let ledger_path = temp_ledger_path("ledger_cli_keyfile_invalid_mode");
+    let jot_path = temp_jot_path("jot_cli_keyfile_invalid_mode");
     let passphrase = "test-passphrase-secure-123";
-    let (config_home, data_home) = temp_xdg_dirs("ledger_cli_keyfile_invalid_mode");
+    let (config_home, data_home) = temp_xdg_dirs("jot_cli_keyfile_invalid_mode");
 
-    create_ledger_with_passphrase(&ledger_path, passphrase);
+    create_jot_with_passphrase(&jot_path, passphrase);
     write_config_file(
         &config_home,
-        &ledger_path,
+        &jot_path,
         "passphrase_keyfile",
         "none",
-        Some(&config_home.join("jot").join("ledger.key")),
+        Some(&config_home.join("jot").join("jot.key")),
         0,
     );
 
     let mut list = Command::new(bin());
     list.arg("list")
         .arg("--jot")
-        .arg(&ledger_path)
+        .arg(&jot_path)
         .env("JOT_PASSPHRASE", passphrase);
     apply_xdg_env(&mut list, &config_home, &data_home);
     let list = list.output().expect("run list");
@@ -1308,22 +1308,15 @@ fn test_cli_invalid_keyfile_mode_errors() {
 
 #[test]
 fn test_cli_missing_keyfile_path_errors() {
-    let ledger_path = temp_ledger_path("ledger_cli_keyfile_missing_path");
+    let jot_path = temp_jot_path("jot_cli_keyfile_missing_path");
     let passphrase = "test-passphrase-secure-123";
-    let (config_home, data_home) = temp_xdg_dirs("ledger_cli_keyfile_missing_path");
+    let (config_home, data_home) = temp_xdg_dirs("jot_cli_keyfile_missing_path");
 
-    create_ledger_with_passphrase(&ledger_path, passphrase);
-    write_config_file(
-        &config_home,
-        &ledger_path,
-        "device_keyfile",
-        "plain",
-        None,
-        0,
-    );
+    create_jot_with_passphrase(&jot_path, passphrase);
+    write_config_file(&config_home, &jot_path, "device_keyfile", "plain", None, 0);
 
     let mut list = Command::new(bin());
-    list.arg("list").arg("--jot").arg(&ledger_path);
+    list.arg("list").arg("--jot").arg(&jot_path);
     apply_xdg_env(&mut list, &config_home, &data_home);
     let list = list.output().expect("run list");
 
@@ -1334,17 +1327,17 @@ fn test_cli_missing_keyfile_path_errors() {
 
 #[test]
 fn test_cli_cache_lock_clears_cache() {
-    let ledger_path = temp_ledger_path("ledger_cli_cache_lock");
+    let jot_path = temp_jot_path("jot_cli_cache_lock");
     let passphrase = "test-passphrase-secure-123";
-    let (config_home, data_home) = temp_xdg_dirs("ledger_cli_cache_lock");
+    let (config_home, data_home) = temp_xdg_dirs("jot_cli_cache_lock");
 
-    create_ledger_with_passphrase(&ledger_path, passphrase);
-    write_config_file(&config_home, &ledger_path, "passphrase", "none", None, 300);
+    create_jot_with_passphrase(&jot_path, passphrase);
+    write_config_file(&config_home, &jot_path, "passphrase", "none", None, 300);
 
     let mut list = Command::new(bin());
     list.arg("list")
         .arg("--jot")
-        .arg(&ledger_path)
+        .arg(&jot_path)
         .env("JOT_PASSPHRASE", passphrase);
     apply_xdg_env(&mut list, &config_home, &data_home);
     let list = list.output().expect("run list");
@@ -1360,7 +1353,7 @@ fn test_cli_cache_lock_clears_cache() {
     list_cached
         .arg("list")
         .arg("--jot")
-        .arg(&ledger_path)
+        .arg(&jot_path)
         .env_remove("JOT_PASSPHRASE");
     apply_xdg_env(&mut list_cached, &config_home, &data_home);
     let list_cached = list_cached.output().expect("run list cached");
@@ -1370,18 +1363,18 @@ fn test_cli_cache_lock_clears_cache() {
 
 #[test]
 fn test_cli_cache_expires_after_ttl() {
-    let ledger_path = temp_ledger_path("ledger_cli_cache_ttl");
+    let jot_path = temp_jot_path("jot_cli_cache_ttl");
     let passphrase = "test-passphrase-secure-123";
-    let (config_home, data_home) = temp_xdg_dirs("ledger_cli_cache_ttl");
+    let (config_home, data_home) = temp_xdg_dirs("jot_cli_cache_ttl");
 
-    create_ledger_with_passphrase(&ledger_path, passphrase);
-    write_config_file(&config_home, &ledger_path, "passphrase", "none", None, 1);
+    create_jot_with_passphrase(&jot_path, passphrase);
+    write_config_file(&config_home, &jot_path, "passphrase", "none", None, 1);
 
     // First list command with passphrase - should cache the passphrase
     let mut list = Command::new(bin());
     list.arg("list")
         .arg("--jot")
-        .arg(&ledger_path)
+        .arg(&jot_path)
         .env("JOT_PASSPHRASE", passphrase);
     apply_xdg_env(&mut list, &config_home, &data_home);
     let list = list.output().expect("run list");
@@ -1392,7 +1385,7 @@ fn test_cli_cache_expires_after_ttl() {
     list_cached
         .arg("list")
         .arg("--jot")
-        .arg(&ledger_path)
+        .arg(&jot_path)
         .env_remove("JOT_PASSPHRASE");
     apply_xdg_env(&mut list_cached, &config_home, &data_home);
     let list_cached = list_cached.output().expect("run list cached");
@@ -1408,7 +1401,7 @@ fn test_cli_cache_expires_after_ttl() {
     list_expired
         .arg("list")
         .arg("--jot")
-        .arg(&ledger_path)
+        .arg(&jot_path)
         .env_remove("JOT_PASSPHRASE");
     apply_xdg_env(&mut list_expired, &config_home, &data_home);
     let list_expired = list_expired.output().expect("run list expired");
@@ -1418,17 +1411,17 @@ fn test_cli_cache_expires_after_ttl() {
 
 #[test]
 fn test_cli_cache_disabled_when_ttl_zero() {
-    let ledger_path = temp_ledger_path("ledger_cli_cache_disabled");
+    let jot_path = temp_jot_path("jot_cli_cache_disabled");
     let passphrase = "test-passphrase-secure-123";
-    let (config_home, data_home) = temp_xdg_dirs("ledger_cli_cache_disabled");
+    let (config_home, data_home) = temp_xdg_dirs("jot_cli_cache_disabled");
 
-    create_ledger_with_passphrase(&ledger_path, passphrase);
-    write_config_file(&config_home, &ledger_path, "passphrase", "none", None, 0);
+    create_jot_with_passphrase(&jot_path, passphrase);
+    write_config_file(&config_home, &jot_path, "passphrase", "none", None, 0);
 
     let mut list = Command::new(bin());
     list.arg("list")
         .arg("--jot")
-        .arg(&ledger_path)
+        .arg(&jot_path)
         .env("JOT_PASSPHRASE", passphrase);
     apply_xdg_env(&mut list, &config_home, &data_home);
     let list = list.output().expect("run list");
@@ -1438,7 +1431,7 @@ fn test_cli_cache_disabled_when_ttl_zero() {
     list_no_env
         .arg("list")
         .arg("--jot")
-        .arg(&ledger_path)
+        .arg(&jot_path)
         .env_remove("JOT_PASSPHRASE");
     apply_xdg_env(&mut list_no_env, &config_home, &data_home);
     let list_no_env = list_no_env.output().expect("run list no env");
@@ -1448,23 +1441,23 @@ fn test_cli_cache_disabled_when_ttl_zero() {
 
 #[test]
 fn test_cli_cache_clears_on_incorrect_passphrase() {
-    let ledger_path = temp_ledger_path("ledger_cli_cache_bad");
+    let jot_path = temp_jot_path("jot_cli_cache_bad");
     let passphrase = "test-passphrase-secure-123";
-    let (config_home, data_home) = temp_xdg_dirs("ledger_cli_cache_bad");
+    let (config_home, data_home) = temp_xdg_dirs("jot_cli_cache_bad");
 
-    create_ledger_with_passphrase(&ledger_path, passphrase);
-    write_config_file(&config_home, &ledger_path, "passphrase", "none", None, 300);
+    create_jot_with_passphrase(&jot_path, passphrase);
+    write_config_file(&config_home, &jot_path, "passphrase", "none", None, 300);
 
     let mut list = Command::new(bin());
     list.arg("list")
         .arg("--jot")
-        .arg(&ledger_path)
+        .arg(&jot_path)
         .env("JOT_PASSPHRASE", passphrase);
     apply_xdg_env(&mut list, &config_home, &data_home);
     let list = list.output().expect("run list");
     assert!(list.status.success());
 
-    let key = ledger_hash(&ledger_path);
+    let key = jot_hash(&jot_path);
     let socket_path = cache_socket_path(&data_home);
     cache_store_raw(&socket_path, &key, "wrong-passphrase");
 
@@ -1472,7 +1465,7 @@ fn test_cli_cache_clears_on_incorrect_passphrase() {
     list_cached
         .arg("list")
         .arg("--jot")
-        .arg(&ledger_path)
+        .arg(&jot_path)
         .env_remove("JOT_PASSPHRASE");
     apply_xdg_env(&mut list_cached, &config_home, &data_home);
     let list_cached = list_cached.output().expect("run list cached");
@@ -1482,7 +1475,7 @@ fn test_cli_cache_clears_on_incorrect_passphrase() {
     list_after
         .arg("list")
         .arg("--jot")
-        .arg(&ledger_path)
+        .arg(&jot_path)
         .env("JOT_PASSPHRASE", passphrase);
     apply_xdg_env(&mut list_after, &config_home, &data_home);
     let list_after = list_after.output().expect("run list after");
@@ -1491,17 +1484,17 @@ fn test_cli_cache_clears_on_incorrect_passphrase() {
 
 #[test]
 fn test_cli_wrong_passphrase_exit_code() {
-    let ledger_path = temp_ledger_path("ledger_cli_wrong_passphrase");
+    let jot_path = temp_jot_path("jot_cli_wrong_passphrase");
     let passphrase = "test-passphrase-secure-123";
-    let (config_home, data_home) = temp_xdg_dirs("ledger_cli_wrong_passphrase");
+    let (config_home, data_home) = temp_xdg_dirs("jot_cli_wrong_passphrase");
 
-    create_ledger_with_passphrase(&ledger_path, passphrase);
-    write_config_file(&config_home, &ledger_path, "passphrase", "none", None, 0);
+    create_jot_with_passphrase(&jot_path, passphrase);
+    write_config_file(&config_home, &jot_path, "passphrase", "none", None, 0);
 
     let mut list = Command::new(bin());
     list.arg("list")
         .arg("--jot")
-        .arg(&ledger_path)
+        .arg(&jot_path)
         .env("JOT_PASSPHRASE", "wrong-passphrase");
     apply_xdg_env(&mut list, &config_home, &data_home);
     let list = list.output().expect("run list");
@@ -1511,18 +1504,18 @@ fn test_cli_wrong_passphrase_exit_code() {
 
 #[test]
 fn test_cli_show_not_found_exit_code() {
-    let ledger_path = temp_ledger_path("ledger_cli_show_not_found");
+    let jot_path = temp_jot_path("jot_cli_show_not_found");
     let passphrase = "test-passphrase-secure-123";
-    let (config_home, data_home) = temp_xdg_dirs("ledger_cli_show_not_found");
+    let (config_home, data_home) = temp_xdg_dirs("jot_cli_show_not_found");
 
-    create_ledger_with_passphrase(&ledger_path, passphrase);
-    write_config_file(&config_home, &ledger_path, "passphrase", "none", None, 0);
+    create_jot_with_passphrase(&jot_path, passphrase);
+    write_config_file(&config_home, &jot_path, "passphrase", "none", None, 0);
 
     let mut show = Command::new(bin());
     show.arg("show")
         .arg("00000000-0000-0000-0000-000000000000")
         .arg("--jot")
-        .arg(&ledger_path)
+        .arg(&jot_path)
         .env("JOT_PASSPHRASE", passphrase);
     apply_xdg_env(&mut show, &config_home, &data_home);
     let show = show.output().expect("run show");
@@ -1535,15 +1528,15 @@ fn test_cli_show_not_found_exit_code() {
 #[cfg(feature = "test-support")]
 #[test]
 fn test_cli_passphrase_retry_exits_after_three_failures() {
-    let ledger_path = temp_ledger_path("ledger_cli_retry_exit");
+    let jot_path = temp_jot_path("jot_cli_retry_exit");
     let passphrase = "test-passphrase-secure-123";
-    let (config_home, data_home) = temp_xdg_dirs("ledger_cli_retry_exit");
+    let (config_home, data_home) = temp_xdg_dirs("jot_cli_retry_exit");
 
-    create_ledger_with_passphrase(&ledger_path, passphrase);
-    write_config_file(&config_home, &ledger_path, "passphrase", "none", None, 0);
+    create_jot_with_passphrase(&jot_path, passphrase);
+    write_config_file(&config_home, &jot_path, "passphrase", "none", None, 0);
 
     let mut list = Command::new(bin());
-    list.arg("list").arg("--jot").arg(&ledger_path).env(
+    list.arg("list").arg("--jot").arg(&jot_path).env(
         "JOT_TEST_PASSPHRASE_ATTEMPTS",
         "wrong-pass-one-1,wrong-pass-two-2,wrong-pass-three-3",
     );
@@ -1564,8 +1557,8 @@ fn test_cli_invalid_args_exit_code() {
 }
 
 #[test]
-fn test_cli_missing_ledger_exit_code() {
-    let (config_home, data_home) = temp_xdg_dirs("ledger_cli_exit_code_missing");
+fn test_cli_missing_jot_exit_code() {
+    let (config_home, data_home) = temp_xdg_dirs("jot_cli_exit_code_missing");
     let mut list = Command::new(bin());
     list.arg("list");
     apply_xdg_env(&mut list, &config_home, &data_home);
@@ -1575,7 +1568,7 @@ fn test_cli_missing_ledger_exit_code() {
 
 #[test]
 fn test_cli_doctor_missing_config() {
-    let (config_home, data_home) = temp_xdg_dirs("ledger_cli_doctor_missing");
+    let (config_home, data_home) = temp_xdg_dirs("jot_cli_doctor_missing");
     let mut doctor = Command::new(bin());
     doctor.arg("doctor");
     apply_xdg_env(&mut doctor, &config_home, &data_home);
@@ -1588,13 +1581,13 @@ fn test_cli_doctor_missing_config() {
 
 #[test]
 fn test_cli_doctor_ok() {
-    let ledger_path = temp_ledger_path("ledger_cli_doctor_ok");
+    let jot_path = temp_jot_path("jot_cli_doctor_ok");
     let passphrase = "test-passphrase-secure-123";
-    let (config_home, data_home) = temp_xdg_dirs("ledger_cli_doctor_ok");
+    let (config_home, data_home) = temp_xdg_dirs("jot_cli_doctor_ok");
 
     let mut init = Command::new(bin());
     init.arg("init")
-        .arg(&ledger_path)
+        .arg(&jot_path)
         .env("JOT_PASSPHRASE", passphrase);
     apply_xdg_env(&mut init, &config_home, &data_home);
     let init = init.output().expect("run init");
@@ -1617,14 +1610,14 @@ fn test_cli_doctor_ok() {
 
 #[test]
 fn test_cli_compositions_crud() {
-    let ledger_path = temp_ledger_path("ledger_cli_comp_crud");
+    let jot_path = temp_jot_path("jot_cli_comp_crud");
     let passphrase = "test-passphrase-secure-123";
-    let (config_home, data_home) = temp_xdg_dirs("ledger_cli_comp_crud");
+    let (config_home, data_home) = temp_xdg_dirs("jot_cli_comp_crud");
 
-    // Init ledger
+    // Init jot
     let mut init = Command::new(bin());
     init.arg("init")
-        .arg(&ledger_path)
+        .arg(&jot_path)
         .env("JOT_PASSPHRASE", passphrase);
     apply_xdg_env(&mut init, &config_home, &data_home);
     let init = init.output().expect("run init");
@@ -1639,7 +1632,7 @@ fn test_cli_compositions_crud() {
         .arg("--description")
         .arg("A test project composition")
         .arg("--jot")
-        .arg(&ledger_path)
+        .arg(&jot_path)
         .env("JOT_PASSPHRASE", passphrase);
     apply_xdg_env(&mut create, &config_home, &data_home);
     let create = create.output().expect("run compositions create");
@@ -1659,7 +1652,7 @@ fn test_cli_compositions_crud() {
         .arg("list")
         .arg("--json")
         .arg("--jot")
-        .arg(&ledger_path)
+        .arg(&jot_path)
         .env("JOT_PASSPHRASE", passphrase);
     apply_xdg_env(&mut list, &config_home, &data_home);
     let list = list.output().expect("run compositions list");
@@ -1678,7 +1671,7 @@ fn test_cli_compositions_crud() {
         .arg("show")
         .arg("my-project")
         .arg("--jot")
-        .arg(&ledger_path)
+        .arg(&jot_path)
         .env("JOT_PASSPHRASE", passphrase);
     apply_xdg_env(&mut show, &config_home, &data_home);
     let show = show.output().expect("run compositions show");
@@ -1695,7 +1688,7 @@ fn test_cli_compositions_crud() {
         .arg("my-project")
         .arg("renamed-project")
         .arg("--jot")
-        .arg(&ledger_path)
+        .arg(&jot_path)
         .env("JOT_PASSPHRASE", passphrase);
     apply_xdg_env(&mut rename, &config_home, &data_home);
     let rename = rename.output().expect("run compositions rename");
@@ -1708,7 +1701,7 @@ fn test_cli_compositions_crud() {
         .arg("list")
         .arg("--json")
         .arg("--jot")
-        .arg(&ledger_path)
+        .arg(&jot_path)
         .env("JOT_PASSPHRASE", passphrase);
     apply_xdg_env(&mut list2, &config_home, &data_home);
     let list2 = list2.output().expect("run compositions list");
@@ -1727,7 +1720,7 @@ fn test_cli_compositions_crud() {
         .arg("renamed-project")
         .arg("--force")
         .arg("--jot")
-        .arg(&ledger_path)
+        .arg(&jot_path)
         .env("JOT_PASSPHRASE", passphrase);
     apply_xdg_env(&mut delete, &config_home, &data_home);
     let delete = delete.output().expect("run compositions delete");
@@ -1744,7 +1737,7 @@ fn test_cli_compositions_crud() {
         .arg("list")
         .arg("--json")
         .arg("--jot")
-        .arg(&ledger_path)
+        .arg(&jot_path)
         .env("JOT_PASSPHRASE", passphrase);
     apply_xdg_env(&mut list3, &config_home, &data_home);
     let list3 = list3.output().expect("run compositions list");
@@ -1755,14 +1748,14 @@ fn test_cli_compositions_crud() {
 
 #[test]
 fn test_cli_attach_detach_entry() {
-    let ledger_path = temp_ledger_path("ledger_cli_attach");
+    let jot_path = temp_jot_path("jot_cli_attach");
     let passphrase = "test-passphrase-secure-123";
-    let (config_home, data_home) = temp_xdg_dirs("ledger_cli_attach");
+    let (config_home, data_home) = temp_xdg_dirs("jot_cli_attach");
 
-    // Init ledger
+    // Init jot
     let mut init = Command::new(bin());
     init.arg("init")
-        .arg(&ledger_path)
+        .arg(&jot_path)
         .env("JOT_PASSPHRASE", passphrase);
     apply_xdg_env(&mut init, &config_home, &data_home);
     let init = init.output().expect("run init");
@@ -1775,7 +1768,7 @@ fn test_cli_attach_detach_entry() {
         .arg("create")
         .arg("research")
         .arg("--jot")
-        .arg(&ledger_path)
+        .arg(&jot_path)
         .env("JOT_PASSPHRASE", passphrase);
     apply_xdg_env(&mut create, &config_home, &data_home);
     let create = create.output().expect("run compositions create");
@@ -1788,7 +1781,7 @@ fn test_cli_attach_detach_entry() {
         .arg("--body")
         .arg("Research notes")
         .arg("--jot")
-        .arg(&ledger_path)
+        .arg(&jot_path)
         .env("JOT_PASSPHRASE", passphrase);
     apply_xdg_env(&mut add, &config_home, &data_home);
     let add = add.output().expect("run add");
@@ -1799,7 +1792,7 @@ fn test_cli_attach_detach_entry() {
     list.arg("list")
         .arg("--json")
         .arg("--jot")
-        .arg(&ledger_path)
+        .arg(&jot_path)
         .env("JOT_PASSPHRASE", passphrase);
     apply_xdg_env(&mut list, &config_home, &data_home);
     let list = list.output().expect("run list");
@@ -1816,7 +1809,7 @@ fn test_cli_attach_detach_entry() {
         .arg(entry_id)
         .arg("research")
         .arg("--jot")
-        .arg(&ledger_path)
+        .arg(&jot_path)
         .env("JOT_PASSPHRASE", passphrase);
     apply_xdg_env(&mut attach, &config_home, &data_home);
     let attach = attach.output().expect("run attach");
@@ -1832,7 +1825,7 @@ fn test_cli_attach_detach_entry() {
         .arg("show")
         .arg("research")
         .arg("--jot")
-        .arg(&ledger_path)
+        .arg(&jot_path)
         .env("JOT_PASSPHRASE", passphrase);
     apply_xdg_env(&mut show, &config_home, &data_home);
     let show = show.output().expect("run compositions show");
@@ -1852,7 +1845,7 @@ fn test_cli_attach_detach_entry() {
         .arg(entry_id)
         .arg("research")
         .arg("--jot")
-        .arg(&ledger_path)
+        .arg(&jot_path)
         .env("JOT_PASSPHRASE", passphrase);
     apply_xdg_env(&mut detach, &config_home, &data_home);
     let detach = detach.output().expect("run detach");
@@ -1865,7 +1858,7 @@ fn test_cli_attach_detach_entry() {
         .arg("show")
         .arg("research")
         .arg("--jot")
-        .arg(&ledger_path)
+        .arg(&jot_path)
         .env("JOT_PASSPHRASE", passphrase);
     apply_xdg_env(&mut show2, &config_home, &data_home);
     let show2 = show2.output().expect("run compositions show");
@@ -1884,14 +1877,14 @@ fn test_cli_attach_detach_entry() {
 
 #[test]
 fn test_cli_templates_crud() {
-    let ledger_path = temp_ledger_path("ledger_cli_tmpl_crud");
+    let jot_path = temp_jot_path("jot_cli_tmpl_crud");
     let passphrase = "test-passphrase-secure-123";
-    let (config_home, data_home) = temp_xdg_dirs("ledger_cli_tmpl_crud");
+    let (config_home, data_home) = temp_xdg_dirs("jot_cli_tmpl_crud");
 
-    // Init ledger
+    // Init jot
     let mut init = Command::new(bin());
     init.arg("init")
-        .arg(&ledger_path)
+        .arg(&jot_path)
         .env("JOT_PASSPHRASE", passphrase);
     apply_xdg_env(&mut init, &config_home, &data_home);
     let init = init.output().expect("run init");
@@ -1910,7 +1903,7 @@ fn test_cli_templates_crud() {
         .arg("--defaults")
         .arg(r#"{"body": "Today I..."}"#)
         .arg("--jot")
-        .arg(&ledger_path)
+        .arg(&jot_path)
         .env("JOT_PASSPHRASE", passphrase);
     apply_xdg_env(&mut create, &config_home, &data_home);
     let create = create.output().expect("run templates create");
@@ -1930,7 +1923,7 @@ fn test_cli_templates_crud() {
         .arg("list")
         .arg("--json")
         .arg("--jot")
-        .arg(&ledger_path)
+        .arg(&jot_path)
         .env("JOT_PASSPHRASE", passphrase);
     apply_xdg_env(&mut list, &config_home, &data_home);
     let list = list.output().expect("run templates list");
@@ -1949,7 +1942,7 @@ fn test_cli_templates_crud() {
         .arg("show")
         .arg("daily-journal")
         .arg("--jot")
-        .arg(&ledger_path)
+        .arg(&jot_path)
         .env("JOT_PASSPHRASE", passphrase);
     apply_xdg_env(&mut show, &config_home, &data_home);
     let show = show.output().expect("run templates show");
@@ -1967,7 +1960,7 @@ fn test_cli_templates_crud() {
         .arg("--defaults")
         .arg(r#"{"body": "Morning entry..."}"#)
         .arg("--jot")
-        .arg(&ledger_path)
+        .arg(&jot_path)
         .env("JOT_PASSPHRASE", passphrase);
     apply_xdg_env(&mut update, &config_home, &data_home);
     let update = update.output().expect("run templates update");
@@ -1989,7 +1982,7 @@ fn test_cli_templates_crud() {
         .arg("daily-journal")
         .arg("--force")
         .arg("--jot")
-        .arg(&ledger_path)
+        .arg(&jot_path)
         .env("JOT_PASSPHRASE", passphrase);
     apply_xdg_env(&mut delete, &config_home, &data_home);
     let delete = delete.output().expect("run templates delete");
@@ -2002,7 +1995,7 @@ fn test_cli_templates_crud() {
         .arg("list")
         .arg("--json")
         .arg("--jot")
-        .arg(&ledger_path)
+        .arg(&jot_path)
         .env("JOT_PASSPHRASE", passphrase);
     apply_xdg_env(&mut list2, &config_home, &data_home);
     let list2 = list2.output().expect("run templates list");
@@ -2013,14 +2006,14 @@ fn test_cli_templates_crud() {
 
 #[test]
 fn test_cli_template_set_default() {
-    let ledger_path = temp_ledger_path("ledger_cli_tmpl_default");
+    let jot_path = temp_jot_path("jot_cli_tmpl_default");
     let passphrase = "test-passphrase-secure-123";
-    let (config_home, data_home) = temp_xdg_dirs("ledger_cli_tmpl_default");
+    let (config_home, data_home) = temp_xdg_dirs("jot_cli_tmpl_default");
 
-    // Init ledger
+    // Init jot
     let mut init = Command::new(bin());
     init.arg("init")
-        .arg(&ledger_path)
+        .arg(&jot_path)
         .env("JOT_PASSPHRASE", passphrase);
     apply_xdg_env(&mut init, &config_home, &data_home);
     let init = init.output().expect("run init");
@@ -2036,7 +2029,7 @@ fn test_cli_template_set_default() {
         .arg("journal")
         .arg("--set-default")
         .arg("--jot")
-        .arg(&ledger_path)
+        .arg(&jot_path)
         .env("JOT_PASSPHRASE", passphrase);
     apply_xdg_env(&mut create, &config_home, &data_home);
     let create = create.output().expect("run templates create");
@@ -2048,14 +2041,14 @@ fn test_cli_template_set_default() {
 
 #[test]
 fn test_cli_add_with_template_flag() {
-    let ledger_path = temp_ledger_path("ledger_cli_add_tmpl");
+    let jot_path = temp_jot_path("jot_cli_add_tmpl");
     let passphrase = "test-passphrase-secure-123";
-    let (config_home, data_home) = temp_xdg_dirs("ledger_cli_add_tmpl");
+    let (config_home, data_home) = temp_xdg_dirs("jot_cli_add_tmpl");
 
-    // Init ledger
+    // Init jot
     let mut init = Command::new(bin());
     init.arg("init")
-        .arg(&ledger_path)
+        .arg(&jot_path)
         .env("JOT_PASSPHRASE", passphrase);
     apply_xdg_env(&mut init, &config_home, &data_home);
     let init = init.output().expect("run init");
@@ -2072,7 +2065,7 @@ fn test_cli_add_with_template_flag() {
         .arg("--defaults")
         .arg(r#"{"body": "Quick note default body"}"#)
         .arg("--jot")
-        .arg(&ledger_path)
+        .arg(&jot_path)
         .env("JOT_PASSPHRASE", passphrase);
     apply_xdg_env(&mut create, &config_home, &data_home);
     let create = create.output().expect("run templates create");
@@ -2086,7 +2079,7 @@ fn test_cli_add_with_template_flag() {
         .arg("quick-note")
         .arg("--no-input")
         .arg("--jot")
-        .arg(&ledger_path)
+        .arg(&jot_path)
         .env("JOT_PASSPHRASE", passphrase);
     apply_xdg_env(&mut add, &config_home, &data_home);
     let add = add.output().expect("run add with template");
@@ -2101,7 +2094,7 @@ fn test_cli_add_with_template_flag() {
     list.arg("list")
         .arg("--json")
         .arg("--jot")
-        .arg(&ledger_path)
+        .arg(&jot_path)
         .env("JOT_PASSPHRASE", passphrase);
     apply_xdg_env(&mut list, &config_home, &data_home);
     let list = list.output().expect("run list");
@@ -2116,7 +2109,7 @@ fn test_cli_add_with_template_flag() {
         .arg(entry_id)
         .arg("--json")
         .arg("--jot")
-        .arg(&ledger_path)
+        .arg(&jot_path)
         .env("JOT_PASSPHRASE", passphrase);
     apply_xdg_env(&mut show, &config_home, &data_home);
     let show = show.output().expect("run show");
@@ -2130,14 +2123,14 @@ fn test_cli_add_with_template_flag() {
 
 #[test]
 fn test_cli_add_with_compose_flag() {
-    let ledger_path = temp_ledger_path("ledger_cli_add_compose");
+    let jot_path = temp_jot_path("jot_cli_add_compose");
     let passphrase = "test-passphrase-secure-123";
-    let (config_home, data_home) = temp_xdg_dirs("ledger_cli_add_compose");
+    let (config_home, data_home) = temp_xdg_dirs("jot_cli_add_compose");
 
-    // Init ledger
+    // Init jot
     let mut init = Command::new(bin());
     init.arg("init")
-        .arg(&ledger_path)
+        .arg(&jot_path)
         .env("JOT_PASSPHRASE", passphrase);
     apply_xdg_env(&mut init, &config_home, &data_home);
     let init = init.output().expect("run init");
@@ -2150,7 +2143,7 @@ fn test_cli_add_with_compose_flag() {
         .arg("create")
         .arg("project-x")
         .arg("--jot")
-        .arg(&ledger_path)
+        .arg(&jot_path)
         .env("JOT_PASSPHRASE", passphrase);
     apply_xdg_env(&mut create, &config_home, &data_home);
     let create = create.output().expect("run compositions create");
@@ -2165,7 +2158,7 @@ fn test_cli_add_with_compose_flag() {
         .arg("--compose")
         .arg("project-x")
         .arg("--jot")
-        .arg(&ledger_path)
+        .arg(&jot_path)
         .env("JOT_PASSPHRASE", passphrase);
     apply_xdg_env(&mut add, &config_home, &data_home);
     let add = add.output().expect("run add with compose");
@@ -2181,7 +2174,7 @@ fn test_cli_add_with_compose_flag() {
         .arg("show")
         .arg("project-x")
         .arg("--jot")
-        .arg(&ledger_path)
+        .arg(&jot_path)
         .env("JOT_PASSPHRASE", passphrase);
     apply_xdg_env(&mut show, &config_home, &data_home);
     let show = show.output().expect("run compositions show");
@@ -2196,14 +2189,14 @@ fn test_cli_add_with_compose_flag() {
 
 #[test]
 fn test_cli_add_field_flags_override_defaults() {
-    let ledger_path = temp_ledger_path("ledger_cli_add_field_override");
+    let jot_path = temp_jot_path("jot_cli_add_field_override");
     let passphrase = "test-passphrase-secure-123";
-    let (config_home, data_home) = temp_xdg_dirs("ledger_cli_add_field_override");
+    let (config_home, data_home) = temp_xdg_dirs("jot_cli_add_field_override");
 
-    // Init ledger
+    // Init jot
     let mut init = Command::new(bin());
     init.arg("init")
-        .arg(&ledger_path)
+        .arg(&jot_path)
         .env("JOT_PASSPHRASE", passphrase);
     apply_xdg_env(&mut init, &config_home, &data_home);
     let init = init.output().expect("run init");
@@ -2221,7 +2214,7 @@ fn test_cli_add_field_flags_override_defaults() {
         .arg(r#"{"body": "Template default body"}"#)
         .arg("--set-default")
         .arg("--jot")
-        .arg(&ledger_path)
+        .arg(&jot_path)
         .env("JOT_PASSPHRASE", passphrase);
     apply_xdg_env(&mut create, &config_home, &data_home);
     let create = create.output().expect("run templates create");
@@ -2234,7 +2227,7 @@ fn test_cli_add_field_flags_override_defaults() {
         .arg("--field")
         .arg("body=Explicit body value")
         .arg("--jot")
-        .arg(&ledger_path)
+        .arg(&jot_path)
         .env("JOT_PASSPHRASE", passphrase);
     apply_xdg_env(&mut add, &config_home, &data_home);
     let add = add.output().expect("run add with field");
@@ -2249,7 +2242,7 @@ fn test_cli_add_field_flags_override_defaults() {
     list.arg("list")
         .arg("--json")
         .arg("--jot")
-        .arg(&ledger_path)
+        .arg(&jot_path)
         .env("JOT_PASSPHRASE", passphrase);
     apply_xdg_env(&mut list, &config_home, &data_home);
     let list = list.output().expect("run list");
@@ -2264,7 +2257,7 @@ fn test_cli_add_field_flags_override_defaults() {
         .arg(entry_id)
         .arg("--json")
         .arg("--jot")
-        .arg(&ledger_path)
+        .arg(&jot_path)
         .env("JOT_PASSPHRASE", passphrase);
     apply_xdg_env(&mut show, &config_home, &data_home);
     let show = show.output().expect("run show");
@@ -2282,13 +2275,13 @@ fn test_cli_add_field_flags_override_defaults() {
 
 #[test]
 fn test_cli_composition_not_found() {
-    let ledger_path = temp_ledger_path("ledger_cli_comp_nf");
+    let jot_path = temp_jot_path("jot_cli_comp_nf");
     let passphrase = "test-passphrase-secure-123";
-    let (config_home, data_home) = temp_xdg_dirs("ledger_cli_comp_nf");
+    let (config_home, data_home) = temp_xdg_dirs("jot_cli_comp_nf");
 
     let mut init = Command::new(bin());
     init.arg("init")
-        .arg(&ledger_path)
+        .arg(&jot_path)
         .env("JOT_PASSPHRASE", passphrase);
     apply_xdg_env(&mut init, &config_home, &data_home);
     let init = init.output().expect("run init");
@@ -2300,7 +2293,7 @@ fn test_cli_composition_not_found() {
         .arg("show")
         .arg("nonexistent")
         .arg("--jot")
-        .arg(&ledger_path)
+        .arg(&jot_path)
         .env("JOT_PASSPHRASE", passphrase);
     apply_xdg_env(&mut show, &config_home, &data_home);
     let show = show.output().expect("run compositions show");
@@ -2316,7 +2309,7 @@ fn test_cli_composition_not_found() {
         .arg("nonexistent")
         .arg("new-name")
         .arg("--jot")
-        .arg(&ledger_path)
+        .arg(&jot_path)
         .env("JOT_PASSPHRASE", passphrase);
     apply_xdg_env(&mut rename, &config_home, &data_home);
     let rename = rename.output().expect("run compositions rename");
@@ -2330,7 +2323,7 @@ fn test_cli_composition_not_found() {
         .arg("nonexistent")
         .arg("--force")
         .arg("--jot")
-        .arg(&ledger_path)
+        .arg(&jot_path)
         .env("JOT_PASSPHRASE", passphrase);
     apply_xdg_env(&mut delete, &config_home, &data_home);
     let delete = delete.output().expect("run compositions delete");
@@ -2339,13 +2332,13 @@ fn test_cli_composition_not_found() {
 
 #[test]
 fn test_cli_template_not_found() {
-    let ledger_path = temp_ledger_path("ledger_cli_tmpl_nf");
+    let jot_path = temp_jot_path("jot_cli_tmpl_nf");
     let passphrase = "test-passphrase-secure-123";
-    let (config_home, data_home) = temp_xdg_dirs("ledger_cli_tmpl_nf");
+    let (config_home, data_home) = temp_xdg_dirs("jot_cli_tmpl_nf");
 
     let mut init = Command::new(bin());
     init.arg("init")
-        .arg(&ledger_path)
+        .arg(&jot_path)
         .env("JOT_PASSPHRASE", passphrase);
     apply_xdg_env(&mut init, &config_home, &data_home);
     let init = init.output().expect("run init");
@@ -2357,7 +2350,7 @@ fn test_cli_template_not_found() {
         .arg("show")
         .arg("nonexistent")
         .arg("--jot")
-        .arg(&ledger_path)
+        .arg(&jot_path)
         .env("JOT_PASSPHRASE", passphrase);
     apply_xdg_env(&mut show, &config_home, &data_home);
     let show = show.output().expect("run templates show");
@@ -2374,7 +2367,7 @@ fn test_cli_template_not_found() {
         .arg("--defaults")
         .arg("{}")
         .arg("--jot")
-        .arg(&ledger_path)
+        .arg(&jot_path)
         .env("JOT_PASSPHRASE", passphrase);
     apply_xdg_env(&mut update, &config_home, &data_home);
     let update = update.output().expect("run templates update");
@@ -2388,7 +2381,7 @@ fn test_cli_template_not_found() {
         .arg("nonexistent")
         .arg("--force")
         .arg("--jot")
-        .arg(&ledger_path)
+        .arg(&jot_path)
         .env("JOT_PASSPHRASE", passphrase);
     apply_xdg_env(&mut delete, &config_home, &data_home);
     let delete = delete.output().expect("run templates delete");
@@ -2397,13 +2390,13 @@ fn test_cli_template_not_found() {
 
 #[test]
 fn test_cli_attach_invalid_entry() {
-    let ledger_path = temp_ledger_path("ledger_cli_att_inv");
+    let jot_path = temp_jot_path("jot_cli_att_inv");
     let passphrase = "test-passphrase-secure-123";
-    let (config_home, data_home) = temp_xdg_dirs("ledger_cli_att_inv");
+    let (config_home, data_home) = temp_xdg_dirs("jot_cli_att_inv");
 
     let mut init = Command::new(bin());
     init.arg("init")
-        .arg(&ledger_path)
+        .arg(&jot_path)
         .env("JOT_PASSPHRASE", passphrase);
     apply_xdg_env(&mut init, &config_home, &data_home);
     let init = init.output().expect("run init");
@@ -2416,7 +2409,7 @@ fn test_cli_attach_invalid_entry() {
         .arg("create")
         .arg("test-comp")
         .arg("--jot")
-        .arg(&ledger_path)
+        .arg(&jot_path)
         .env("JOT_PASSPHRASE", passphrase);
     apply_xdg_env(&mut create, &config_home, &data_home);
     let create = create.output().expect("run compositions create");
@@ -2429,7 +2422,7 @@ fn test_cli_attach_invalid_entry() {
         .arg("00000000-0000-0000-0000-000000000000")
         .arg("test-comp")
         .arg("--jot")
-        .arg(&ledger_path)
+        .arg(&jot_path)
         .env("JOT_PASSPHRASE", passphrase);
     apply_xdg_env(&mut attach, &config_home, &data_home);
     let attach = attach.output().expect("run attach");
@@ -2440,13 +2433,13 @@ fn test_cli_attach_invalid_entry() {
 
 #[test]
 fn test_cli_attach_invalid_composition() {
-    let ledger_path = temp_ledger_path("ledger_cli_att_bc");
+    let jot_path = temp_jot_path("jot_cli_att_bc");
     let passphrase = "test-passphrase-secure-123";
-    let (config_home, data_home) = temp_xdg_dirs("ledger_cli_att_bc");
+    let (config_home, data_home) = temp_xdg_dirs("jot_cli_att_bc");
 
     let mut init = Command::new(bin());
     init.arg("init")
-        .arg(&ledger_path)
+        .arg(&jot_path)
         .env("JOT_PASSPHRASE", passphrase);
     apply_xdg_env(&mut init, &config_home, &data_home);
     let init = init.output().expect("run init");
@@ -2459,7 +2452,7 @@ fn test_cli_attach_invalid_composition() {
         .arg("--body")
         .arg("test")
         .arg("--jot")
-        .arg(&ledger_path)
+        .arg(&jot_path)
         .env("JOT_PASSPHRASE", passphrase);
     apply_xdg_env(&mut add, &config_home, &data_home);
     let add = add.output().expect("run add");
@@ -2470,7 +2463,7 @@ fn test_cli_attach_invalid_composition() {
     list.arg("list")
         .arg("--json")
         .arg("--jot")
-        .arg(&ledger_path)
+        .arg(&jot_path)
         .env("JOT_PASSPHRASE", passphrase);
     apply_xdg_env(&mut list, &config_home, &data_home);
     let list = list.output().expect("run list");
@@ -2487,7 +2480,7 @@ fn test_cli_attach_invalid_composition() {
         .arg(entry_id)
         .arg("nonexistent-comp")
         .arg("--jot")
-        .arg(&ledger_path)
+        .arg(&jot_path)
         .env("JOT_PASSPHRASE", passphrase);
     apply_xdg_env(&mut attach, &config_home, &data_home);
     let attach = attach.output().expect("run attach");
@@ -2498,13 +2491,13 @@ fn test_cli_attach_invalid_composition() {
 
 #[test]
 fn test_cli_detach_when_not_attached() {
-    let ledger_path = temp_ledger_path("ledger_cli_det_na");
+    let jot_path = temp_jot_path("jot_cli_det_na");
     let passphrase = "test-passphrase-secure-123";
-    let (config_home, data_home) = temp_xdg_dirs("ledger_cli_det_na");
+    let (config_home, data_home) = temp_xdg_dirs("jot_cli_det_na");
 
     let mut init = Command::new(bin());
     init.arg("init")
-        .arg(&ledger_path)
+        .arg(&jot_path)
         .env("JOT_PASSPHRASE", passphrase);
     apply_xdg_env(&mut init, &config_home, &data_home);
     let init = init.output().expect("run init");
@@ -2517,7 +2510,7 @@ fn test_cli_detach_when_not_attached() {
         .arg("create")
         .arg("test-comp")
         .arg("--jot")
-        .arg(&ledger_path)
+        .arg(&jot_path)
         .env("JOT_PASSPHRASE", passphrase);
     apply_xdg_env(&mut create, &config_home, &data_home);
     let create = create.output().expect("run compositions create");
@@ -2531,7 +2524,7 @@ fn test_cli_detach_when_not_attached() {
         .arg("test")
         .arg("--no-compose")
         .arg("--jot")
-        .arg(&ledger_path)
+        .arg(&jot_path)
         .env("JOT_PASSPHRASE", passphrase);
     apply_xdg_env(&mut add, &config_home, &data_home);
     let add = add.output().expect("run add");
@@ -2542,7 +2535,7 @@ fn test_cli_detach_when_not_attached() {
     list.arg("list")
         .arg("--json")
         .arg("--jot")
-        .arg(&ledger_path)
+        .arg(&jot_path)
         .env("JOT_PASSPHRASE", passphrase);
     apply_xdg_env(&mut list, &config_home, &data_home);
     let list = list.output().expect("run list");
@@ -2559,7 +2552,7 @@ fn test_cli_detach_when_not_attached() {
         .arg(entry_id)
         .arg("test-comp")
         .arg("--jot")
-        .arg(&ledger_path)
+        .arg(&jot_path)
         .env("JOT_PASSPHRASE", passphrase);
     apply_xdg_env(&mut detach, &config_home, &data_home);
     let detach = detach.output().expect("run detach");
@@ -2574,13 +2567,13 @@ fn test_cli_detach_when_not_attached() {
 
 #[test]
 fn test_cli_add_with_invalid_template() {
-    let ledger_path = temp_ledger_path("ledger_cli_add_bt");
+    let jot_path = temp_jot_path("jot_cli_add_bt");
     let passphrase = "test-passphrase-secure-123";
-    let (config_home, data_home) = temp_xdg_dirs("ledger_cli_add_bt");
+    let (config_home, data_home) = temp_xdg_dirs("jot_cli_add_bt");
 
     let mut init = Command::new(bin());
     init.arg("init")
-        .arg(&ledger_path)
+        .arg(&jot_path)
         .env("JOT_PASSPHRASE", passphrase);
     apply_xdg_env(&mut init, &config_home, &data_home);
     let init = init.output().expect("run init");
@@ -2595,7 +2588,7 @@ fn test_cli_add_with_invalid_template() {
         .arg("--body")
         .arg("test")
         .arg("--jot")
-        .arg(&ledger_path)
+        .arg(&jot_path)
         .env("JOT_PASSPHRASE", passphrase);
     apply_xdg_env(&mut add, &config_home, &data_home);
     let add = add.output().expect("run add with invalid template");
@@ -2606,13 +2599,13 @@ fn test_cli_add_with_invalid_template() {
 
 #[test]
 fn test_cli_add_with_invalid_composition() {
-    let ledger_path = temp_ledger_path("ledger_cli_add_bc");
+    let jot_path = temp_jot_path("jot_cli_add_bc");
     let passphrase = "test-passphrase-secure-123";
-    let (config_home, data_home) = temp_xdg_dirs("ledger_cli_add_bc");
+    let (config_home, data_home) = temp_xdg_dirs("jot_cli_add_bc");
 
     let mut init = Command::new(bin());
     init.arg("init")
-        .arg(&ledger_path)
+        .arg(&jot_path)
         .env("JOT_PASSPHRASE", passphrase);
     apply_xdg_env(&mut init, &config_home, &data_home);
     let init = init.output().expect("run init");
@@ -2627,7 +2620,7 @@ fn test_cli_add_with_invalid_composition() {
         .arg("--compose")
         .arg("nonexistent-comp")
         .arg("--jot")
-        .arg(&ledger_path)
+        .arg(&jot_path)
         .env("JOT_PASSPHRASE", passphrase);
     apply_xdg_env(&mut add, &config_home, &data_home);
     let add = add.output().expect("run add with invalid composition");
@@ -2641,13 +2634,13 @@ fn test_cli_add_with_invalid_composition() {
 
 #[test]
 fn test_cli_no_compose_prevents_attachment() {
-    let ledger_path = temp_ledger_path("ledger_cli_nc_pa");
+    let jot_path = temp_jot_path("jot_cli_nc_pa");
     let passphrase = "test-passphrase-secure-123";
-    let (config_home, data_home) = temp_xdg_dirs("ledger_cli_nc_pa");
+    let (config_home, data_home) = temp_xdg_dirs("jot_cli_nc_pa");
 
     let mut init = Command::new(bin());
     init.arg("init")
-        .arg(&ledger_path)
+        .arg(&jot_path)
         .env("JOT_PASSPHRASE", passphrase);
     apply_xdg_env(&mut init, &config_home, &data_home);
     let init = init.output().expect("run init");
@@ -2660,7 +2653,7 @@ fn test_cli_no_compose_prevents_attachment() {
         .arg("create")
         .arg("no-auto")
         .arg("--jot")
-        .arg(&ledger_path)
+        .arg(&jot_path)
         .env("JOT_PASSPHRASE", passphrase);
     apply_xdg_env(&mut create_comp, &config_home, &data_home);
     let create_comp = create_comp.output().expect("run compositions create");
@@ -2674,7 +2667,7 @@ fn test_cli_no_compose_prevents_attachment() {
         .arg("not attached")
         .arg("--no-compose")
         .arg("--jot")
-        .arg(&ledger_path)
+        .arg(&jot_path)
         .env("JOT_PASSPHRASE", passphrase);
     apply_xdg_env(&mut add, &config_home, &data_home);
     let add = add.output().expect("run add with no-compose");
@@ -2686,7 +2679,7 @@ fn test_cli_no_compose_prevents_attachment() {
         .arg("show")
         .arg("no-auto")
         .arg("--jot")
-        .arg(&ledger_path)
+        .arg(&jot_path)
         .env("JOT_PASSPHRASE", passphrase);
     apply_xdg_env(&mut show, &config_home, &data_home);
     let show = show.output().expect("run compositions show");

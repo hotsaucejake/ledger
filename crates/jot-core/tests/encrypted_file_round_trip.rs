@@ -28,7 +28,7 @@ impl Drop for TempFile {
 
 #[test]
 fn test_encrypted_file_round_trip() {
-    let temp = TempFile::new("ledger_round_trip");
+    let temp = TempFile::new("jot_round_trip");
     let passphrase = "test-passphrase-secure-123";
     let plaintext = b"journal entry: hello world";
 
@@ -44,7 +44,7 @@ fn test_encrypted_file_round_trip() {
 
 #[test]
 fn test_encrypted_file_wrong_passphrase_fails() {
-    let temp = TempFile::new("ledger_wrong_passphrase");
+    let temp = TempFile::new("jot_wrong_passphrase");
     let passphrase = "correct-passphrase-123";
     let wrong_passphrase = "wrong-passphrase-456";
     let plaintext = b"secret entry";
@@ -59,7 +59,7 @@ fn test_encrypted_file_wrong_passphrase_fails() {
 
 #[test]
 fn test_encrypted_file_does_not_contain_plaintext() {
-    let temp = TempFile::new("ledger_no_plaintext");
+    let temp = TempFile::new("jot_no_plaintext");
     let passphrase = "test-passphrase-secure-123";
     let plaintext = b"secret entry with marker: PLAINTEXT_MARKER_123";
 

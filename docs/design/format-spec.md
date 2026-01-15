@@ -1,7 +1,7 @@
 # Jot File Format Specification
 
 **Status:** Draft
-**Applies to:** Ledger v0.1+
+**Applies to:** Jot v0.1+
 **Audience:** Users, contributors, future maintainers
 **Purpose:** Define the stable, long-term on-disk format of a Jot
 
@@ -9,7 +9,7 @@
 
 ## 1. Purpose & Scope
 
-This document defines the **Ledger file format** — the data that persists when a Jot is closed and stored.
+This document defines the **Jot file format** — the data that persists when a Jot is closed and stored.
 
 It is intentionally:
 
@@ -17,7 +17,7 @@ It is intentionally:
 * **Independent of storage backend details**
 * **Explicit about stability guarantees**
 
-This spec exists to support Ledger’s long-term goal:
+This spec exists to support Jot’s long-term goal:
 
 > Data created today should remain readable, decryptable, and interpretable in the future.
 
@@ -27,7 +27,7 @@ This spec exists to support Ledger’s long-term goal:
 
 | Term           | Meaning                                               |
 | -------------- | ----------------------------------------------------- |
-| Ledger         | A logical container for encrypted user data           |
+| Jot         | A logical container for encrypted user data           |
 | Entry          | A single immutable record created by the user         |
 | Entry Type     | A schema defining fields for entries                  |
 | Template       | Reusable defaults for creating entries                |
@@ -48,7 +48,7 @@ At rest, a Jot consists of:
 Conceptually:
 
 ```
-Ledger
+Jot
 ├── Metadata
 ├── Entry Types (schemas)
 ├── Templates (v0.2+)
@@ -65,7 +65,7 @@ Only the **encrypted payload** is persisted to disk.
 
 ### 4.1 Stable Guarantees (v0.1+)
 
-The following are guaranteed stable across Ledger versions:
+The following are guaranteed stable across Jot versions:
 
 * Entry identity (UUID)
 * Entry immutability
@@ -107,7 +107,7 @@ age_encrypt(
 Where:
 
 * `derived_key` is produced via Argon2id
-* `sqlite_database_bytes` represent the full logical ledger state
+* `sqlite_database_bytes` represent the full logical jot state
 
 No plaintext user data is written to disk.
 
@@ -120,7 +120,7 @@ No plaintext user data is written to disk.
 
     * Memory: implementation-defined
     * Iterations: implementation-defined
-    * Salt: random, per-ledger
+    * Salt: random, per-jot
 
 **Important:** Key derivation parameters are stored in the **Age file header** (plaintext), not inside the encrypted payload. This is how Age passphrase recipients work — the scrypt parameters are embedded in the recipient stanza, allowing decryption without a separate metadata file.
 
@@ -133,7 +133,7 @@ The encrypted payload contains only the SQLite database. No bootstrap metadata i
 ### 5.3 Encryption Tooling
 
 * Age recipients are passphrase-based
-* Ledger does not require system GPG configuration
+* Jot does not require system GPG configuration
 * Encryption is authenticated; tampering causes decryption failure
 
 ---
@@ -155,7 +155,7 @@ The SQLite schema itself is **not** the format — it is an implementation detai
 
 ### 6.2 In-Memory Operation
 
-Ledger implementations:
+Jot implementations:
 
 * Deserialize SQLite into memory
 * Perform all operations in-memory
@@ -275,18 +275,18 @@ Compositions do not define schema and do not own entries. Deleting a composition
 
 ### 7.5 Metadata Table
 
-The metadata table stores ledger-level configuration:
+The metadata table stores jot-level configuration:
 
 | Key | Type | Mutability | Description |
 |-----|------|------------|-------------|
 | `format_version` | string | Authoritative | Format spec version (e.g., "0.1") |
 | `device_id` | UUID | Authoritative | This device's identifier |
-| `created_at` | ISO-8601 | Authoritative | When this ledger was created |
+| `created_at` | ISO-8601 | Authoritative | When this jot was created |
 | `last_modified` | ISO-8601 | Informational | Last write timestamp |
 
 **Mutability rules:**
-- **Authoritative** keys define ledger identity and format. They must not be modified after creation except by explicit migration.
-- **Informational** keys are updated automatically during normal operation. Multiple tools touching the same ledger may overwrite these values.
+- **Authoritative** keys define jot identity and format. They must not be modified after creation except by explicit migration.
+- **Informational** keys are updated automatically during normal operation. Multiple tools touching the same jot may overwrite these values.
 
 Additional keys may be added in future versions. Unknown keys must be preserved on read/write.
 
@@ -343,16 +343,16 @@ All text data is UTF-8. No other encodings are supported.
 
 These limits are enforced at write time. Implementations may support larger values but must not require them.
 
-### 9.3 Empty Ledger
+### 9.3 Empty Jot
 
-A valid empty ledger contains:
+A valid empty jot contains:
 * Metadata table with required keys (format_version, device_id, created_at)
 * Zero entries
 * Zero entry types
 * Zero templates
 * Zero compositions
 
-Empty ledgers are valid and must be handled correctly.
+Empty jots are valid and must be handled correctly.
 
 ---
 
@@ -360,7 +360,7 @@ Empty ledgers are valid and must be handled correctly.
 
 ### 10.1 Format Version
 
-Each Ledger has a **format version** stored in metadata.
+Each Jot has a **format version** stored in metadata.
 
 * Incremented only when stable guarantees change
 * Backward-compatible readers must exist for all released versions
@@ -376,7 +376,7 @@ Backends may evolve independently as long as:
 
 ## 11. Export Guarantees
 
-Ledger implementations must support exporting:
+Jot implementations must support exporting:
 
 * Entries
 * Entry Types
@@ -422,7 +422,7 @@ This keeps exports forward-compatible and easy to stream.
 
 * Encryption ensures confidentiality and tamper detection
 * Entries are append-only
-* Backups are whole-ledger operations
+* Backups are whole-jot operations
 * Recovery tools must favor **data preservation over convenience**
 
 ---
@@ -456,7 +456,7 @@ These must preserve the stable guarantees defined here.
 
 ## 15. Summary
 
-The Ledger format is:
+The Jot format is:
 
 * Encrypted by default
 * Append-only
@@ -464,4 +464,4 @@ The Ledger format is:
 * Backend-agnostic
 * Designed for long-term durability
 
-This specification exists so Ledger can evolve **without betraying user trust**.
+This specification exists so Jot can evolve **without betraying user trust**.

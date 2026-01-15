@@ -1,4 +1,4 @@
-//! UI primitives for the Ledger CLI.
+//! UI primitives for the Jot CLI.
 //!
 //! This module provides:
 //! - **Context**: Environment detection (TTY, width, color, unicode)
@@ -22,9 +22,9 @@
 //!     return Ok(());
 //! }
 //!
-//! println!("{}", header(&ctx, "list", Some(&ledger_path)));
+//! println!("{}", header(&ctx, "list", Some(&jot_path)));
 //! println!("{}", table(&ctx, &columns, &rows));
-//! println!("{}", hint(&ctx, "ledger show <id>"));
+//! println!("{}", hint(&ctx, "jot show <id>"));
 //! ```
 
 mod context;

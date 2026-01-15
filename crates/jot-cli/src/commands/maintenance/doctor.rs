@@ -1,6 +1,6 @@
 use jot_core::StorageEngine;
 
-use crate::app::{missing_config_message, missing_ledger_message, resolve_config_path, AppContext};
+use crate::app::{missing_config_message, missing_jot_message, resolve_config_path, AppContext};
 use crate::cli::DoctorArgs;
 use crate::config::read_config;
 use crate::ui::{badge, header, hint, kv, Badge, OutputMode, StepList};
@@ -11,19 +11,19 @@ pub fn handle_doctor(ctx: &AppContext, args: &DoctorArgs) -> anyhow::Result<()> 
     let config_path = resolve_config_path()?;
     if !config_path.exists() {
         eprintln!("{}", missing_config_message(&config_path));
-        return Err(anyhow::anyhow!("Ledger is not initialized"));
+        return Err(anyhow::anyhow!("Jot is not initialized"));
     }
 
     let config = read_config(&config_path).map_err(|e| anyhow::anyhow!("Config error: {}", e))?;
-    let ledger_path = std::path::PathBuf::from(&config.jot.path);
-    if !ledger_path.exists() {
-        eprintln!("{}", missing_ledger_message(&ledger_path));
+    let jot_path = std::path::PathBuf::from(&config.jot.path);
+    if !jot_path.exists() {
+        eprintln!("{}", missing_jot_message(&jot_path));
         return Err(anyhow::anyhow!("Jot file missing"));
     }
 
     let (storage, _passphrase) = ctx.open_storage(args.no_input).map_err(|e| {
         anyhow::anyhow!(
-            "Failed to open ledger for diagnostics: {}\nHint: Set JOT_PASSPHRASE or run in a TTY.",
+            "Failed to open jot for diagnostics: {}\nHint: Set JOT_PASSPHRASE or run in a TTY.",
             e
         )
     })?;
@@ -58,7 +58,7 @@ pub fn handle_doctor(ctx: &AppContext, args: &DoctorArgs) -> anyhow::Result<()> 
             }
             OutputMode::Plain | OutputMode::Json => {
                 println!("check=config ok");
-                println!("check=ledger ok");
+                println!("check=jot ok");
                 println!("check=integrity err");
                 println!("error={}", err);
                 println!("status=failed");
@@ -81,11 +81,11 @@ pub fn handle_doctor(ctx: &AppContext, args: &DoctorArgs) -> anyhow::Result<()> 
                 steps.ok();
 
                 println!();
-                println!("{}", badge(&ui_ctx, Badge::Ok, "Ledger is healthy"));
+                println!("{}", badge(&ui_ctx, Badge::Ok, "Jot is healthy"));
             }
             OutputMode::Plain | OutputMode::Json => {
                 println!("check=config ok");
-                println!("check=ledger ok");
+                println!("check=jot ok");
                 println!("check=integrity ok");
                 println!("status=ok");
             }

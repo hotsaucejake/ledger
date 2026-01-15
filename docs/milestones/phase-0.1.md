@@ -71,7 +71,7 @@ Per format-spec.md §7:
 
 | Command | Description |
 |---------|-------------|
-| `jot init` | Create new encrypted ledger |
+| `jot init` | Create new encrypted jot |
 | `jot add` | Add journal entry (opens $EDITOR) |
 | `jot add --body "..."` | Add inline entry |
 | `jot add --tags foo,bar` | Add with tags |
@@ -142,13 +142,13 @@ The following items landed early during the M2 UX milestone:
 
 Phase 0.1 is complete when:
 
-1. **Init works:** `jot init` creates a valid encrypted ledger
+1. **Init works:** `jot init` creates a valid encrypted jot
 2. **Add works:** `jot add` opens $EDITOR, saves encrypted entry
 3. **List works:** `jot list` shows entries with timestamps
 4. **Search works:** `jot search "term"` finds matching entries
 5. **Export works:** `jot export --json` produces valid JSON
 6. **Tags work:** Entries can be created and filtered by tag
-7. **Round-trip:** Ledger can be closed, reopened, and queried
+7. **Round-trip:** Jot can be closed, reopened, and queried
 8. **No plaintext leaks:** Verified via testing
 9. **Crash safety:** Interrupted writes don't corrupt the jot
 

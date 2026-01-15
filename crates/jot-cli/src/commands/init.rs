@@ -5,7 +5,7 @@ use jot_core::storage::{AgeSqliteStorage, NewEntryType, StorageEngine};
 use uuid::Uuid;
 
 use crate::app::{device_keyfile_warning, resolve_config_path, AppContext};
-use crate::cache::ledger_hash;
+use crate::cache::jot_hash;
 use crate::cli::InitArgs;
 use crate::config::{
     default_jot_path, default_keyfile_path, write_config, JotConfig, KeyfileMode, SecurityTier,
@@ -40,23 +40,23 @@ pub fn handle_init(ctx: &AppContext, args: &InitArgs) -> anyhow::Result<()> {
     if !ctx.quiet() && !effective_no_input {
         // Print wizard header
         if ui_ctx.mode.is_pretty() {
-            let header = styled("Ledger", styles::bold(), ui_ctx.color);
+            let header = styled("Jot", styles::bold(), ui_ctx.color);
             println!("{} \u{00B7} init\n", header);
         }
     }
 
-    let default_ledger = default_jot_path()?;
-    let ledger_path = match args.path.clone().or_else(|| ctx.cli().jot.clone()) {
+    let default_jot = default_jot_path()?;
+    let jot_path = match args.path.clone().or_else(|| ctx.cli().jot.clone()) {
         Some(value) => std::path::PathBuf::from(value),
         None => {
             if effective_no_input {
-                default_ledger.clone()
+                default_jot.clone()
             } else {
                 print_step(&ui_ctx, 1, total_steps, "Choose location");
                 let theme = ColorfulTheme::default();
                 let input: String = Input::with_theme(&theme)
                     .with_prompt("Jot file location")
-                    .default(default_ledger.to_string_lossy().to_string())
+                    .default(default_jot.to_string_lossy().to_string())
                     .interact_text()?;
                 println!();
                 std::path::PathBuf::from(input)
@@ -191,7 +191,7 @@ pub fn handle_init(ctx: &AppContext, args: &InitArgs) -> anyhow::Result<()> {
 
         if args.config_path.is_none() {
             let input: String = Input::with_theme(&theme)
-                .with_prompt("Ledger config path")
+                .with_prompt("Jot config path")
                 .default(config_path.to_string_lossy().to_string())
                 .interact_text()?;
             config_path = std::path::PathBuf::from(input);
@@ -199,7 +199,7 @@ pub fn handle_init(ctx: &AppContext, args: &InitArgs) -> anyhow::Result<()> {
         println!();
     }
 
-    let (ledger_passphrase, keyfile_mode, keyfile_path_value) = match tier {
+    let (jot_passphrase, keyfile_mode, keyfile_path_value) = match tier {
         SecurityTier::Passphrase => (passphrase.clone(), KeyfileMode::None, None),
         SecurityTier::PassphraseKeychain => (passphrase.clone(), KeyfileMode::None, None),
         SecurityTier::PassphraseKeyfile => {
@@ -222,29 +222,25 @@ pub fn handle_init(ctx: &AppContext, args: &InitArgs) -> anyhow::Result<()> {
         }
     };
 
-    if let Some(parent) = ledger_path.parent() {
+    if let Some(parent) = jot_path.parent() {
         std::fs::create_dir_all(parent).map_err(|e| {
-            anyhow::anyhow!(
-                "Failed to create ledger directory {}: {}",
-                parent.display(),
-                e
-            )
+            anyhow::anyhow!("Failed to create jot directory {}: {}", parent.display(), e)
         })?;
     }
 
     // Print review step before creating
     if !effective_no_input && ui_ctx.mode.is_pretty() {
         let review_step = if args.advanced { 5 } else { 4 };
-        print_step(&ui_ctx, review_step, total_steps, "Creating ledger");
+        print_step(&ui_ctx, review_step, total_steps, "Creating jot");
     }
 
-    let device_id = AgeSqliteStorage::create(&ledger_path, &ledger_passphrase)?;
-    let mut storage = AgeSqliteStorage::open(&ledger_path, &ledger_passphrase)?;
+    let device_id = AgeSqliteStorage::create(&jot_path, &jot_passphrase)?;
+    let mut storage = AgeSqliteStorage::open(&jot_path, &jot_passphrase)?;
     ensure_journal_entry_type(&mut storage, device_id)?;
-    storage.close(&ledger_passphrase)?;
+    storage.close(&jot_passphrase)?;
 
     let config = JotConfig::new(
-        ledger_path.clone(),
+        jot_path.clone(),
         tier,
         passphrase_cache_ttl_seconds,
         keyfile_mode,
@@ -255,7 +251,7 @@ pub fn handle_init(ctx: &AppContext, args: &InitArgs) -> anyhow::Result<()> {
     write_config(&config_path, &config)?;
 
     if matches!(tier, SecurityTier::PassphraseKeychain) {
-        let account = ledger_hash(&ledger_path);
+        let account = jot_hash(&jot_path);
         let _ = keychain_set(&account, &passphrase);
     }
 
@@ -268,7 +264,7 @@ pub fn handle_init(ctx: &AppContext, args: &InitArgs) -> anyhow::Result<()> {
                     &badge(
                         &ui_ctx,
                         Badge::Ok,
-                        &format!("Ledger created at {}", ledger_path.to_string_lossy()),
+                        &format!("Jot created at {}", jot_path.to_string_lossy()),
                     ),
                 );
                 print(
@@ -297,13 +293,13 @@ pub fn handle_init(ctx: &AppContext, args: &InitArgs) -> anyhow::Result<()> {
                     &ui_ctx,
                     &hint(
                         &ui_ctx,
-                        "ledger add journal  \u{00B7}  ledger list  \u{00B7}  ledger --help",
+                        "jot add journal  \u{00B7}  jot list  \u{00B7}  jot --help",
                     ),
                 );
             }
             OutputMode::Plain | OutputMode::Json => {
                 println!("status=ok");
-                println!("ledger_path={}", ledger_path.to_string_lossy());
+                println!("jot_path={}", jot_path.to_string_lossy());
                 println!("config_path={}", config_path.to_string_lossy());
                 if passphrase_cache_ttl_seconds > 0 {
                     println!("passphrase_cache_ttl={}", passphrase_cache_ttl_seconds);

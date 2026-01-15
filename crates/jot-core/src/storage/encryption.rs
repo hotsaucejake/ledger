@@ -1,7 +1,7 @@
 //! Age encryption/decryption utilities.
 //!
 //! This module provides wrappers around the Age encryption library for
-//! encrypting and decrypting ledger data using passphrase-based encryption.
+//! encrypting and decrypting jot data using passphrase-based encryption.
 //!
 //! Note: Age uses scrypt internally for passphrase-based encryption.
 //! While RFC-001 specified Argon2id, we use Age's built-in passphrase support

@@ -17,7 +17,7 @@ pub fn handle_edit(ctx: &AppContext, args: &EditArgs) -> anyhow::Result<()> {
     let entry = storage.get_entry(&parsed)?.unwrap_or_else(|| {
         exit_not_found_with_hint(
             "Entry not found",
-            "Hint: Run `ledger list --last 7d` to find entry IDs.",
+            "Hint: Run `jot list --last 7d` to find entry IDs.",
         )
     });
 
@@ -80,7 +80,7 @@ pub fn handle_edit(ctx: &AppContext, args: &EditArgs) -> anyhow::Result<()> {
                     &ui_ctx,
                     &hint(
                         &ui_ctx,
-                        &format!("ledger show {}  \u{00B7}  ledger list", short_id(&entry_id)),
+                        &format!("jot show {}  \u{00B7}  jot list", short_id(&entry_id)),
                     ),
                 );
             }

@@ -8,7 +8,7 @@ use std::fmt;
 /// CLI-specific errors with associated exit codes.
 #[derive(Debug)]
 pub enum CliError {
-    /// Resource not found (config, ledger, entry, etc.)
+    /// Resource not found (config, jot, entry, etc.)
     NotFound { message: String, hint: String },
 
     /// Authentication failed (wrong passphrase, too many attempts)

@@ -1,4 +1,4 @@
-//! Ledger CLI - A secure, encrypted, CLI-first personal journal and logbook
+//! Jot CLI - A secure, encrypted, CLI-first personal journal and logbook
 //!
 //! This is the command-line interface for Jot. It provides a user-friendly
 //! interface to the core library functionality.
@@ -56,19 +56,17 @@ fn extract_error_hint(error: &str) -> Option<String> {
 
     // Entry not found
     if error_lower.contains("entry") && error_lower.contains("not found") {
-        return Some("Hint: Run `ledger list --last 7d` to find entry IDs.".to_string());
+        return Some("Hint: Run `jot list --last 7d` to find entry IDs.".to_string());
     }
 
     // Template not found
     if error_lower.contains("template") && error_lower.contains("not found") {
-        return Some("Hint: Run `ledger template list` to see available templates.".to_string());
+        return Some("Hint: Run `jot template list` to see available templates.".to_string());
     }
 
     // Composition not found
     if error_lower.contains("composition") && error_lower.contains("not found") {
-        return Some(
-            "Hint: Run `ledger composition list` to see available compositions.".to_string(),
-        );
+        return Some("Hint: Run `jot composition list` to see available compositions.".to_string());
     }
 
     // Invalid entry ID format
@@ -78,9 +76,9 @@ fn extract_error_hint(error: &str) -> Option<String> {
         );
     }
 
-    // Ledger not initialized
+    // Jot not initialized
     if error_lower.contains("not initialized") || error_lower.contains("config not found") {
-        return Some("Hint: Run `jot init` to create a new ledger.".to_string());
+        return Some("Hint: Run `jot init` to create jot.".to_string());
     }
 
     // Wrong passphrase
@@ -106,7 +104,10 @@ fn extract_error_hint(error: &str) -> Option<String> {
 
     // Integrity check failed
     if error_lower.contains("integrity") && error_lower.contains("failed") {
-        return Some("Hint: Restore from a backup with `ledger backup --restore <file>` or export data first.".to_string());
+        return Some(
+            "Hint: Restore from a backup with `jot backup --restore <file>` or export data first."
+                .to_string(),
+        );
     }
 
     None
@@ -200,14 +201,14 @@ fn run(ctx: &AppContext, cli: &Cli) -> anyhow::Result<()> {
             associations::handle_detach(ctx, args)?;
         }
         None => {
-            println!("Ledger v{}", VERSION);
+            println!("Jot v{}", VERSION);
             println!("\nQuickstart:");
             println!("  jot init");
-            println!("  ledger add journal --body \"Hello\"");
-            println!("  ledger list --last 7d");
-            println!("  ledger search \"Hello\"");
-            println!("  ledger show <id>");
-            println!("\nRun `ledger --help` for full usage.");
+            println!("  jot add journal --body \"Hello\"");
+            println!("  jot list --last 7d");
+            println!("  jot search \"Hello\"");
+            println!("  jot show <id>");
+            println!("\nRun `jot --help` for full usage.");
         }
     }
 

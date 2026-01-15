@@ -71,7 +71,7 @@ pub fn handle_create(ctx: &AppContext, args: &TemplateCreateArgs) -> anyhow::Res
                     &hint(
                         &ui_ctx,
                         &format!(
-                            "ledger add {} --template {}  \u{00B7}  ledger template list",
+                            "jot add {} --template {}  \u{00B7}  jot template list",
                             args.entry_type, args.name
                         ),
                     ),

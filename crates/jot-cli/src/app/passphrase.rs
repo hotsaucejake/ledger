@@ -6,7 +6,7 @@ use std::path::Path;
 use jot_core::storage::AgeSqliteStorage;
 use jot_core::StorageEngine;
 
-use crate::cache::{cache_clear, cache_config, cache_get, cache_store, ledger_hash, CacheConfig};
+use crate::cache::{cache_clear, cache_config, cache_get, cache_store, jot_hash, CacheConfig};
 use crate::cli::Cli;
 use crate::config::SecurityTier;
 use crate::errors::CliError;
@@ -16,7 +16,7 @@ use crate::security::{
     read_keyfile_plain,
 };
 
-use super::resolver::{missing_ledger_message, resolve_ledger_path};
+use super::resolver::{missing_jot_message, resolve_jot_path};
 use super::security_config::{load_security_config, SecurityConfig};
 
 /// Open storage with passphrase retry logic based on security tier.
@@ -24,7 +24,7 @@ pub fn open_storage_with_retry(
     cli: &Cli,
     no_input: bool,
 ) -> anyhow::Result<(AgeSqliteStorage, String)> {
-    let target = resolve_ledger_path(cli)?;
+    let target = resolve_jot_path(cli)?;
     let interactive = std::io::stdin().is_terminal() && !no_input;
     let target_path = Path::new(&target);
     let security = load_security_config(cli)?;
@@ -79,7 +79,7 @@ pub fn open_storage_with_retry(
         let (storage, passphrase) =
             open_with_passphrase_and_cache(cli, target_path, &passphrase, cache_config.as_ref())?;
         if matches!(security.tier, SecurityTier::PassphraseKeychain) && security.keychain_enabled {
-            let account = ledger_hash(target_path);
+            let account = jot_hash(target_path);
             let _ = keychain_set(&account, &passphrase);
         }
         return Ok((storage, passphrase));
@@ -89,7 +89,7 @@ pub fn open_storage_with_retry(
     let (storage, passphrase) =
         open_with_retry_prompt(cli, target_path, interactive, cache_config.as_ref())?;
     if matches!(security.tier, SecurityTier::PassphraseKeychain) && security.keychain_enabled {
-        let account = ledger_hash(target_path);
+        let account = jot_hash(target_path);
         let _ = keychain_set(&account, &passphrase);
     }
     Ok((storage, passphrase))
@@ -131,7 +131,7 @@ fn open_with_passphrase_keyfile(
 }
 
 fn try_keychain_passphrase(target_path: &Path) -> Option<(AgeSqliteStorage, String)> {
-    let account = ledger_hash(target_path);
+    let account = jot_hash(target_path);
     match keychain_get(&account) {
         Ok(Some(passphrase)) => {
             if let Ok(storage) = AgeSqliteStorage::open(target_path, &passphrase) {
@@ -170,9 +170,7 @@ fn open_with_passphrase_and_cache(
         Err(err) if is_incorrect_passphrase_error(&err) => {
             CliError::auth_failed("Incorrect passphrase.").exit()
         }
-        Err(err) if is_missing_ledger_error(&err) => {
-            Err(anyhow::anyhow!(missing_ledger_message(path)))
-        }
+        Err(err) if is_missing_jot_error(&err) => Err(anyhow::anyhow!(missing_jot_message(path))),
         Err(err) => Err(err.into()),
     }
 }
@@ -242,8 +240,8 @@ fn open_with_retry_prompt(
                 );
                 continue;
             }
-            Err(err) if is_missing_ledger_error(&err) => {
-                return Err(anyhow::anyhow!(missing_ledger_message(path)));
+            Err(err) if is_missing_jot_error(&err) => {
+                return Err(anyhow::anyhow!(missing_jot_message(path)));
             }
             Err(err) => return Err(err.into()),
         }
@@ -298,6 +296,6 @@ fn is_incorrect_passphrase_error(err: &jot_core::error::JotError) -> bool {
     matches!(err, jot_core::error::JotError::IncorrectPassphrase)
 }
 
-fn is_missing_ledger_error(err: &jot_core::error::JotError) -> bool {
+fn is_missing_jot_error(err: &jot_core::error::JotError) -> bool {
     matches!(err, jot_core::error::JotError::JotNotFound)
 }

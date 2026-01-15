@@ -1,4 +1,4 @@
-//! Application-level utilities for the Ledger CLI.
+//! Application-level utilities for the Jot CLI.
 //!
 //! This module provides:
 //! - Application context for unified CLI + config handling
@@ -14,7 +14,7 @@ mod security_config;
 // Re-export public API
 pub use context::AppContext;
 pub use resolver::{
-    exit_not_found_with_hint, missing_config_message, missing_ledger_message, resolve_config_path,
-    resolve_ledger_path,
+    exit_not_found_with_hint, missing_config_message, missing_jot_message, resolve_config_path,
+    resolve_jot_path,
 };
 pub use security_config::device_keyfile_warning;

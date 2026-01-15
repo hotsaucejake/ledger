@@ -511,7 +511,7 @@ pub enum Commands {
     /// Export entries (portable formats, you own your data)
     Export(ExportArgs),
 
-    /// Check ledger integrity
+    /// Check jot integrity
     Check,
 
     /// Backup the jot

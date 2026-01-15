@@ -1,7 +1,7 @@
 # Milestone 3: Query & Export Stability
 
 **Status**: Draft  
-**Target**: Make Ledger exports durable and query ergonomics consistent without expanding the data model.
+**Target**: Make Jot exports durable and query ergonomics consistent without expanding the data model.
 
 ## Goals
 

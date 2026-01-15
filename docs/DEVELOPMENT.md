@@ -1,14 +1,14 @@
 # Development Guide
 
-**For developers working on Ledger**
+**For developers working on Jot**
 
-This document defines the standards, practices, and workflow for developing Ledger. Follow these guidelines to maintain quality, consistency, and long-term maintainability.
+This document defines the standards, practices, and workflow for developing Jot. Follow these guidelines to maintain quality, consistency, and long-term maintainability.
 
 ---
 
 ## Project Context
 
-### What is Ledger?
+### What is Jot?
 
 A secure, encrypted, CLI-first personal journal and logbook combining:
 - Strong encryption at rest (no plaintext modes)
@@ -131,15 +131,15 @@ use jot_core::storage::StorageEngine;
 #[test]
 fn test_round_trip_entry() {
     let temp_dir = tempfile::tempdir().unwrap();
-    let ledger_path = temp_dir.path().join("test.jot");
+    let jot_path = temp_dir.path().join("test.jot");
 
     // Create and add entry
-    let mut engine = TestStorageEngine::create(&ledger_path).unwrap();
+    let mut engine = TestStorageEngine::create(&jot_path).unwrap();
     let entry_id = engine.insert_entry(&test_entry()).unwrap();
     engine.close().unwrap();
 
     // Reopen and verify
-    let engine = TestStorageEngine::open(&ledger_path).unwrap();
+    let engine = TestStorageEngine::open(&jot_path).unwrap();
     let entry = engine.get_entry(&entry_id).unwrap().unwrap();
     assert_eq!(entry.data["body"], "test content");
 }
@@ -158,7 +158,7 @@ Create test helpers to reduce boilerplate:
 ```rust
 // In jot-core/src/test_utils.rs (cfg(test) only)
 pub fn test_entry() -> NewEntry { /* ... */ }
-pub fn temp_ledger() -> TempLedger { /* ... */ }
+pub fn temp_jot() -> TempJot { /* ... */ }
 pub fn mock_storage() -> MockStorage { /* ... */ }
 ```
 
@@ -532,12 +532,12 @@ pub fn list(
 
 ```rust
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct LedgerConfig {
+pub struct JotConfig {
     pub storage: StorageConfig,
     pub crypto: CryptoConfig,
 }
 
-impl LedgerConfig {
+impl JotConfig {
     pub fn load() -> Result<Self> {
         // Load from config file with defaults
     }
@@ -551,12 +551,12 @@ impl LedgerConfig {
 ### Resource Cleanup Pattern
 
 ```rust
-pub struct Ledger {
+pub struct Jot {
     storage: Box<dyn StorageEngine>,
     key: Option<DerivedKey>,
 }
 
-impl Drop for Ledger {
+impl Drop for Jot {
     fn drop(&mut self) {
         // Wipe sensitive data
         if let Some(key) = self.key.take() {
@@ -732,7 +732,7 @@ Always validate at the boundary (CLI or API entry point).
 ```bash
 # CPU profiling
 cargo install flamegraph
-cargo flamegraph --bin ledger -- add journal
+cargo flamegraph --bin jot -- add journal
 
 # Memory profiling
 cargo install cargo-bloat
@@ -772,13 +772,13 @@ criterion_main!(benches);
 // Use tracing for structured logging
 use tracing::{info, debug, warn, error};
 
-pub fn open_ledger(path: &Path) -> Result<Ledger> {
-    debug!(?path, "Opening ledger");
+pub fn open_jot(path: &Path) -> Result<Jot> {
+    debug!(?path, "Opening jot");
 
     let metadata = read_metadata(path)?;
-    info!(version = %metadata.version, "Ledger opened");
+    info!(version = %metadata.version, "Jot opened");
 
-    Ok(ledger)
+    Ok(jot)
 }
 ```
 
@@ -877,4 +877,4 @@ PR description should include:
 6. **User data is sacred**
 7. **When in doubt, read the RFCs**
 
-Follow these principles, and Ledger will remain maintainable, secure, and trustworthy for years to come.
+Follow these principles, and Jot will remain maintainable, secure, and trustworthy for years to come.

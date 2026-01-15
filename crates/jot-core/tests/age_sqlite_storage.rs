@@ -103,7 +103,7 @@ fn create_basic_entry_type(storage: &mut AgeSqliteStorage) -> Uuid {
 
 #[test]
 fn test_create_open_close_round_trip() {
-    let temp = TempFile::new("ledger_storage_round_trip");
+    let temp = TempFile::new("jot_storage_round_trip");
     let passphrase = "test-passphrase-secure-123";
 
     let device_id =
@@ -121,7 +121,7 @@ fn test_create_open_close_round_trip() {
 
 #[test]
 fn test_open_wrong_passphrase_fails() {
-    let temp = TempFile::new("ledger_storage_wrong_passphrase");
+    let temp = TempFile::new("jot_storage_wrong_passphrase");
     let passphrase = "correct-passphrase-123";
     let wrong_passphrase = "wrong-passphrase-456";
 
@@ -133,7 +133,7 @@ fn test_open_wrong_passphrase_fails() {
 
 #[test]
 fn test_open_missing_file_fails() {
-    let temp = TempFile::new("ledger_storage_missing");
+    let temp = TempFile::new("jot_storage_missing");
     let passphrase = "test-passphrase-secure-123";
 
     let result = AgeSqliteStorage::open(&temp.path, passphrase);
@@ -142,7 +142,7 @@ fn test_open_missing_file_fails() {
 
 #[test]
 fn test_metadata_persistence() {
-    let temp = TempFile::new("ledger_storage_metadata");
+    let temp = TempFile::new("jot_storage_metadata");
     let passphrase = "test-passphrase-secure-123";
 
     let device_id =
@@ -160,7 +160,7 @@ fn test_metadata_persistence() {
 
 #[test]
 fn test_create_and_get_entry_type() {
-    let temp = TempFile::new("ledger_entry_type_basic");
+    let temp = TempFile::new("jot_entry_type_basic");
     let passphrase = "test-passphrase-secure-123";
 
     AgeSqliteStorage::create(&temp.path, passphrase).expect("create should succeed");
@@ -196,7 +196,7 @@ fn test_create_and_get_entry_type() {
 
 #[test]
 fn test_get_nonexistent_entry_type() {
-    let temp = TempFile::new("ledger_entry_type_nonexistent");
+    let temp = TempFile::new("jot_entry_type_nonexistent");
     let passphrase = "test-passphrase-secure-123";
 
     AgeSqliteStorage::create(&temp.path, passphrase).expect("create should succeed");
@@ -212,7 +212,7 @@ fn test_get_nonexistent_entry_type() {
 
 #[test]
 fn test_list_entry_types() {
-    let temp = TempFile::new("ledger_entry_type_list");
+    let temp = TempFile::new("jot_entry_type_list");
     let passphrase = "test-passphrase-secure-123";
 
     AgeSqliteStorage::create(&temp.path, passphrase).expect("create should succeed");
@@ -243,7 +243,7 @@ fn test_list_entry_types() {
 
 #[test]
 fn test_entry_type_versioning() {
-    let temp = TempFile::new("ledger_entry_type_versioning");
+    let temp = TempFile::new("jot_entry_type_versioning");
     let passphrase = "test-passphrase-secure-123";
 
     AgeSqliteStorage::create(&temp.path, passphrase).expect("create should succeed");
@@ -290,7 +290,7 @@ fn test_entry_type_versioning() {
 
 #[test]
 fn test_insert_and_get_entry_round_trip() {
-    let temp = TempFile::new("ledger_entry_round_trip");
+    let temp = TempFile::new("jot_entry_round_trip");
     let passphrase = "test-passphrase-secure-123";
 
     AgeSqliteStorage::create(&temp.path, passphrase).expect("create should succeed");
@@ -324,7 +324,7 @@ fn test_insert_and_get_entry_round_trip() {
 
 #[test]
 fn test_insert_entry_missing_required_field_fails() {
-    let temp = TempFile::new("ledger_entry_missing_required");
+    let temp = TempFile::new("jot_entry_missing_required");
     let passphrase = "test-passphrase-secure-123";
 
     AgeSqliteStorage::create(&temp.path, passphrase).expect("create should succeed");
@@ -340,7 +340,7 @@ fn test_insert_entry_missing_required_field_fails() {
 
 #[test]
 fn test_insert_entry_type_mismatch_fails() {
-    let temp = TempFile::new("ledger_entry_type_mismatch");
+    let temp = TempFile::new("jot_entry_type_mismatch");
     let passphrase = "test-passphrase-secure-123";
 
     AgeSqliteStorage::create(&temp.path, passphrase).expect("create should succeed");
@@ -356,7 +356,7 @@ fn test_insert_entry_type_mismatch_fails() {
 
 #[test]
 fn test_insert_entry_unknown_field_fails() {
-    let temp = TempFile::new("ledger_entry_unknown_field");
+    let temp = TempFile::new("jot_entry_unknown_field");
     let passphrase = "test-passphrase-secure-123";
 
     AgeSqliteStorage::create(&temp.path, passphrase).expect("create should succeed");
@@ -377,7 +377,7 @@ fn test_insert_entry_unknown_field_fails() {
 
 #[test]
 fn test_list_entries_with_filters() {
-    let temp = TempFile::new("ledger_entry_list");
+    let temp = TempFile::new("jot_entry_list");
     let passphrase = "test-passphrase-secure-123";
 
     AgeSqliteStorage::create(&temp.path, passphrase).expect("create should succeed");
@@ -425,7 +425,7 @@ fn test_list_entries_with_filters() {
 
 #[test]
 fn test_insert_entry_invalid_tag_characters() {
-    let temp = TempFile::new("ledger_entry_invalid_tag");
+    let temp = TempFile::new("jot_entry_invalid_tag");
     let passphrase = "test-passphrase-secure-123";
 
     AgeSqliteStorage::create(&temp.path, passphrase).expect("create should succeed");
@@ -447,7 +447,7 @@ fn test_insert_entry_invalid_tag_characters() {
 
 #[test]
 fn test_insert_entry_empty_tag_fails() {
-    let temp = TempFile::new("ledger_entry_empty_tag");
+    let temp = TempFile::new("jot_entry_empty_tag");
     let passphrase = "test-passphrase-secure-123";
 
     AgeSqliteStorage::create(&temp.path, passphrase).expect("create should succeed");
@@ -469,7 +469,7 @@ fn test_insert_entry_empty_tag_fails() {
 
 #[test]
 fn test_insert_entry_tag_too_long_fails() {
-    let temp = TempFile::new("ledger_entry_long_tag");
+    let temp = TempFile::new("jot_entry_long_tag");
     let passphrase = "test-passphrase-secure-123";
 
     AgeSqliteStorage::create(&temp.path, passphrase).expect("create should succeed");
@@ -492,7 +492,7 @@ fn test_insert_entry_tag_too_long_fails() {
 
 #[test]
 fn test_insert_entry_too_many_tags_fails() {
-    let temp = TempFile::new("ledger_entry_too_many_tags");
+    let temp = TempFile::new("jot_entry_too_many_tags");
     let passphrase = "test-passphrase-secure-123";
 
     AgeSqliteStorage::create(&temp.path, passphrase).expect("create should succeed");
@@ -515,7 +515,7 @@ fn test_insert_entry_too_many_tags_fails() {
 
 #[test]
 fn test_insert_entry_invalid_date_fails() {
-    let temp = TempFile::new("ledger_entry_bad_date");
+    let temp = TempFile::new("jot_entry_bad_date");
     let passphrase = "test-passphrase-secure-123";
 
     AgeSqliteStorage::create(&temp.path, passphrase).expect("create should succeed");
@@ -543,7 +543,7 @@ fn test_insert_entry_invalid_date_fails() {
 
 #[test]
 fn test_insert_entry_invalid_datetime_fails() {
-    let temp = TempFile::new("ledger_entry_bad_datetime");
+    let temp = TempFile::new("jot_entry_bad_datetime");
     let passphrase = "test-passphrase-secure-123";
 
     AgeSqliteStorage::create(&temp.path, passphrase).expect("create should succeed");
@@ -571,7 +571,7 @@ fn test_insert_entry_invalid_datetime_fails() {
 
 #[test]
 fn test_search_entries_basic() {
-    let temp = TempFile::new("ledger_entry_search");
+    let temp = TempFile::new("jot_entry_search");
     let passphrase = "test-passphrase-secure-123";
 
     AgeSqliteStorage::create(&temp.path, passphrase).expect("create should succeed");
@@ -596,7 +596,7 @@ fn test_search_entries_basic() {
 
 #[test]
 fn test_check_integrity_ok() {
-    let temp = TempFile::new("ledger_integrity_ok");
+    let temp = TempFile::new("jot_integrity_ok");
     let passphrase = "test-passphrase-secure-123";
 
     AgeSqliteStorage::create(&temp.path, passphrase).expect("create should succeed");
@@ -617,7 +617,7 @@ fn test_check_integrity_ok() {
 
 #[test]
 fn test_check_integrity_fails_on_orphaned_fts() {
-    let temp = TempFile::new("ledger_integrity_fail_fts");
+    let temp = TempFile::new("jot_integrity_fail_fts");
     let passphrase = "test-passphrase-secure-123";
 
     AgeSqliteStorage::create(&temp.path, passphrase).expect("create should succeed");
@@ -658,12 +658,12 @@ fn test_check_integrity_fails_on_orphaned_fts() {
 fn test_atomic_write_failure_leaves_no_temp_files() {
     use std::os::unix::fs::PermissionsExt;
 
-    let dir = temp_dir("ledger_atomic_failure");
-    let ledger_path = dir.join("test.jot");
+    let dir = temp_dir("jot_atomic_failure");
+    let jot_path = dir.join("test.jot");
     let passphrase = "test-passphrase-secure-123";
 
-    AgeSqliteStorage::create(&ledger_path, passphrase).expect("create should succeed");
-    let storage = AgeSqliteStorage::open(&ledger_path, passphrase).expect("open should succeed");
+    AgeSqliteStorage::create(&jot_path, passphrase).expect("create should succeed");
+    let storage = AgeSqliteStorage::open(&jot_path, passphrase).expect("open should succeed");
 
     let mut perms = fs::metadata(&dir).expect("metadata").permissions();
     perms.set_mode(0o500);
@@ -676,14 +676,14 @@ fn test_atomic_write_failure_leaves_no_temp_files() {
     perms.set_mode(0o700);
     fs::set_permissions(&dir, perms).expect("restore permissions");
 
-    assert_no_temp_files(&ledger_path);
-    let _ = fs::remove_file(&ledger_path);
+    assert_no_temp_files(&jot_path);
+    let _ = fs::remove_file(&jot_path);
     let _ = fs::remove_dir_all(&dir);
 }
 
 #[test]
 fn test_entry_type_active_flag_unique() {
-    let temp = TempFile::new("ledger_entry_type_active");
+    let temp = TempFile::new("jot_entry_type_active");
     let passphrase = "test-passphrase-secure-123";
 
     AgeSqliteStorage::create(&temp.path, passphrase).expect("create should succeed");
@@ -726,7 +726,7 @@ fn test_entry_type_active_flag_unique() {
 
 #[test]
 fn test_last_modified_updates_on_entry_type_create() {
-    let temp = TempFile::new("ledger_last_modified");
+    let temp = TempFile::new("jot_last_modified");
     let passphrase = "test-passphrase-secure-123";
 
     AgeSqliteStorage::create(&temp.path, passphrase).expect("create should succeed");
@@ -763,7 +763,7 @@ fn test_last_modified_updates_on_entry_type_create() {
 
 #[test]
 fn test_create_and_get_composition() {
-    let temp = TempFile::new("ledger_composition_basic");
+    let temp = TempFile::new("jot_composition_basic");
     let passphrase = "test-passphrase-secure-123";
 
     AgeSqliteStorage::create(&temp.path, passphrase).expect("create should succeed");
@@ -795,7 +795,7 @@ fn test_create_and_get_composition() {
 
 #[test]
 fn test_get_composition_by_id() {
-    let temp = TempFile::new("ledger_composition_by_id");
+    let temp = TempFile::new("jot_composition_by_id");
     let passphrase = "test-passphrase-secure-123";
 
     AgeSqliteStorage::create(&temp.path, passphrase).expect("create should succeed");
@@ -822,7 +822,7 @@ fn test_get_composition_by_id() {
 
 #[test]
 fn test_composition_duplicate_name_fails() {
-    let temp = TempFile::new("ledger_composition_dup");
+    let temp = TempFile::new("jot_composition_dup");
     let passphrase = "test-passphrase-secure-123";
 
     AgeSqliteStorage::create(&temp.path, passphrase).expect("create should succeed");
@@ -841,7 +841,7 @@ fn test_composition_duplicate_name_fails() {
 
 #[test]
 fn test_list_compositions() {
-    let temp = TempFile::new("ledger_composition_list");
+    let temp = TempFile::new("jot_composition_list");
     let passphrase = "test-passphrase-secure-123";
 
     AgeSqliteStorage::create(&temp.path, passphrase).expect("create should succeed");
@@ -879,7 +879,7 @@ fn test_list_compositions() {
 
 #[test]
 fn test_rename_composition() {
-    let temp = TempFile::new("ledger_composition_rename");
+    let temp = TempFile::new("jot_composition_rename");
     let passphrase = "test-passphrase-secure-123";
 
     AgeSqliteStorage::create(&temp.path, passphrase).expect("create should succeed");
@@ -910,7 +910,7 @@ fn test_rename_composition() {
 
 #[test]
 fn test_rename_composition_to_existing_fails() {
-    let temp = TempFile::new("ledger_composition_rename_dup");
+    let temp = TempFile::new("jot_composition_rename_dup");
     let passphrase = "test-passphrase-secure-123";
 
     AgeSqliteStorage::create(&temp.path, passphrase).expect("create should succeed");
@@ -932,7 +932,7 @@ fn test_rename_composition_to_existing_fails() {
 
 #[test]
 fn test_delete_composition() {
-    let temp = TempFile::new("ledger_composition_delete");
+    let temp = TempFile::new("jot_composition_delete");
     let passphrase = "test-passphrase-secure-123";
 
     AgeSqliteStorage::create(&temp.path, passphrase).expect("create should succeed");
@@ -957,7 +957,7 @@ fn test_delete_composition() {
 
 #[test]
 fn test_attach_detach_entry_to_composition() {
-    let temp = TempFile::new("ledger_composition_attach");
+    let temp = TempFile::new("jot_composition_attach");
     let passphrase = "test-passphrase-secure-123";
 
     AgeSqliteStorage::create(&temp.path, passphrase).expect("create should succeed");
@@ -1012,7 +1012,7 @@ fn test_attach_detach_entry_to_composition() {
 
 #[test]
 fn test_attach_idempotent() {
-    let temp = TempFile::new("ledger_composition_attach_idem");
+    let temp = TempFile::new("jot_composition_attach_idem");
     let passphrase = "test-passphrase-secure-123";
 
     AgeSqliteStorage::create(&temp.path, passphrase).expect("create should succeed");
@@ -1051,7 +1051,7 @@ fn test_attach_idempotent() {
 
 #[test]
 fn test_delete_composition_removes_associations() {
-    let temp = TempFile::new("ledger_composition_delete_assoc");
+    let temp = TempFile::new("jot_composition_delete_assoc");
     let passphrase = "test-passphrase-secure-123";
 
     AgeSqliteStorage::create(&temp.path, passphrase).expect("create should succeed");
@@ -1098,7 +1098,7 @@ fn test_delete_composition_removes_associations() {
 
 #[test]
 fn test_list_entries_with_composition_filter() {
-    let temp = TempFile::new("ledger_entries_comp_filter");
+    let temp = TempFile::new("jot_entries_comp_filter");
     let passphrase = "test-passphrase-secure-123";
 
     AgeSqliteStorage::create(&temp.path, passphrase).expect("create should succeed");
@@ -1155,7 +1155,7 @@ fn test_list_entries_with_composition_filter() {
 
 #[test]
 fn test_create_and_get_template() {
-    let temp = TempFile::new("ledger_template_basic");
+    let temp = TempFile::new("jot_template_basic");
     let passphrase = "test-passphrase-secure-123";
 
     AgeSqliteStorage::create(&temp.path, passphrase).expect("create should succeed");
@@ -1201,7 +1201,7 @@ fn test_create_and_get_template() {
 
 #[test]
 fn test_get_template_by_id() {
-    let temp = TempFile::new("ledger_template_by_id");
+    let temp = TempFile::new("jot_template_by_id");
     let passphrase = "test-passphrase-secure-123";
 
     AgeSqliteStorage::create(&temp.path, passphrase).expect("create should succeed");
@@ -1234,7 +1234,7 @@ fn test_get_template_by_id() {
 
 #[test]
 fn test_template_duplicate_name_fails() {
-    let temp = TempFile::new("ledger_template_dup");
+    let temp = TempFile::new("jot_template_dup");
     let passphrase = "test-passphrase-secure-123";
 
     AgeSqliteStorage::create(&temp.path, passphrase).expect("create should succeed");
@@ -1265,7 +1265,7 @@ fn test_template_duplicate_name_fails() {
 
 #[test]
 fn test_template_invalid_entry_type_fails() {
-    let temp = TempFile::new("ledger_template_invalid_type");
+    let temp = TempFile::new("jot_template_invalid_type");
     let passphrase = "test-passphrase-secure-123";
 
     AgeSqliteStorage::create(&temp.path, passphrase).expect("create should succeed");
@@ -1287,7 +1287,7 @@ fn test_template_invalid_entry_type_fails() {
 
 #[test]
 fn test_list_templates() {
-    let temp = TempFile::new("ledger_template_list");
+    let temp = TempFile::new("jot_template_list");
     let passphrase = "test-passphrase-secure-123";
 
     AgeSqliteStorage::create(&temp.path, passphrase).expect("create should succeed");
@@ -1325,7 +1325,7 @@ fn test_list_templates() {
 
 #[test]
 fn test_update_template_creates_new_version() {
-    let temp = TempFile::new("ledger_template_update");
+    let temp = TempFile::new("jot_template_update");
     let passphrase = "test-passphrase-secure-123";
 
     AgeSqliteStorage::create(&temp.path, passphrase).expect("create should succeed");
@@ -1371,7 +1371,7 @@ fn test_update_template_creates_new_version() {
 
 #[test]
 fn test_delete_template() {
-    let temp = TempFile::new("ledger_template_delete");
+    let temp = TempFile::new("jot_template_delete");
     let passphrase = "test-passphrase-secure-123";
 
     AgeSqliteStorage::create(&temp.path, passphrase).expect("create should succeed");
@@ -1403,7 +1403,7 @@ fn test_delete_template() {
 
 #[test]
 fn test_set_and_get_default_template() {
-    let temp = TempFile::new("ledger_template_default");
+    let temp = TempFile::new("jot_template_default");
     let passphrase = "test-passphrase-secure-123";
 
     AgeSqliteStorage::create(&temp.path, passphrase).expect("create should succeed");
@@ -1443,7 +1443,7 @@ fn test_set_and_get_default_template() {
 
 #[test]
 fn test_set_default_template_replaces_existing() {
-    let temp = TempFile::new("ledger_template_default_replace");
+    let temp = TempFile::new("jot_template_default_replace");
     let passphrase = "test-passphrase-secure-123";
 
     AgeSqliteStorage::create(&temp.path, passphrase).expect("create should succeed");
@@ -1487,7 +1487,7 @@ fn test_set_default_template_replaces_existing() {
 
 #[test]
 fn test_set_default_template_wrong_entry_type_fails() {
-    let temp = TempFile::new("ledger_template_default_wrong_type");
+    let temp = TempFile::new("jot_template_default_wrong_type");
     let passphrase = "test-passphrase-secure-123";
 
     AgeSqliteStorage::create(&temp.path, passphrase).expect("create should succeed");
@@ -1524,7 +1524,7 @@ fn test_set_default_template_wrong_entry_type_fails() {
 
 #[test]
 fn test_clear_default_template() {
-    let temp = TempFile::new("ledger_template_clear_default");
+    let temp = TempFile::new("jot_template_clear_default");
     let passphrase = "test-passphrase-secure-123";
 
     AgeSqliteStorage::create(&temp.path, passphrase).expect("create should succeed");
@@ -1560,7 +1560,7 @@ fn test_clear_default_template() {
 
 #[test]
 fn test_delete_template_removes_default_mapping() {
-    let temp = TempFile::new("ledger_template_delete_default");
+    let temp = TempFile::new("jot_template_delete_default");
     let passphrase = "test-passphrase-secure-123";
 
     AgeSqliteStorage::create(&temp.path, passphrase).expect("create should succeed");
@@ -1596,7 +1596,7 @@ fn test_delete_template_removes_default_mapping() {
 
 #[test]
 fn test_template_persistence() {
-    let temp = TempFile::new("ledger_template_persist");
+    let temp = TempFile::new("jot_template_persist");
     let passphrase = "test-passphrase-secure-123";
 
     AgeSqliteStorage::create(&temp.path, passphrase).expect("create should succeed");
@@ -1649,7 +1649,7 @@ fn test_template_persistence() {
 
 #[test]
 fn test_composition_persistence() {
-    let temp = TempFile::new("ledger_composition_persist");
+    let temp = TempFile::new("jot_composition_persist");
     let passphrase = "test-passphrase-secure-123";
 
     let comp_id: Uuid;
@@ -1713,7 +1713,7 @@ fn test_composition_persistence() {
 
 #[test]
 fn test_detach_entry_not_attached_fails() {
-    let temp = TempFile::new("ledger_detach_not_attached");
+    let temp = TempFile::new("jot_detach_not_attached");
     let passphrase = "test-passphrase-secure-123";
 
     AgeSqliteStorage::create(&temp.path, passphrase).expect("create should succeed");
@@ -1743,7 +1743,7 @@ fn test_detach_entry_not_attached_fails() {
 
 #[test]
 fn test_get_default_template_returns_latest_version() {
-    let temp = TempFile::new("ledger_default_latest_version");
+    let temp = TempFile::new("jot_default_latest_version");
     let passphrase = "test-passphrase-secure-123";
 
     AgeSqliteStorage::create(&temp.path, passphrase).expect("create should succeed");
@@ -1795,7 +1795,7 @@ fn test_get_default_template_returns_latest_version() {
 
 #[test]
 fn test_delete_template_allows_new_default() {
-    let temp = TempFile::new("ledger_delete_allows_new");
+    let temp = TempFile::new("jot_delete_allows_new");
     let passphrase = "test-passphrase-secure-123";
 
     AgeSqliteStorage::create(&temp.path, passphrase).expect("create should succeed");
@@ -1848,7 +1848,7 @@ fn test_delete_template_allows_new_default() {
 
 #[test]
 fn test_list_templates_returns_latest_versions_only() {
-    let temp = TempFile::new("ledger_list_latest_only");
+    let temp = TempFile::new("jot_list_latest_only");
     let passphrase = "test-passphrase-secure-123";
 
     AgeSqliteStorage::create(&temp.path, passphrase).expect("create should succeed");

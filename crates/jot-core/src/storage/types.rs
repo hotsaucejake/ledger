@@ -160,7 +160,7 @@ pub struct Composition {
     /// Unique identifier for this composition
     pub id: Uuid,
 
-    /// User-facing name (unique within ledger)
+    /// User-facing name (unique within jot)
     pub name: String,
 
     /// Optional description
@@ -219,7 +219,7 @@ pub struct Template {
     /// Unique identifier for this template
     pub id: Uuid,
 
-    /// User-facing name (unique within ledger)
+    /// User-facing name (unique within jot)
     pub name: String,
 
     /// Entry type this template applies to

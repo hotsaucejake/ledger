@@ -1,7 +1,7 @@
 # Init Wizard UX
 
 **Status:** Draft  
-**Applies to:** Ledger v0.1+  
+**Applies to:** Jot v0.1+  
 **Purpose:** Define the first-run UX and initialization flow.
 
 ---
@@ -17,7 +17,7 @@ Run full wizard.
 Print friendly guidance:
 
 ```
-No ledger found at ~/.config/ledger/config.toml
+No jot found at ~/.config/jot/config.toml
 
 Run:
   jot init
@@ -33,10 +33,10 @@ No auto-init.
 ## 2. Default Wizard Flow (fast path)
 
 ```
-Welcome to Ledger.
+Welcome to Jot.
 
-Ledger file location:
-  [~/.local/share/ledger/ledger.jot]
+Jot file location:
+  [~/.local/share/jot/data.jot]
 
 Create a passphrase (min 8 chars):
   Passphrase:
@@ -56,7 +56,7 @@ If user selects security tier 4, show warning:
 
 ```
 WARNING: You selected device_keyfile. This stores an unencrypted key on disk.
-If your device is compromised, your ledger can be decrypted without a passphrase.
+If your device is compromised, your jot can be decrypted without a passphrase.
 Continue? [no]:
 ```
 
@@ -72,8 +72,8 @@ Additional prompts:
 Timezone [auto-detect]:
 Default editor [$EDITOR or nano]:
 Passphrase cache (seconds) [0]:
-Keyfile path (if applicable) [~/.config/ledger/ledger.key]:
-Ledger config path [~/.config/ledger/config.toml]:
+Keyfile path (if applicable) [~/.config/jot/jot.key]:
+Jot config path [~/.config/jot/config.toml]:
 ```
 
 ---
@@ -83,8 +83,8 @@ Ledger config path [~/.config/ledger/config.toml]:
 On success:
 
 ```
-Ledger created at ~/.local/share/ledger/ledger.jot
-Config written to ~/.config/ledger/config.toml
+Jot created at ~/.local/share/jot/data.jot
+Config written to ~/.config/jot/config.toml
 ```
 
 If “create first entry” was selected:
@@ -99,7 +99,7 @@ Entry saved.
 
 ## 5. Passphrase Retry Behavior
 
-When opening an existing ledger (not during init), passphrase entry follows these rules:
+When opening an existing jot (not during init), passphrase entry follows these rules:
 
 ### 5.1 Retry Flow
 

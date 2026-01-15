@@ -4,7 +4,7 @@
 
 ## 0.1 Project Working Name
 
-> **Ledger**
+> **Jot**
 > *A secure, structured, CLI-first personal journal and logbook.*
 
 ---
@@ -29,7 +29,7 @@ Most journaling tools fall into one of three buckets:
      * not extensible
      * hostile to long-term data evolution
 
-**Ledger aims to combine:**
+**Jot aims to combine:**
 
 * Strong encryption at rest
 * Structured, queryable data
@@ -38,13 +38,13 @@ Most journaling tools fall into one of three buckets:
 * Portable, Git-friendly storage
 * Long-term data integrity
 
-Tools like `jrnl` (GPG-encrypted, CLI) and `pass` (git + GPG model) cover parts of this space. Ledger's differentiation is *compositional*: combining structured schemas with encryption and queryability in a single, coherent system.
+Tools like `jrnl` (GPG-encrypted, CLI) and `pass` (git + GPG model) cover parts of this space. Jot's differentiation is *compositional*: combining structured schemas with encryption and queryability in a single, coherent system.
 
 ---
 
 ## 0.3 Core Vision (1 Sentence)
 
-> **Ledger is a CLI-first, encrypted, extensible personal data system for journaling, logging, and tracking anything over time.**
+> **Jot is a CLI-first, encrypted, extensible personal data system for journaling, logging, and tracking anything over time.**
 
 If a feature does not serve *this* sentence, it does not belong.
 
@@ -73,7 +73,7 @@ If it's stored, it's encrypted.
 
 ### 3. Structure Without Rigidity
 
-Ledger must support:
+Jot must support:
 
 * Free-form writing
 * Structured metrics
@@ -88,14 +88,14 @@ Ledger must support:
 * Everything must be possible via CLI
 * Designed for terminals, SSH, dotfiles, automation
 
-### 5. One Logical Ledger, Portable Storage
+### 5. One Logical Jot, Portable Storage
 
-* A ledger represents a single, coherent data set
+* A jot represents a single, coherent data set
 * Implementation may be a single file, a directory, or an archive
 * Safe to back up, sync, or commit to Git
 * No scattered state or hidden dependencies
 
-The user thinks of "my ledger" as one thing, regardless of how it's stored.
+The user thinks of "my jot" as one thing, regardless of how it's stored.
 
 ### 6. Future-Proof by Design
 
@@ -119,7 +119,7 @@ Even without sync in v1, the data model must support eventual multi-device use:
 
 ## 0.5 Explicit Non-Goals (Important)
 
-Ledger will **not**:
+Jot will **not**:
 
 * Be a social product
 * Sync via a hosted service
@@ -134,7 +134,7 @@ These exclusions protect focus.
 
 ## 0.6 Core Use Cases (Canonical)
 
-Ledger must handle these **first-class**:
+Jot must handle these **first-class**:
 
 ### A. Free-Form Journaling
 
@@ -167,7 +167,7 @@ Queryable later.
 ```bash
 jot add todo
 jot list todo --open
-ledger complete todo <id>
+jot complete todo <id>
 ```
 
 ### D. Hybrid Entries
@@ -181,7 +181,7 @@ Example:
 ```bash
 jot search "anxious"
 jot list weight --last 90d
-ledger export weight --json
+jot export weight --json
 ```
 
 ---

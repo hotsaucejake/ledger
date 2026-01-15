@@ -56,7 +56,7 @@ pub fn handle_attach(ctx: &AppContext, args: &AttachArgs) -> anyhow::Result<()> 
                     &hint(
                         &ui_ctx,
                         &format!(
-                            "ledger composition show {}  \u{00B7}  ledger show {}",
+                            "jot composition show {}  \u{00B7}  jot show {}",
                             composition.name,
                             short_id(&entry_id)
                         ),

@@ -55,7 +55,7 @@ pub fn parse_duration(value: &str) -> anyhow::Result<Duration> {
 pub fn ensure_journal_type_name(entry_type: &str) -> anyhow::Result<()> {
     if entry_type != "journal" {
         return Err(anyhow::anyhow!(
-            "Entry type \"{}\" is not supported in the CLI yet. Only \"journal\" is available.\nHint: Use `ledger add journal` or `ledger list journal` for Phase 0.1.",
+            "Entry type \"{}\" is not supported in the CLI yet. Only \"journal\" is available.\nHint: Use `jot add journal` or `jot list journal` for Phase 0.1.",
             entry_type
         ));
     }

@@ -55,7 +55,7 @@ pub fn handle_detach(ctx: &AppContext, args: &DetachArgs) -> anyhow::Result<()> 
                     &ui_ctx,
                     &hint(
                         &ui_ctx,
-                        &format!("ledger show {}  \u{00B7}  ledger list", short_id(&entry_id)),
+                        &format!("jot show {}  \u{00B7}  jot list", short_id(&entry_id)),
                     ),
                 );
             }

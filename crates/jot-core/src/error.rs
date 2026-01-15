@@ -7,10 +7,10 @@
 use thiserror::Error;
 use uuid::Uuid;
 
-/// Result type alias for Ledger operations.
+/// Result type alias for Jot operations.
 pub type Result<T> = std::result::Result<T, JotError>;
 
-/// Core error type for Ledger operations.
+/// Core error type for Jot operations.
 #[derive(Debug, Error)]
 pub enum JotError {
     /// Incorrect passphrase during decryption
