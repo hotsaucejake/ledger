@@ -18,7 +18,7 @@ ledger-core = { path = "../ledger-core" }
 clap = { workspace = true }
 anyhow = { workspace = true }
 chrono = { workspace = true }
-dialoguer = "0.11"
+dialoguer = { version = "0.11", features = ["completion"] }
 clap_complete = "4.5"
 serde_json = { workspace = true }
 serde = { workspace = true }
@@ -39,7 +39,7 @@ owo-colors = "4.1"
 
 [dev-dependencies]
 rusqlite = { workspace = true }
-dialoguer = "0.11"
+dialoguer = { version = "0.11", features = ["completion"] }
 
 [features]
 test-support = []

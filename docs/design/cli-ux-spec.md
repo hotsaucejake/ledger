@@ -148,20 +148,22 @@ All commands should compose these primitives.
 - Show a clear message with safe options:
   - list, check, open, or `--force`.
 
-#### Basic wizard
+#### Wizard
 
-- Step-based flow with 2-4 steps max:
+- Step-based flow with 4-5 steps:
   1) Path (default suggested)
   2) Passphrase + confirmation
-  3) Review
+  3) Security level
+  4) Advanced settings
+  5) Review
 
 - Final receipt:
   - Path, tier, cache TTL
   - Next commands (add/list/search)
 
-#### Advanced wizard
+#### Advanced settings (default)
 
-- Sectioned flow:
+- Sectioned flow within init:
   - Storage (path, cache TTL)
   - Editor (detect `$EDITOR`)
   - Timezone (auto-detect + override)

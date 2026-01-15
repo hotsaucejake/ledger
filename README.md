@@ -37,7 +37,7 @@ The encrypted storage and CLI flows are functional with compositions and templat
 ```bash
 # Core commands
 ledger init                  # Initialize encrypted ledger
-ledger init --advanced       # Advanced init wizard (editor, timezone, cache, keyfile)
+ledger init                  # Init wizard (editor, timezone, cache, keyfile)
 ledger add <type>            # Add entry (prompts for fields)
 ledger add journal --body "" # Add inline entry
 ledger add journal --template <name>  # Use specific template

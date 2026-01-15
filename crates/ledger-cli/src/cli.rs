@@ -36,31 +36,27 @@ pub struct InitArgs {
     #[arg(value_name = "PATH")]
     pub path: Option<String>,
 
-    /// Show advanced setup prompts
-    #[arg(long)]
-    pub advanced: bool,
-
     /// Disable interactive prompts
     #[arg(long)]
     pub no_input: bool,
 
-    /// Set timezone (use with --advanced or --no-input)
+    /// Set timezone (use with --no-input or to override prompt)
     #[arg(long)]
     pub timezone: Option<String>,
 
-    /// Set default editor (use with --advanced or --no-input)
+    /// Set default editor (use with --no-input or to override prompt)
     #[arg(long)]
     pub editor: Option<String>,
 
-    /// Passphrase cache TTL seconds (advanced)
+    /// Passphrase cache TTL seconds
     #[arg(long)]
     pub passphrase_cache_ttl_seconds: Option<u64>,
 
-    /// Keyfile path override (advanced)
+    /// Keyfile path override
     #[arg(long)]
     pub keyfile_path: Option<String>,
 
-    /// Config path override (advanced)
+    /// Config path override
     #[arg(long)]
     pub config_path: Option<String>,
 }

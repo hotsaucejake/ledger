@@ -64,7 +64,7 @@ Continue? [no]:
 
 ## 3. Advanced Wizard Flow
 
-Triggered by `ledger init --advanced`.
+Triggered by `ledger init`.
 
 Additional prompts:
 
@@ -146,4 +146,3 @@ For scripts using `LEDGER_PASSPHRASE` environment variable:
 - `--no-input` is respected; missing required values should error.
 - No passphrase is printed or logged.
 - `--quiet` suppresses informational output (errors still printed to stderr).
-

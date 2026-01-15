@@ -1,6 +1,6 @@
 use std::io::IsTerminal;
 
-use dialoguer::{theme::ColorfulTheme, Confirm, Input, Select};
+use dialoguer::{theme::ColorfulTheme, Completion, Confirm, Input, Select};
 use ledger_core::storage::{AgeSqliteStorage, NewEntryType, StorageEngine};
 use ledger_core::VERSION;
 use uuid::Uuid;
@@ -31,13 +31,96 @@ fn print_step(ctx: &UiContext, step: usize, total: usize, title: &str) {
     println!("{}  {}", progress_styled, title_styled);
 }
 
+struct PathCompletion;
+
+impl PathCompletion {
+    fn new() -> Self {
+        Self
+    }
+
+    fn expand_tilde(input: &str) -> String {
+        let Ok(home) = std::env::var("HOME") else {
+            return input.to_string();
+        };
+
+        if input == "~" {
+            return home;
+        }
+
+        if let Some(rest) = input.strip_prefix("~/") {
+            return format!("{}/{}", home, rest);
+        }
+
+        input.to_string()
+    }
+}
+
+impl Completion for PathCompletion {
+    fn get(&self, input: &str) -> Option<String> {
+        if input.trim().is_empty() {
+            return None;
+        }
+
+        if input == "~" {
+            return Some("~/".to_string());
+        }
+
+        let separator = std::path::MAIN_SEPARATOR;
+        let (base_input_dir, _) = if input.ends_with(separator) {
+            (input.to_string(), "")
+        } else if let Some((dir, file)) = input.rsplit_once(separator) {
+            (format!("{}{}", dir, separator), file)
+        } else {
+            (String::new(), input)
+        };
+
+        let expanded = Self::expand_tilde(input);
+        let (expanded_dir, prefix_expanded) = if expanded.ends_with(separator) {
+            (std::path::PathBuf::from(&expanded), "")
+        } else if let Some((dir, file)) = expanded.rsplit_once(separator) {
+            (std::path::PathBuf::from(dir), file)
+        } else {
+            (std::env::current_dir().ok()?, expanded.as_str())
+        };
+
+        let mut matches = Vec::new();
+        for entry in std::fs::read_dir(&expanded_dir).ok()? {
+            let entry = entry.ok()?;
+            let file_name = entry.file_name();
+            let name = file_name.to_string_lossy();
+            if !name.starts_with(prefix_expanded) {
+                continue;
+            }
+            let is_dir = entry.file_type().ok().map(|t| t.is_dir()).unwrap_or(false);
+            matches.push((is_dir, name.to_string()));
+        }
+
+        if matches.is_empty() {
+            return None;
+        }
+
+        matches.sort_by(|a, b| b.0.cmp(&a.0).then_with(|| a.1.cmp(&b.1)));
+        let (is_dir, name) = &matches[0];
+
+        let mut suggestion = String::new();
+        suggestion.push_str(&base_input_dir);
+        suggestion.push_str(name);
+        if *is_dir {
+            suggestion.push(separator);
+        }
+
+        Some(suggestion)
+    }
+}
+
 pub fn handle_init(ctx: &AppContext, args: &InitArgs) -> anyhow::Result<()> {
     let interactive = std::io::stdin().is_terminal();
     let effective_no_input = args.no_input || !interactive;
 
     // Create UI context for step indicators
     let ui_ctx = ctx.ui_context(false, None);
-    let total_steps = if args.advanced { 5 } else { 4 };
+    let total_steps = 5;
+    let path_completion = PathCompletion::new();
 
     if !ctx.quiet() && ui_ctx.mode.is_pretty() {
         if let Some(banner_text) = banner(&ui_ctx) {
@@ -65,6 +148,7 @@ pub fn handle_init(ctx: &AppContext, args: &InitArgs) -> anyhow::Result<()> {
                 let theme = ColorfulTheme::default();
                 let input: String = Input::with_theme(&theme)
                     .with_prompt("Ledger file location")
+                    .completion_with(&path_completion)
                     .default(default_ledger.to_string_lossy().to_string())
                     .interact_text()?;
                 println!();
@@ -146,7 +230,7 @@ pub fn handle_init(ctx: &AppContext, args: &InitArgs) -> anyhow::Result<()> {
         }
     }
 
-    if args.advanced && !effective_no_input {
+    if !effective_no_input {
         print_step(&ui_ctx, 4, total_steps, "Advanced settings");
         let theme = ColorfulTheme::default();
 
@@ -193,6 +277,7 @@ pub fn handle_init(ctx: &AppContext, args: &InitArgs) -> anyhow::Result<()> {
         {
             let input: String = Input::with_theme(&theme)
                 .with_prompt("Keyfile path")
+                .completion_with(&path_completion)
                 .default(keyfile_path.to_string_lossy().to_string())
                 .interact_text()?;
             keyfile_path = std::path::PathBuf::from(input);
@@ -201,6 +286,7 @@ pub fn handle_init(ctx: &AppContext, args: &InitArgs) -> anyhow::Result<()> {
         if args.config_path.is_none() {
             let input: String = Input::with_theme(&theme)
                 .with_prompt("Ledger config path")
+                .completion_with(&path_completion)
                 .default(config_path.to_string_lossy().to_string())
                 .interact_text()?;
             config_path = std::path::PathBuf::from(input);
@@ -243,7 +329,7 @@ pub fn handle_init(ctx: &AppContext, args: &InitArgs) -> anyhow::Result<()> {
 
     // Print review step before creating
     if !effective_no_input && ui_ctx.mode.is_pretty() {
-        let review_step = if args.advanced { 5 } else { 4 };
+        let review_step = 5;
         print_step(&ui_ctx, review_step, total_steps, "Creating ledger");
     }
 

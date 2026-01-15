@@ -235,7 +235,7 @@ fn run(ctx: &AppContext, cli: &Cli) -> anyhow::Result<()> {
                         &ui_ctx,
                         &[
                             "ledger init",
-                            "ledger init --advanced",
+                            "ledger init --help",
                             "ledger --ledger /path/to/my.ledger init",
                         ],
                     );
@@ -250,7 +250,7 @@ fn run(ctx: &AppContext, cli: &Cli) -> anyhow::Result<()> {
                         &[
                             "ledger init",
                             "ledger --ledger /path/to/my.ledger init",
-                            "ledger init --advanced",
+                            "ledger init --help",
                         ],
                     );
                 }

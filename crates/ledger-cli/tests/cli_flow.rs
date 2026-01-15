@@ -490,13 +490,12 @@ fn test_cli_init_no_input_requires_passphrase() {
 }
 
 #[test]
-fn test_cli_init_no_input_advanced_uses_defaults() {
+fn test_cli_init_no_input_uses_defaults() {
     let passphrase = "test-passphrase-secure-123";
-    let (config_home, data_home) = temp_xdg_dirs("ledger_cli_init_advanced_no_input");
+    let (config_home, data_home) = temp_xdg_dirs("ledger_cli_init_no_input_defaults");
 
     let mut init = Command::new(bin());
     init.arg("init")
-        .arg("--advanced")
         .arg("--no-input")
         .env("LEDGER_PASSPHRASE", passphrase);
     apply_xdg_env(&mut init, &config_home, &data_home);
@@ -1075,9 +1074,9 @@ fn test_cli_editor_override_is_used() {
 }
 
 #[test]
-fn test_cli_init_advanced_ui_fields() {
+fn test_cli_init_ui_fields() {
     let passphrase = "test-passphrase-secure-123";
-    let (config_home, data_home) = temp_xdg_dirs("ledger_cli_init_ui_adv");
+    let (config_home, data_home) = temp_xdg_dirs("ledger_cli_init_ui_fields");
 
     let mut init = Command::new(bin());
     init.arg("init")
@@ -1121,7 +1120,6 @@ fn test_cli_init_flags_skip_prompts() {
 
     let mut init = Command::new(bin());
     init.arg("init")
-        .arg("--advanced")
         .arg("--timezone")
         .arg("UTC")
         .arg("--editor")
