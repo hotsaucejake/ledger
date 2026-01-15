@@ -55,6 +55,52 @@ fn timezone_options() -> Vec<String> {
     zones
 }
 
+fn command_exists(cmd: &str) -> bool {
+    std::process::Command::new("sh")
+        .arg("-c")
+        .arg(format!("command -v {} >/dev/null 2>&1", cmd))
+        .status()
+        .map(|status| status.success())
+        .unwrap_or(false)
+}
+
+fn editor_command_name(value: &str) -> Option<&str> {
+    value.split_whitespace().next().filter(|s| !s.is_empty())
+}
+
+fn available_editors() -> Vec<String> {
+    let mut editors = Vec::new();
+
+    if let Ok(editor) = std::env::var("EDITOR") {
+        if let Some(cmd) = editor_command_name(&editor) {
+            if command_exists(cmd) {
+                editors.push(editor);
+            }
+        }
+    }
+
+    let candidates = [
+        "code",
+        "code-insiders",
+        "cursor",
+        "zed",
+        "subl",
+        "vim",
+        "nvim",
+        "vi",
+        "nano",
+        "emacs",
+    ];
+
+    for candidate in candidates {
+        if command_exists(candidate) && !editors.iter().any(|e| e == candidate) {
+            editors.push(candidate.to_string());
+        }
+    }
+
+    editors
+}
+
 struct PathCompletion;
 
 impl PathCompletion {
@@ -274,12 +320,44 @@ pub fn handle_init(ctx: &AppContext, args: &InitArgs) -> anyhow::Result<()> {
 
         if editor.is_none() {
             let default_editor = default_editor();
-            let editor_input: String = Input::with_theme(&theme)
-                .with_prompt("Default editor")
-                .default(default_editor)
-                .interact_text()?;
-            if !editor_input.trim().is_empty() {
-                editor = Some(editor_input);
+            let mut editor_choices = available_editors();
+            if editor_choices.is_empty() {
+                let editor_input: String = Input::with_theme(&theme)
+                    .with_prompt("Default editor")
+                    .default(default_editor)
+                    .interact_text()?;
+                if !editor_input.trim().is_empty() {
+                    editor = Some(editor_input);
+                }
+            } else {
+                editor_choices.push("Other...".to_string());
+                let default_index = editor_command_name(&default_editor)
+                    .and_then(|name| {
+                        editor_choices.iter().position(|choice| {
+                            editor_command_name(choice).unwrap_or(choice) == name
+                        })
+                    })
+                    .unwrap_or(0);
+                let selection = Select::with_theme(&theme)
+                    .with_prompt("Default editor")
+                    .default(default_index)
+                    .items(&editor_choices)
+                    .interact()?;
+                if editor_choices
+                    .get(selection)
+                    .map(|choice| choice == "Other...")
+                    .unwrap_or(false)
+                {
+                    let editor_input: String = Input::with_theme(&theme)
+                        .with_prompt("Editor command")
+                        .default(default_editor)
+                        .interact_text()?;
+                    if !editor_input.trim().is_empty() {
+                        editor = Some(editor_input);
+                    }
+                } else if let Some(choice) = editor_choices.get(selection) {
+                    editor = Some(choice.to_string());
+                }
             }
         }
 
