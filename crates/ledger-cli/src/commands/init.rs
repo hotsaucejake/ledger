@@ -1,6 +1,6 @@
 use std::io::IsTerminal;
 
-use dialoguer::{theme::ColorfulTheme, Completion, Confirm, Input, Select};
+use dialoguer::{theme::ColorfulTheme, Completion, Confirm, FuzzySelect, Input, Select};
 use ledger_core::storage::{AgeSqliteStorage, NewEntryType, StorageEngine};
 use ledger_core::VERSION;
 use uuid::Uuid;
@@ -29,6 +29,30 @@ fn print_step(ctx: &UiContext, step: usize, total: usize, title: &str) {
     let progress_styled = styled(&progress, styles::dim(), ctx.color);
     let title_styled = styled(title, styles::bold(), ctx.color);
     println!("{}  {}", progress_styled, title_styled);
+}
+
+fn parse_timezone(value: &str) -> anyhow::Result<Option<String>> {
+    let trimmed = value.trim();
+    if trimmed.is_empty() || trimmed.eq_ignore_ascii_case("auto") {
+        return Ok(None);
+    }
+
+    let tz = trimmed
+        .parse::<chrono_tz::Tz>()
+        .map_err(|_| anyhow::anyhow!("Invalid timezone: {}", trimmed))?;
+    Ok(Some(tz.to_string()))
+}
+
+fn timezone_options() -> Vec<String> {
+    let mut zones: Vec<String> = chrono_tz::TZ_VARIANTS
+        .iter()
+        .map(|tz| tz.to_string())
+        .collect();
+    zones.retain(|tz| tz != "UTC");
+    zones.sort();
+    zones.insert(0, "UTC".to_string());
+    zones.insert(0, "Auto (system)".to_string());
+    zones
 }
 
 struct PathCompletion;
@@ -235,14 +259,16 @@ pub fn handle_init(ctx: &AppContext, args: &InitArgs) -> anyhow::Result<()> {
         let theme = ColorfulTheme::default();
 
         if timezone.is_none() {
-            let tz_input: String = Input::with_theme(&theme)
+            let tz_options = timezone_options();
+            let selection = FuzzySelect::with_theme(&theme)
                 .with_prompt("Timezone")
-                .default("auto".to_string())
-                .interact_text()?;
-            if tz_input.trim().is_empty() || tz_input.trim().eq_ignore_ascii_case("auto") {
-                timezone = None;
-            } else {
-                timezone = Some(tz_input);
+                .default(0)
+                .items(&tz_options)
+                .interact()?;
+            match tz_options.get(selection).map(|s| s.as_str()) {
+                Some("Auto (system)") => timezone = None,
+                Some(value) => timezone = Some(value.to_string()),
+                None => {}
             }
         }
 
@@ -293,6 +319,8 @@ pub fn handle_init(ctx: &AppContext, args: &InitArgs) -> anyhow::Result<()> {
         }
         println!();
     }
+
+    let timezone = parse_timezone(timezone.as_deref().unwrap_or(""))?;
 
     let (ledger_passphrase, keyfile_mode, keyfile_path_value) = match tier {
         SecurityTier::Passphrase => (passphrase.clone(), KeyfileMode::None, None),
