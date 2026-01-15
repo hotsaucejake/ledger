@@ -18,10 +18,14 @@ mod ui;
 use clap::Parser;
 use ledger_core::VERSION;
 
-use crate::app::AppContext;
+use std::path::PathBuf;
+
+use crate::app::{resolve_config_path, AppContext};
 use crate::cli::{Cli, Commands, CompositionsSubcommand, TemplatesSubcommand};
 use crate::commands::{associations, compositions, entries, init, maintenance, misc, templates};
-use crate::ui::print_error;
+use crate::config::read_config;
+use crate::ui::theme::{styled, styles};
+use crate::ui::{banner, blank_line, hint, kv, print, print_error, OutputMode};
 
 fn main() {
     let cli = Cli::parse();
@@ -200,16 +204,141 @@ fn run(ctx: &AppContext, cli: &Cli) -> anyhow::Result<()> {
             associations::handle_detach(ctx, args)?;
         }
         None => {
-            println!("Ledger v{}", VERSION);
-            println!("\nQuickstart:");
-            println!("  ledger init");
-            println!("  ledger add journal --body \"Hello\"");
-            println!("  ledger list --last 7d");
-            println!("  ledger search \"Hello\"");
-            println!("  ledger show <id>");
-            println!("\nRun `ledger --help` for full usage.");
+            if ctx.quiet() {
+                return Ok(());
+            }
+
+            let ui_ctx = ctx.ui_context(false, None);
+            if ui_ctx.mode == OutputMode::Json {
+                return Ok(());
+            }
+
+            if let Some(banner_text) = banner(&ui_ctx) {
+                print(&ui_ctx, &banner_text);
+            }
+            if ui_ctx.mode.is_pretty() {
+                let version_line = format!("Ledger v{}", VERSION);
+                print(&ui_ctx, &styled(&version_line, styles::dim(), ui_ctx.color));
+                blank_line(&ui_ctx);
+            }
+
+            let state = detect_bootstrap_state(cli);
+            match state {
+                BootstrapState::MissingConfig { config_path } => {
+                    print(&ui_ctx, &kv(&ui_ctx, "Status", "not initialized"));
+                    if let Some(path) = config_path {
+                        let value = format!("not found ({})", path.display());
+                        print(&ui_ctx, &kv(&ui_ctx, "Config", &value));
+                    }
+                    blank_line(&ui_ctx);
+                    print_next_steps(
+                        &ui_ctx,
+                        &[
+                            "ledger init",
+                            "ledger init --advanced",
+                            "ledger --ledger /path/to/my.ledger init",
+                        ],
+                    );
+                }
+                BootstrapState::MissingLedger { ledger_path } => {
+                    print(&ui_ctx, &kv(&ui_ctx, "Status", "ledger file missing"));
+                    let value = ledger_path.display().to_string();
+                    print(&ui_ctx, &kv(&ui_ctx, "Ledger", &value));
+                    blank_line(&ui_ctx);
+                    print_next_steps(
+                        &ui_ctx,
+                        &[
+                            "ledger init",
+                            "ledger --ledger /path/to/my.ledger init",
+                            "ledger init --advanced",
+                        ],
+                    );
+                }
+                BootstrapState::Ready { ledger_path } => {
+                    print(&ui_ctx, &kv(&ui_ctx, "Status", "ready"));
+                    let value = ledger_path.display().to_string();
+                    print(&ui_ctx, &kv(&ui_ctx, "Ledger", &value));
+                    blank_line(&ui_ctx);
+                    print_next_steps(
+                        &ui_ctx,
+                        &[
+                            "ledger add journal",
+                            "ledger list --last 7d",
+                            "ledger search \"...\"",
+                            "ledger templates list",
+                            "ledger compositions list",
+                        ],
+                    );
+                }
+            }
+
+            if ui_ctx.mode.is_pretty() {
+                blank_line(&ui_ctx);
+                print(
+                    &ui_ctx,
+                    &hint(&ui_ctx, "Run `ledger --help` for full usage."),
+                );
+            }
         }
     }
 
     Ok(())
+}
+
+#[derive(Debug)]
+enum BootstrapState {
+    MissingConfig { config_path: Option<PathBuf> },
+    MissingLedger { ledger_path: PathBuf },
+    Ready { ledger_path: PathBuf },
+}
+
+fn detect_bootstrap_state(cli: &Cli) -> BootstrapState {
+    if let Some(path) = cli.ledger.as_ref() {
+        let ledger_path = PathBuf::from(path);
+        return if ledger_path.exists() {
+            BootstrapState::Ready { ledger_path }
+        } else {
+            BootstrapState::MissingLedger { ledger_path }
+        };
+    }
+
+    let config_path = resolve_config_path().ok();
+    let Some(config_path) = config_path else {
+        return BootstrapState::MissingConfig { config_path: None };
+    };
+
+    if !config_path.exists() {
+        return BootstrapState::MissingConfig {
+            config_path: Some(config_path),
+        };
+    }
+
+    let config = match read_config(&config_path) {
+        Ok(cfg) => cfg,
+        Err(_) => {
+            return BootstrapState::MissingConfig {
+                config_path: Some(config_path),
+            }
+        }
+    };
+
+    let ledger_path = PathBuf::from(config.ledger.path);
+    if ledger_path.exists() {
+        BootstrapState::Ready { ledger_path }
+    } else {
+        BootstrapState::MissingLedger { ledger_path }
+    }
+}
+
+fn print_next_steps(ctx: &crate::ui::UiContext, steps: &[&str]) {
+    if ctx.mode.is_pretty() {
+        print(ctx, "Next:");
+        for step in steps {
+            print(ctx, &format!("  {}", step));
+        }
+    } else {
+        for step in steps {
+            print(ctx, &format!("next={}", step));
+        }
+    }
 }

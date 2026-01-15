@@ -2,6 +2,7 @@ use std::io::IsTerminal;
 
 use dialoguer::{theme::ColorfulTheme, Confirm, Input, Select};
 use ledger_core::storage::{AgeSqliteStorage, NewEntryType, StorageEngine};
+use ledger_core::VERSION;
 use uuid::Uuid;
 
 use crate::app::{device_keyfile_warning, resolve_config_path, AppContext};
@@ -17,7 +18,7 @@ use crate::security::{
     write_keyfile_plain,
 };
 use crate::ui::theme::{styled, styles};
-use crate::ui::{badge, hint, print, Badge, OutputMode, UiContext};
+use crate::ui::{badge, banner, hint, print, Badge, OutputMode, UiContext};
 
 /// Print a step indicator for the wizard flow.
 fn print_step(ctx: &UiContext, step: usize, total: usize, title: &str) {
@@ -38,12 +39,19 @@ pub fn handle_init(ctx: &AppContext, args: &InitArgs) -> anyhow::Result<()> {
     let ui_ctx = ctx.ui_context(false, None);
     let total_steps = if args.advanced { 5 } else { 4 };
 
-    if !ctx.quiet() && !effective_no_input {
-        // Print wizard header
-        if ui_ctx.mode.is_pretty() {
-            let header = styled("Ledger", styles::bold(), ui_ctx.color);
-            println!("{} \u{00B7} init\n", header);
+    if !ctx.quiet() && ui_ctx.mode.is_pretty() {
+        if let Some(banner_text) = banner(&ui_ctx) {
+            println!("{}", banner_text);
         }
+        let version_line = format!("Ledger v{}", VERSION);
+        println!("{}", styled(&version_line, styles::dim(), ui_ctx.color));
+        println!();
+    }
+
+    if !ctx.quiet() && !effective_no_input && ui_ctx.mode.is_pretty() {
+        // Print wizard header
+        let header = styled("Ledger", styles::bold(), ui_ctx.color);
+        println!("{} \u{00B7} init\n", header);
     }
 
     let default_ledger = default_ledger_path()?;

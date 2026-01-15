@@ -3,13 +3,20 @@ use ledger_core::StorageEngine;
 use crate::app::{missing_config_message, missing_ledger_message, resolve_config_path, AppContext};
 use crate::cli::DoctorArgs;
 use crate::config::read_config;
-use crate::ui::{badge, header, hint, kv, Badge, OutputMode, StepList};
+use crate::ui::{badge, banner, header, hint, kv, Badge, OutputMode, StepList};
 
 pub fn handle_doctor(ctx: &AppContext, args: &DoctorArgs) -> anyhow::Result<()> {
     let ui_ctx = ctx.ui_context(false, None);
+    let show_banner = ui_ctx.mode.is_pretty() && !ctx.quiet();
 
     let config_path = resolve_config_path()?;
     if !config_path.exists() {
+        if show_banner {
+            if let Some(banner_text) = banner(&ui_ctx) {
+                eprintln!("{}", banner_text);
+                eprintln!();
+            }
+        }
         eprintln!("{}", missing_config_message(&config_path));
         return Err(anyhow::anyhow!("Ledger is not initialized"));
     }
@@ -17,6 +24,12 @@ pub fn handle_doctor(ctx: &AppContext, args: &DoctorArgs) -> anyhow::Result<()> 
     let config = read_config(&config_path).map_err(|e| anyhow::anyhow!("Config error: {}", e))?;
     let ledger_path = std::path::PathBuf::from(&config.ledger.path);
     if !ledger_path.exists() {
+        if show_banner {
+            if let Some(banner_text) = banner(&ui_ctx) {
+                eprintln!("{}", banner_text);
+                eprintln!();
+            }
+        }
         eprintln!("{}", missing_ledger_message(&ledger_path));
         return Err(anyhow::anyhow!("Ledger file missing"));
     }
@@ -35,6 +48,12 @@ pub fn handle_doctor(ctx: &AppContext, args: &DoctorArgs) -> anyhow::Result<()> 
     if let Err(ref err) = integrity_result {
         match ui_ctx.mode {
             OutputMode::Pretty => {
+                if show_banner {
+                    if let Some(banner_text) = banner(&ui_ctx) {
+                        println!("{}", banner_text);
+                        println!();
+                    }
+                }
                 println!("{}", header(&ui_ctx, "doctor", None));
                 println!();
 
@@ -71,6 +90,12 @@ pub fn handle_doctor(ctx: &AppContext, args: &DoctorArgs) -> anyhow::Result<()> 
     if !ctx.quiet() {
         match ui_ctx.mode {
             OutputMode::Pretty => {
+                if show_banner {
+                    if let Some(banner_text) = banner(&ui_ctx) {
+                        println!("{}", banner_text);
+                        println!();
+                    }
+                }
                 println!("{}", header(&ui_ctx, "doctor", None));
                 println!();
 

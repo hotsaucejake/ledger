@@ -720,7 +720,7 @@ fn test_cli_quickstart_output() {
     let output = Command::new(bin()).output().expect("run ledger");
     assert!(output.status.success());
     let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(stdout.contains("Quickstart"));
+    assert!(stdout.contains("status="));
     assert!(stdout.contains("ledger init"));
 }
 

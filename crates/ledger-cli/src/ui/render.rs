@@ -5,6 +5,7 @@ use comfy_table::presets::UTF8_FULL;
 use comfy_table::{
     Attribute, Cell, ColumnConstraint, ContentArrangement, Table as ComfyTable, Width,
 };
+use owo_colors::Style;
 
 use super::context::UiContext;
 use super::mode::OutputMode;
@@ -127,6 +128,42 @@ pub fn receipt(ctx: &UiContext, title: &str, items: &[(&str, &str)]) -> String {
     }
 
     lines.join("\n")
+}
+
+/// Render the Ledger banner for pretty mode.
+pub fn banner(ctx: &UiContext) -> Option<String> {
+    if !ctx.mode.is_pretty() {
+        return None;
+    }
+
+    if !ctx.unicode {
+        return Some("Ledger".to_string());
+    }
+
+    let lines = [
+        "██      ███████ ██████   ██████  ███████ ██████",
+        "██      ██      ██   ██ ██       ██      ██   ██",
+        "██      █████   ██   ██ ██   ███ █████   ██████",
+        "██      ██      ██   ██ ██    ██ ██      ██   ██",
+        "███████ ███████ ██████   ██████  ███████ ██   ██",
+    ];
+
+    let styles = [
+        Style::new().green(),
+        Style::new().bright_green(),
+        Style::new().cyan(),
+        Style::new().bright_blue(),
+        Style::new().blue(),
+    ];
+
+    let rendered = lines
+        .iter()
+        .zip(styles.iter())
+        .map(|(line, style)| styled(line, *style, ctx.color))
+        .collect::<Vec<_>>()
+        .join("\n");
+
+    Some(rendered)
 }
 
 /// Column definition for table rendering.

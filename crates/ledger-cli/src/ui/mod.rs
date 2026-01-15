@@ -45,7 +45,7 @@ pub use theme::Badge;
 
 // Re-export commonly used render functions
 pub use render::{
-    badge, blank_line, divider, header, header_with_context, hint, kv, print, print_error,
+    badge, banner, blank_line, divider, header, header_with_context, hint, kv, print, print_error,
     simple_table, Column,
 };
 
