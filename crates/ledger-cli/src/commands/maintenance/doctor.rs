@@ -3,8 +3,11 @@ use ledger_core::StorageEngine;
 use crate::app::{missing_config_message, missing_ledger_message, resolve_config_path, AppContext};
 use crate::cli::DoctorArgs;
 use crate::config::read_config;
+use crate::ui::{badge, header, hint, kv, Badge, OutputMode, StepList};
 
 pub fn handle_doctor(ctx: &AppContext, args: &DoctorArgs) -> anyhow::Result<()> {
+    let ui_ctx = ctx.ui_context(false, None);
+
     let config_path = resolve_config_path()?;
     if !config_path.exists() {
         eprintln!("{}", missing_config_message(&config_path));
@@ -12,7 +15,7 @@ pub fn handle_doctor(ctx: &AppContext, args: &DoctorArgs) -> anyhow::Result<()> 
     }
 
     let config = read_config(&config_path).map_err(|e| anyhow::anyhow!("Config error: {}", e))?;
-    let ledger_path = std::path::PathBuf::from(config.ledger.path);
+    let ledger_path = std::path::PathBuf::from(&config.ledger.path);
     if !ledger_path.exists() {
         eprintln!("{}", missing_ledger_message(&ledger_path));
         return Err(anyhow::anyhow!("Ledger file missing"));
@@ -25,19 +28,68 @@ pub fn handle_doctor(ctx: &AppContext, args: &DoctorArgs) -> anyhow::Result<()> 
         )
     })?;
 
-    if let Err(err) = storage.check_integrity() {
-        eprintln!("Doctor: FAILED");
-        eprintln!("- integrity check: FAILED");
-        eprintln!("- error: {}", err);
-        eprintln!("Hint: Restore from a backup or export data before retrying.");
+    // Run integrity check first
+    let integrity_result = storage.check_integrity();
+
+    // Handle errors (always output, regardless of quiet)
+    if let Err(ref err) = integrity_result {
+        match ui_ctx.mode {
+            OutputMode::Pretty => {
+                println!("{}", header(&ui_ctx, "doctor", None));
+                println!();
+
+                let mut steps =
+                    StepList::new(&ui_ctx, &["Config file", "Ledger file", "Integrity check"]);
+                steps.ok();
+                steps.ok();
+                steps.err();
+
+                println!();
+                println!("{}", badge(&ui_ctx, Badge::Err, "Doctor failed"));
+                println!("  {}", kv(&ui_ctx, "Error", &err.to_string()));
+                println!();
+                println!(
+                    "{}",
+                    hint(
+                        &ui_ctx,
+                        "Restore from a backup or export data before retrying."
+                    )
+                );
+            }
+            OutputMode::Plain | OutputMode::Json => {
+                println!("check=config ok");
+                println!("check=ledger ok");
+                println!("check=integrity err");
+                println!("error={}", err);
+                println!("status=failed");
+            }
+        }
         return Err(anyhow::anyhow!("Doctor failed"));
     }
 
+    // Handle success (respect quiet flag)
     if !ctx.quiet() {
-        println!("Doctor: OK");
-        println!("- config: OK ({})", config_path.display());
-        println!("- ledger: OK ({})", ledger_path.display());
-        println!("- integrity: OK");
+        match ui_ctx.mode {
+            OutputMode::Pretty => {
+                println!("{}", header(&ui_ctx, "doctor", None));
+                println!();
+
+                let mut steps =
+                    StepList::new(&ui_ctx, &["Config file", "Ledger file", "Integrity check"]);
+                steps.ok();
+                steps.ok();
+                steps.ok();
+
+                println!();
+                println!("{}", badge(&ui_ctx, Badge::Ok, "Ledger is healthy"));
+            }
+            OutputMode::Plain | OutputMode::Json => {
+                println!("check=config ok");
+                println!("check=ledger ok");
+                println!("check=integrity ok");
+                println!("status=ok");
+            }
+        }
     }
 
     Ok(())

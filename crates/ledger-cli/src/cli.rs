@@ -19,6 +19,14 @@ pub struct Cli {
     /// Quiet mode (minimal output)
     #[arg(short, long, global = true)]
     pub quiet: bool,
+
+    /// Disable colored output
+    #[arg(long, global = true, env = "NO_COLOR")]
+    pub no_color: bool,
+
+    /// Use ASCII-only symbols (no Unicode)
+    #[arg(long, global = true)]
+    pub ascii: bool,
 }
 
 /// Arguments for the `init` command

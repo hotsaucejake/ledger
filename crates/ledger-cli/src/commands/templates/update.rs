@@ -4,6 +4,7 @@ use ledger_core::storage::StorageEngine;
 
 use crate::app::AppContext;
 use crate::cli::TemplateUpdateArgs;
+use crate::ui::{badge, print, Badge, OutputMode};
 
 pub fn handle_update(ctx: &AppContext, args: &TemplateUpdateArgs) -> anyhow::Result<()> {
     let (mut storage, passphrase) = ctx.open_storage(false)?;
@@ -25,14 +26,29 @@ pub fn handle_update(ctx: &AppContext, args: &TemplateUpdateArgs) -> anyhow::Res
         "defaults": user_defaults
     });
 
+    let name = template.name.clone();
     let new_version = storage.update_template(&template.id, new_template_json)?;
     storage.close(&passphrase)?;
 
     if !ctx.quiet() {
-        println!(
-            "Updated template '{}' to version {}",
-            template.name, new_version
-        );
+        let ui_ctx = ctx.ui_context(false, None);
+        match ui_ctx.mode {
+            OutputMode::Pretty => {
+                print(
+                    &ui_ctx,
+                    &badge(
+                        &ui_ctx,
+                        Badge::Ok,
+                        &format!("Updated template '{}' to version {}", name, new_version),
+                    ),
+                );
+            }
+            OutputMode::Plain | OutputMode::Json => {
+                println!("status=ok");
+                println!("name={}", name);
+                println!("version={}", new_version);
+            }
+        }
     }
     Ok(())
 }

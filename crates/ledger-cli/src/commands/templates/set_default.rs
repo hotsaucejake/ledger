@@ -5,6 +5,7 @@ use ledger_core::storage::StorageEngine;
 use crate::app::AppContext;
 use crate::cli::TemplateSetDefaultArgs;
 use crate::helpers::require_entry_type;
+use crate::ui::{badge, print, Badge, OutputMode};
 
 pub fn handle_set_default(ctx: &AppContext, args: &TemplateSetDefaultArgs) -> anyhow::Result<()> {
     let (mut storage, passphrase) = ctx.open_storage(false)?;
@@ -36,14 +37,32 @@ pub fn handle_set_default(ctx: &AppContext, args: &TemplateSetDefaultArgs) -> an
         ));
     }
 
+    let template_name = template.name.clone();
     storage.set_default_template(&entry_type.id, &template.id)?;
     storage.close(&passphrase)?;
 
     if !ctx.quiet() {
-        println!(
-            "Set '{}' as default template for '{}'",
-            template.name, args.entry_type
-        );
+        let ui_ctx = ctx.ui_context(false, None);
+        match ui_ctx.mode {
+            OutputMode::Pretty => {
+                print(
+                    &ui_ctx,
+                    &badge(
+                        &ui_ctx,
+                        Badge::Ok,
+                        &format!(
+                            "Set '{}' as default template for '{}'",
+                            template_name, args.entry_type
+                        ),
+                    ),
+                );
+            }
+            OutputMode::Plain | OutputMode::Json => {
+                println!("status=ok");
+                println!("template={}", template_name);
+                println!("entry_type={}", args.entry_type);
+            }
+        }
     }
     Ok(())
 }
