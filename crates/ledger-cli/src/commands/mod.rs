@@ -5,3 +5,4 @@ pub mod init;
 pub mod maintenance;
 pub mod misc;
 pub mod templates;
+pub mod todo;

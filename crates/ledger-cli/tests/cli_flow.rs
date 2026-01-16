@@ -10,7 +10,7 @@ use rusqlite::{Connection, DatabaseName};
 
 use base64::engine::general_purpose::STANDARD;
 use base64::Engine;
-use ledger_core::storage::{AgeSqliteStorage, StorageEngine};
+use ledger_core::storage::{AgeSqliteStorage, NewEntry, NewEntryType, StorageEngine};
 
 fn bin() -> PathBuf {
     PathBuf::from(env!("CARGO_BIN_EXE_ledger"))
@@ -2757,6 +2757,79 @@ fn test_cli_add_with_invalid_composition() {
     assert!(!add.status.success());
     let stderr = String::from_utf8_lossy(&add.stderr);
     assert!(stderr.contains("not found"), "stderr: {}", stderr);
+}
+
+#[test]
+fn test_cli_todo_done_updates_task() {
+    let ledger_path = temp_ledger_path("ledger_cli_todo_done");
+    let passphrase = "test-passphrase-secure-123";
+    let (config_home, data_home) = temp_xdg_dirs("ledger_cli_todo_done");
+
+    create_ledger_with_passphrase(&ledger_path, passphrase);
+    write_config_file(&config_home, &ledger_path, "passphrase", "none", None, 0);
+
+    let mut storage = AgeSqliteStorage::open(&ledger_path, passphrase).expect("open ledger");
+    let metadata = storage.metadata().expect("metadata");
+    let schema = serde_json::json!({
+        "fields": [
+            {"name": "items", "type": "task_list", "required": true}
+        ]
+    });
+    let entry_type = NewEntryType::new("todo", schema, metadata.device_id);
+    storage
+        .create_entry_type(&entry_type)
+        .expect("create entry type");
+    let entry_type = storage
+        .get_entry_type("todo")
+        .expect("get entry type")
+        .expect("entry type exists");
+    let entry = NewEntry::new(
+        entry_type.id,
+        entry_type.version,
+        serde_json::json!({
+            "items": [
+                {"text": "Milk", "done": false}
+            ]
+        }),
+        metadata.device_id,
+    );
+    let entry_id = storage.insert_entry(&entry).expect("insert entry");
+    storage.close(passphrase).expect("close");
+
+    let mut todo = Command::new(bin());
+    todo.arg("todo")
+        .arg("done")
+        .arg(entry_id.to_string())
+        .arg("1")
+        .env("LEDGER_PASSPHRASE", passphrase);
+    apply_xdg_env(&mut todo, &config_home, &data_home);
+    let todo = todo.output().expect("run todo done");
+    assert!(todo.status.success());
+    let stdout = String::from_utf8_lossy(&todo.stdout);
+    let new_entry_id = stdout
+        .lines()
+        .find_map(|line| line.strip_prefix("entry_id="))
+        .expect("entry_id in output");
+
+    let mut show = Command::new(bin());
+    show.arg("show")
+        .arg(new_entry_id)
+        .arg("--json")
+        .arg("--ledger")
+        .arg(&ledger_path)
+        .env("LEDGER_PASSPHRASE", passphrase);
+    apply_xdg_env(&mut show, &config_home, &data_home);
+    let show = show.output().expect("run show");
+    assert!(show.status.success());
+    let show_value: serde_json::Value = serde_json::from_slice(&show.stdout).expect("parse json");
+    let done = show_value
+        .get("data")
+        .and_then(|d| d.get("items"))
+        .and_then(|v| v.as_array())
+        .and_then(|arr| arr.first())
+        .and_then(|item| item.get("done"))
+        .and_then(|v| v.as_bool());
+    assert_eq!(done, Some(true));
 }
 
 // Note: test_cli_template_wrong_entry_type skipped - only "journal" entry type supported in Phase 0.1

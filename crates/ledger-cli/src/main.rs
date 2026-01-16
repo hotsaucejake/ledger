@@ -22,7 +22,9 @@ use std::path::PathBuf;
 
 use crate::app::{resolve_config_path, AppContext};
 use crate::cli::{Cli, Commands, CompositionsSubcommand, TemplatesSubcommand};
-use crate::commands::{associations, compositions, entries, init, maintenance, misc, templates};
+use crate::commands::{
+    associations, compositions, entries, init, maintenance, misc, templates, todo,
+};
 use crate::config::read_config;
 use crate::ui::theme::{styled, styles};
 use crate::ui::{banner, blank_line, hint, kv, print, print_error, OutputMode};
@@ -199,6 +201,9 @@ fn run(ctx: &AppContext, cli: &Cli) -> anyhow::Result<()> {
         }
         Some(Commands::Detach(args)) => {
             associations::handle_detach(ctx, args)?;
+        }
+        Some(Commands::Todo(args)) => {
+            todo::handle_todo(ctx, args)?;
         }
         None => {
             if ctx.quiet() {

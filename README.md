@@ -59,6 +59,9 @@ ledger export                # Export data (portable, you own your data)
 ledger check                 # Integrity check
 ledger backup <dest>         # Backup ledger
 ledger lock                  # Clear passphrase cache
+ledger todo list <id>        # List tasks in a todo entry
+ledger todo done <id> <n>    # Mark task n as completed
+ledger todo undo <id> <n>    # Reopen task n
 ledger completions bash      # Generate shell completions
 
 # Compositions (semantic grouping)

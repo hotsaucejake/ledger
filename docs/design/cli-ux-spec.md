@@ -223,6 +223,13 @@ Pretty mode:
 - Progress for large operations (entries/bytes).
 - Receipt on completion (path, size, duration).
 
+### `ledger todo`
+
+- `ledger todo list <id>` lists tasks with completion state.
+- `ledger todo done <id> <n>` marks task `n` complete.
+- `ledger todo undo <id> <n>` reopens task `n`.
+- Each change creates a new entry revision (append-only).
+
 ### `ledger lock`
 
 - Clear success message with cache/TTL state.

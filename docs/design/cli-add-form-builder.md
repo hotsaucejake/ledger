@@ -123,6 +123,8 @@ Provide a built-in preset in the form builder:
 
 Todo lists are stored as a single entry containing task state.
 
+Use `ledger todo done <id> <n>` / `ledger todo undo <id> <n>` to update task completion.
+
 ---
 
 ## 9. UI/UX Requirements
