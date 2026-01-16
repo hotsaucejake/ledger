@@ -177,7 +177,8 @@ pub fn prompt_for_fields(
         // Check if value was provided via CLI
         if let Some(cli_value) = cli_values.get(&field.name) {
             let allowed = merged_enum_values(field, template_defaults);
-            let value = parse_field_value(&field.field_type, cli_value, &allowed, field.multiple)?;
+            let value =
+                parse_field_value(&field.field_type, cli_value, &allowed, field.multiple, true)?;
             data.insert(field.name.clone(), value);
             continue;
         }
@@ -318,6 +319,7 @@ fn prompt_single_field(
                 &result,
                 allowed_enum_values,
                 field.multiple,
+                false,
             )?;
             Ok(PromptFieldResult {
                 value: Some(parsed),
@@ -565,6 +567,7 @@ fn parse_field_value(
     value: &str,
     enum_values: &Option<Vec<String>>,
     multiple: bool,
+    allow_custom_enum: bool,
 ) -> anyhow::Result<Value> {
     match field_type {
         "string" | "text" => Ok(Value::String(value.to_string())),
@@ -640,7 +643,7 @@ fn parse_field_value(
                             allowed
                         ));
                     }
-                    if !allowed.contains(&value.to_string()) {
+                    if !allowed.contains(&value.to_string()) && !allow_custom_enum {
                         return Err(anyhow::anyhow!(
                             "Invalid enum value '{}'. Allowed: {:?}",
                             value,
@@ -728,7 +731,7 @@ fn resolve_default_value(field_type: &str, default_value: &Value) -> anyhow::Res
             return Ok(Value::String(Utc::now().to_rfc3339()));
         }
         if field_type == "date" || field_type == "datetime" {
-            return parse_field_value(field_type, s, &None, false);
+            return parse_field_value(field_type, s, &None, false, true);
         }
     }
     Ok(default_value.clone())

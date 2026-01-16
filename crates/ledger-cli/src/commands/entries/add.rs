@@ -474,7 +474,8 @@ fn run_form_builder(
 
     let steps = vec![
         WizardStep::new("Form builder").with_description("Define the fields for this entry type."),
-        WizardStep::new("Review"),
+        WizardStep::new("Review")
+            .with_description("Confirm the fields before creating the template."),
     ];
     let mut wizard = Wizard::new(ctx, &format!("add ({})", entry_type), steps);
     wizard.print_header();
@@ -504,7 +505,22 @@ fn run_form_builder(
         } else {
             "optional"
         };
-        println!("  {} ({}, {})", field.name, field.field_type, required);
+        let default_note = field
+            .default_value
+            .as_ref()
+            .and_then(|v| match v {
+                serde_json::Value::String(s) => Some(s.clone()),
+                serde_json::Value::Number(n) => Some(n.to_string()),
+                serde_json::Value::Bool(b) => Some(b.to_string()),
+                _ => None,
+            })
+            .filter(|v| !v.is_empty())
+            .map(|v| format!(", default={}", v))
+            .unwrap_or_default();
+        println!(
+            "  {} ({}, {}{})",
+            field.name, field.field_type, required, default_note
+        );
     }
     println!();
     let proceed = prompt_confirm(ctx, "Create form?", true)?;
