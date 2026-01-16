@@ -480,6 +480,49 @@ pub struct DetachArgs {
     pub composition: String,
 }
 
+/// Arguments for the `todo` command
+#[derive(Args)]
+pub struct TodoArgs {
+    #[command(subcommand)]
+    pub command: TodoSubcommand,
+}
+
+#[derive(Subcommand)]
+pub enum TodoSubcommand {
+    /// List tasks in a todo entry
+    List(TodoListArgs),
+    /// Mark a task as completed
+    Done(TodoUpdateArgs),
+    /// Reopen a completed task
+    Undo(TodoUpdateArgs),
+}
+
+#[derive(Args)]
+pub struct TodoListArgs {
+    /// Entry ID (full UUID)
+    #[arg(value_name = "ID")]
+    pub id: String,
+
+    /// Disable interactive prompts
+    #[arg(long)]
+    pub no_input: bool,
+}
+
+#[derive(Args)]
+pub struct TodoUpdateArgs {
+    /// Entry ID (full UUID)
+    #[arg(value_name = "ID")]
+    pub id: String,
+
+    /// Task index (1-based)
+    #[arg(value_name = "INDEX")]
+    pub index: usize,
+
+    /// Disable interactive prompts
+    #[arg(long)]
+    pub no_input: bool,
+}
+
 #[derive(Subcommand)]
 pub enum Commands {
     /// Initialize a new encrypted ledger
@@ -533,4 +576,7 @@ pub enum Commands {
 
     /// Detach an entry from a composition
     Detach(DetachArgs),
+
+    /// Manage todo entries
+    Todo(TodoArgs),
 }

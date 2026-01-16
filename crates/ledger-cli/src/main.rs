@@ -22,7 +22,9 @@ use std::path::PathBuf;
 
 use crate::app::{resolve_config_path, AppContext};
 use crate::cli::{Cli, Commands, CompositionsSubcommand, TemplatesSubcommand};
-use crate::commands::{associations, compositions, entries, init, maintenance, misc, templates};
+use crate::commands::{
+    associations, compositions, entries, init, maintenance, misc, templates, todo,
+};
 use crate::config::read_config;
 use crate::ui::theme::{styled, styles};
 use crate::ui::{banner, blank_line, hint, kv, print, print_error, OutputMode};
@@ -94,10 +96,7 @@ fn extract_error_hint(error: &str) -> Option<String> {
 
     // Entry type not found
     if error_lower.contains("entry type") && error_lower.contains("not found") {
-        return Some(
-            "Hint: Valid entry types are 'journal' (built-in). Custom types require manual setup."
-                .to_string(),
-        );
+        return Some("Hint: Run `ledger add <type>` to create a new entry type.".to_string());
     }
 
     // Backup destination issues
@@ -202,6 +201,9 @@ fn run(ctx: &AppContext, cli: &Cli) -> anyhow::Result<()> {
         }
         Some(Commands::Detach(args)) => {
             associations::handle_detach(ctx, args)?;
+        }
+        Some(Commands::Todo(args)) => {
+            todo::handle_todo(ctx, args)?;
         }
         None => {
             if ctx.quiet() {

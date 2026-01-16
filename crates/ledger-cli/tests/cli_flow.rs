@@ -10,7 +10,7 @@ use rusqlite::{Connection, DatabaseName};
 
 use base64::engine::general_purpose::STANDARD;
 use base64::Engine;
-use ledger_core::storage::{AgeSqliteStorage, StorageEngine};
+use ledger_core::storage::{AgeSqliteStorage, NewEntry, NewEntryType, StorageEngine};
 
 fn bin() -> PathBuf {
     PathBuf::from(env!("CARGO_BIN_EXE_ledger"))
@@ -716,7 +716,10 @@ fn test_cli_list_truncates_summary() {
 
 #[test]
 fn test_cli_quickstart_output() {
-    let output = Command::new(bin()).output().expect("run ledger");
+    let (config_home, data_home) = temp_xdg_dirs("ledger_cli_quickstart");
+    let mut cmd = Command::new(bin());
+    apply_xdg_env(&mut cmd, &config_home, &data_home);
+    let output = cmd.output().expect("run ledger");
     assert!(output.status.success());
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(stdout.contains("status="));
@@ -750,6 +753,50 @@ fn test_cli_add_body_no_input_skips_prompt() {
     let add = add.output().expect("run add");
 
     assert!(add.status.success());
+}
+
+#[test]
+fn test_cli_add_creates_entry_type_on_first_use() {
+    let ledger_path = temp_ledger_path("ledger_cli_add_first_use");
+    let passphrase = "test-passphrase-secure-123";
+    let (config_home, data_home) = temp_xdg_dirs("ledger_cli_add_first_use");
+
+    let mut init = Command::new(bin());
+    init.arg("init")
+        .arg(&ledger_path)
+        .env("LEDGER_PASSPHRASE", passphrase);
+    apply_xdg_env(&mut init, &config_home, &data_home);
+    let init = init.output().expect("run init");
+    assert!(init.status.success());
+
+    let mut add = Command::new(bin());
+    add.arg("add")
+        .arg("weight")
+        .arg("--body")
+        .arg("180")
+        .arg("--ledger")
+        .arg(&ledger_path)
+        .env("LEDGER_PASSPHRASE", passphrase);
+    apply_xdg_env(&mut add, &config_home, &data_home);
+    let add = add.output().expect("run add");
+    assert!(add.status.success());
+
+    let mut list = Command::new(bin());
+    list.arg("list")
+        .arg("--json")
+        .arg("--ledger")
+        .arg(&ledger_path)
+        .env("LEDGER_PASSPHRASE", passphrase);
+    apply_xdg_env(&mut list, &config_home, &data_home);
+    let list = list.output().expect("run list");
+    assert!(list.status.success());
+    let value: serde_json::Value = serde_json::from_slice(&list.stdout).expect("parse list json");
+    let array = value.as_array().expect("list output array");
+    assert_eq!(array.len(), 1);
+    assert_eq!(
+        array[0].get("entry_type_name").and_then(|v| v.as_str()),
+        Some("weight")
+    );
 }
 
 #[test]
@@ -1035,6 +1082,24 @@ fn test_cli_editor_override_is_used() {
         perms.set_mode(0o700);
         std::fs::set_permissions(&editor_path, perms).expect("chmod editor");
     }
+
+    // First create a journal entry to establish the entry type
+    let mut setup_add = Command::new(bin());
+    setup_add
+        .arg("add")
+        .arg("journal")
+        .arg("--body")
+        .arg("Setup entry")
+        .arg("--ledger")
+        .arg(&ledger_path)
+        .env("LEDGER_PASSPHRASE", passphrase);
+    apply_xdg_env(&mut setup_add, &config_home, &data_home);
+    let setup_add = setup_add.output().expect("run setup add");
+    assert!(
+        setup_add.status.success(),
+        "setup add failed: {:?}",
+        setup_add
+    );
 
     let config_path = config_home.join("ledger").join("config.toml");
     let contents = format!(
@@ -1886,6 +1951,19 @@ fn test_cli_templates_crud() {
     let init = init.output().expect("run init");
     assert!(init.status.success());
 
+    // Seed entry type via add
+    let mut add = Command::new(bin());
+    add.arg("add")
+        .arg("journal")
+        .arg("--body")
+        .arg("Seed entry")
+        .arg("--ledger")
+        .arg(&ledger_path)
+        .env("LEDGER_PASSPHRASE", passphrase);
+    apply_xdg_env(&mut add, &config_home, &data_home);
+    let add = add.output().expect("run add");
+    assert!(add.status.success());
+
     // Create template
     let mut create = Command::new(bin());
     create
@@ -1926,11 +2004,12 @@ fn test_cli_templates_crud() {
     assert!(list.status.success());
     let value: serde_json::Value = serde_json::from_slice(&list.stdout).expect("parse json");
     let array = value.as_array().expect("list output array");
-    assert_eq!(array.len(), 1);
-    assert_eq!(
-        array[0].get("name").and_then(|v| v.as_str()),
-        Some("daily-journal")
-    );
+    assert_eq!(array.len(), 2);
+    let names: Vec<_> = array
+        .iter()
+        .filter_map(|item| item.get("name").and_then(|v| v.as_str()))
+        .collect();
+    assert!(names.contains(&"daily-journal"));
 
     // Show template
     let mut show = Command::new(bin());
@@ -1997,7 +2076,7 @@ fn test_cli_templates_crud() {
     let list2 = list2.output().expect("run templates list");
     let value: serde_json::Value = serde_json::from_slice(&list2.stdout).expect("parse json");
     let array = value.as_array().expect("list output array");
-    assert!(array.is_empty());
+    assert_eq!(array.len(), 1);
 }
 
 #[test]
@@ -2014,6 +2093,19 @@ fn test_cli_template_set_default() {
     apply_xdg_env(&mut init, &config_home, &data_home);
     let init = init.output().expect("run init");
     assert!(init.status.success());
+
+    // Seed entry type via add
+    let mut add = Command::new(bin());
+    add.arg("add")
+        .arg("journal")
+        .arg("--body")
+        .arg("Seed entry")
+        .arg("--ledger")
+        .arg(&ledger_path)
+        .env("LEDGER_PASSPHRASE", passphrase);
+    apply_xdg_env(&mut add, &config_home, &data_home);
+    let add = add.output().expect("run add");
+    assert!(add.status.success());
 
     // Create template and set as default
     let mut create = Command::new(bin());
@@ -2049,6 +2141,20 @@ fn test_cli_add_with_template_flag() {
     apply_xdg_env(&mut init, &config_home, &data_home);
     let init = init.output().expect("run init");
     assert!(init.status.success());
+
+    // Seed entry type via add
+    let mut add_seed = Command::new(bin());
+    add_seed
+        .arg("add")
+        .arg("journal")
+        .arg("--body")
+        .arg("Seed entry")
+        .arg("--ledger")
+        .arg(&ledger_path)
+        .env("LEDGER_PASSPHRASE", passphrase);
+    apply_xdg_env(&mut add_seed, &config_home, &data_home);
+    let add_seed = add_seed.output().expect("run add");
+    assert!(add_seed.status.success());
 
     // Create template with defaults
     let mut create = Command::new(bin());
@@ -2096,25 +2202,32 @@ fn test_cli_add_with_template_flag() {
     let list = list.output().expect("run list");
     let value: serde_json::Value = serde_json::from_slice(&list.stdout).expect("parse json");
     let array = value.as_array().expect("list output array");
-    assert_eq!(array.len(), 1);
+    assert!(array.len() >= 2);
 
-    // Show entry to verify body
-    let entry_id = array[0].get("id").and_then(|v| v.as_str()).unwrap();
-    let mut show = Command::new(bin());
-    show.arg("show")
-        .arg(entry_id)
-        .arg("--json")
-        .arg("--ledger")
-        .arg(&ledger_path)
-        .env("LEDGER_PASSPHRASE", passphrase);
-    apply_xdg_env(&mut show, &config_home, &data_home);
-    let show = show.output().expect("run show");
-    let show_value: serde_json::Value = serde_json::from_slice(&show.stdout).expect("parse json");
-    let body = show_value
-        .get("data")
-        .and_then(|d| d.get("body"))
-        .and_then(|b| b.as_str());
-    assert_eq!(body, Some("Quick note default body"));
+    let mut found = false;
+    for item in array {
+        let entry_id = item.get("id").and_then(|v| v.as_str()).unwrap();
+        let mut show = Command::new(bin());
+        show.arg("show")
+            .arg(entry_id)
+            .arg("--json")
+            .arg("--ledger")
+            .arg(&ledger_path)
+            .env("LEDGER_PASSPHRASE", passphrase);
+        apply_xdg_env(&mut show, &config_home, &data_home);
+        let show = show.output().expect("run show");
+        let show_value: serde_json::Value =
+            serde_json::from_slice(&show.stdout).expect("parse json");
+        let body = show_value
+            .get("data")
+            .and_then(|d| d.get("body"))
+            .and_then(|b| b.as_str());
+        if body == Some("Quick note default body") {
+            found = true;
+            break;
+        }
+    }
+    assert!(found, "expected template default body to be present");
 }
 
 #[test]
@@ -2198,6 +2311,20 @@ fn test_cli_add_field_flags_override_defaults() {
     let init = init.output().expect("run init");
     assert!(init.status.success());
 
+    // Seed entry type via add
+    let mut add_seed = Command::new(bin());
+    add_seed
+        .arg("add")
+        .arg("journal")
+        .arg("--body")
+        .arg("Seed entry")
+        .arg("--ledger")
+        .arg(&ledger_path)
+        .env("LEDGER_PASSPHRASE", passphrase);
+    apply_xdg_env(&mut add_seed, &config_home, &data_home);
+    let add_seed = add_seed.output().expect("run add");
+    assert!(add_seed.status.success());
+
     // Create template with defaults
     let mut create = Command::new(bin());
     create
@@ -2243,26 +2370,33 @@ fn test_cli_add_field_flags_override_defaults() {
     apply_xdg_env(&mut list, &config_home, &data_home);
     let list = list.output().expect("run list");
     let value: serde_json::Value = serde_json::from_slice(&list.stdout).expect("parse json");
-    let entry_id = value.as_array().unwrap()[0]
-        .get("id")
-        .and_then(|v| v.as_str())
-        .unwrap();
+    let entries = value.as_array().expect("list output array");
 
-    let mut show = Command::new(bin());
-    show.arg("show")
-        .arg(entry_id)
-        .arg("--json")
-        .arg("--ledger")
-        .arg(&ledger_path)
-        .env("LEDGER_PASSPHRASE", passphrase);
-    apply_xdg_env(&mut show, &config_home, &data_home);
-    let show = show.output().expect("run show");
-    let show_value: serde_json::Value = serde_json::from_slice(&show.stdout).expect("parse json");
-    let body = show_value
-        .get("data")
-        .and_then(|d| d.get("body"))
-        .and_then(|b| b.as_str());
-    assert_eq!(body, Some("Explicit body value"));
+    let mut found = false;
+    for item in entries {
+        let entry_id = item.get("id").and_then(|v| v.as_str()).unwrap();
+        let mut show = Command::new(bin());
+        show.arg("show")
+            .arg(entry_id)
+            .arg("--json")
+            .arg("--ledger")
+            .arg(&ledger_path)
+            .env("LEDGER_PASSPHRASE", passphrase);
+        apply_xdg_env(&mut show, &config_home, &data_home);
+        let show = show.output().expect("run show");
+        let show_value: serde_json::Value =
+            serde_json::from_slice(&show.stdout).expect("parse json");
+        let body = show_value
+            .get("data")
+            .and_then(|d| d.get("body"))
+            .and_then(|b| b.as_str());
+        if body == Some("Explicit body value") {
+            found = true;
+            break;
+        }
+    }
+
+    assert!(found, "expected explicit body value");
 }
 
 // ============================================================================
@@ -2562,6 +2696,82 @@ fn test_cli_detach_when_not_attached() {
 }
 
 #[test]
+fn test_cli_add_allows_custom_enum_multi_values() {
+    let ledger_path = temp_ledger_path("ledger_cli_add_enum_multi");
+    let passphrase = "test-passphrase-secure-123";
+    let (config_home, data_home) = temp_xdg_dirs("ledger_cli_add_enum_multi");
+
+    create_ledger_with_passphrase(&ledger_path, passphrase);
+    write_config_file(&config_home, &ledger_path, "passphrase", "none", None, 0);
+
+    let mut storage = AgeSqliteStorage::open(&ledger_path, passphrase).expect("open ledger");
+    let metadata = storage.metadata().expect("metadata");
+    let schema = serde_json::json!({
+        "fields": [
+            {"name": "colors", "type": "enum", "required": true, "values": ["red"], "multiple": true}
+        ]
+    });
+    let entry_type = NewEntryType::new("palette", schema, metadata.device_id);
+    storage
+        .create_entry_type(&entry_type)
+        .expect("create entry type");
+    storage.close(passphrase).expect("close");
+
+    let mut add = Command::new(bin());
+    add.arg("add")
+        .arg("palette")
+        .arg("--field")
+        .arg("colors=blue,orange")
+        .arg("--ledger")
+        .arg(&ledger_path)
+        .env("LEDGER_PASSPHRASE", passphrase);
+    apply_xdg_env(&mut add, &config_home, &data_home);
+    let add = add.output().expect("run add with enum multi");
+    assert!(
+        add.status.success(),
+        "add failed: {}",
+        String::from_utf8_lossy(&add.stderr)
+    );
+
+    let mut list = Command::new(bin());
+    list.arg("list")
+        .arg("--json")
+        .arg("--ledger")
+        .arg(&ledger_path)
+        .env("LEDGER_PASSPHRASE", passphrase);
+    apply_xdg_env(&mut list, &config_home, &data_home);
+    let list = list.output().expect("run list");
+    assert!(list.status.success());
+    let value: serde_json::Value = serde_json::from_slice(&list.stdout).expect("parse list json");
+    let entries = value.as_array().expect("list output array");
+    let entry_id = entries
+        .first()
+        .and_then(|e| e.get("id"))
+        .and_then(|v| v.as_str())
+        .expect("entry id");
+
+    let mut show = Command::new(bin());
+    show.arg("show")
+        .arg(entry_id)
+        .arg("--json")
+        .arg("--ledger")
+        .arg(&ledger_path)
+        .env("LEDGER_PASSPHRASE", passphrase);
+    apply_xdg_env(&mut show, &config_home, &data_home);
+    let show = show.output().expect("run show");
+    assert!(show.status.success());
+    let show_value: serde_json::Value = serde_json::from_slice(&show.stdout).expect("parse json");
+    let colors = show_value
+        .get("data")
+        .and_then(|d| d.get("colors"))
+        .and_then(|v| v.as_array())
+        .expect("colors array");
+    let values: Vec<_> = colors.iter().filter_map(|v| v.as_str()).collect();
+    assert!(values.contains(&"blue"));
+    assert!(values.contains(&"orange"));
+}
+
+#[test]
 fn test_cli_add_with_invalid_template() {
     let ledger_path = temp_ledger_path("ledger_cli_add_bt");
     let passphrase = "test-passphrase-secure-123";
@@ -2623,6 +2833,79 @@ fn test_cli_add_with_invalid_composition() {
     assert!(!add.status.success());
     let stderr = String::from_utf8_lossy(&add.stderr);
     assert!(stderr.contains("not found"), "stderr: {}", stderr);
+}
+
+#[test]
+fn test_cli_todo_done_updates_task() {
+    let ledger_path = temp_ledger_path("ledger_cli_todo_done");
+    let passphrase = "test-passphrase-secure-123";
+    let (config_home, data_home) = temp_xdg_dirs("ledger_cli_todo_done");
+
+    create_ledger_with_passphrase(&ledger_path, passphrase);
+    write_config_file(&config_home, &ledger_path, "passphrase", "none", None, 0);
+
+    let mut storage = AgeSqliteStorage::open(&ledger_path, passphrase).expect("open ledger");
+    let metadata = storage.metadata().expect("metadata");
+    let schema = serde_json::json!({
+        "fields": [
+            {"name": "items", "type": "task_list", "required": true}
+        ]
+    });
+    let entry_type = NewEntryType::new("todo", schema, metadata.device_id);
+    storage
+        .create_entry_type(&entry_type)
+        .expect("create entry type");
+    let entry_type = storage
+        .get_entry_type("todo")
+        .expect("get entry type")
+        .expect("entry type exists");
+    let entry = NewEntry::new(
+        entry_type.id,
+        entry_type.version,
+        serde_json::json!({
+            "items": [
+                {"text": "Milk", "done": false}
+            ]
+        }),
+        metadata.device_id,
+    );
+    let entry_id = storage.insert_entry(&entry).expect("insert entry");
+    storage.close(passphrase).expect("close");
+
+    let mut todo = Command::new(bin());
+    todo.arg("todo")
+        .arg("done")
+        .arg(entry_id.to_string())
+        .arg("1")
+        .env("LEDGER_PASSPHRASE", passphrase);
+    apply_xdg_env(&mut todo, &config_home, &data_home);
+    let todo = todo.output().expect("run todo done");
+    assert!(todo.status.success());
+    let stdout = String::from_utf8_lossy(&todo.stdout);
+    let new_entry_id = stdout
+        .lines()
+        .find_map(|line| line.strip_prefix("entry_id="))
+        .expect("entry_id in output");
+
+    let mut show = Command::new(bin());
+    show.arg("show")
+        .arg(new_entry_id)
+        .arg("--json")
+        .arg("--ledger")
+        .arg(&ledger_path)
+        .env("LEDGER_PASSPHRASE", passphrase);
+    apply_xdg_env(&mut show, &config_home, &data_home);
+    let show = show.output().expect("run show");
+    assert!(show.status.success());
+    let show_value: serde_json::Value = serde_json::from_slice(&show.stdout).expect("parse json");
+    let done = show_value
+        .get("data")
+        .and_then(|d| d.get("items"))
+        .and_then(|v| v.as_array())
+        .and_then(|arr| arr.first())
+        .and_then(|item| item.get("done"))
+        .and_then(|v| v.as_bool());
+    assert_eq!(done, Some(true));
 }
 
 // Note: test_cli_template_wrong_entry_type skipped - only "journal" entry type supported in Phase 0.1

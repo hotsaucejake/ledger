@@ -1,9 +1,8 @@
 use std::io::IsTerminal;
 
 use dialoguer::{theme::ColorfulTheme, Completion, Confirm, FuzzySelect, Input, Select};
-use ledger_core::storage::{AgeSqliteStorage, NewEntryType, StorageEngine};
+use ledger_core::storage::{AgeSqliteStorage, StorageEngine};
 use ledger_core::VERSION;
-use uuid::Uuid;
 
 use crate::app::{device_keyfile_warning, resolve_config_path, AppContext};
 use crate::cache::ledger_hash;
@@ -482,9 +481,8 @@ pub fn handle_init(ctx: &AppContext, args: &InitArgs) -> anyhow::Result<()> {
         );
     }
 
-    let device_id = AgeSqliteStorage::create(&ledger_path, &ledger_passphrase)?;
-    let mut storage = AgeSqliteStorage::open(&ledger_path, &ledger_passphrase)?;
-    ensure_journal_entry_type(&mut storage, device_id)?;
+    let _ = AgeSqliteStorage::create(&ledger_path, &ledger_passphrase)?;
+    let storage = AgeSqliteStorage::open(&ledger_path, &ledger_passphrase)?;
     storage.close(&ledger_passphrase)?;
 
     let config = LedgerConfig::new(
@@ -561,22 +559,4 @@ pub fn handle_init(ctx: &AppContext, args: &InitArgs) -> anyhow::Result<()> {
 
 fn default_editor() -> String {
     std::env::var("EDITOR").unwrap_or_else(|_| "nano".to_string())
-}
-
-fn ensure_journal_entry_type(
-    storage: &mut AgeSqliteStorage,
-    device_id: Uuid,
-) -> anyhow::Result<()> {
-    if storage.get_entry_type("journal")?.is_some() {
-        return Ok(());
-    }
-
-    let schema = serde_json::json!({
-        "fields": [
-            {"name": "body", "type": "text", "required": true}
-        ]
-    });
-    let entry_type = NewEntryType::new("journal", schema, device_id);
-    storage.create_entry_type(&entry_type)?;
-    Ok(())
 }

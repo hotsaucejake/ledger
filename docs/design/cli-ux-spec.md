@@ -175,6 +175,8 @@ All commands should compose these primitives.
 ### `ledger add <type>`
 
 - If `<type>` missing and interactive, prompt for a selection.
+- If the entry type is new, prompt to create a form or fall back to a body-only entry.
+- If no template exists, create a body-only template for compatibility and offer to build a form.
 - Editor-first for body; allow inline `--body`.
 - If no field flags are provided and TTY is available, run a guided wizard:
   - show template selection (if any)
@@ -220,6 +222,13 @@ Pretty mode:
 - Confirm overwrite unless `--force`.
 - Progress for large operations (entries/bytes).
 - Receipt on completion (path, size, duration).
+
+### `ledger todo`
+
+- `ledger todo list <id>` lists tasks with completion state.
+- `ledger todo done <id> <n>` marks task `n` complete.
+- `ledger todo undo <id> <n>` reopens task `n`.
+- Each change creates a new entry revision (append-only).
 
 ### `ledger lock`
 

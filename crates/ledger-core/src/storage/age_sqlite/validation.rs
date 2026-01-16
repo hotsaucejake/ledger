@@ -174,6 +174,33 @@ pub fn validate_entry_data(
                     )));
                 }
             }
+            "task_list" => {
+                let arr = value.as_array().ok_or_else(|| {
+                    LedgerError::Validation(format!("Field {} must be an array", name))
+                })?;
+                for (i, item) in arr.iter().enumerate() {
+                    let obj = item.as_object().ok_or_else(|| {
+                        LedgerError::Validation(format!(
+                            "Field {} item {} must be an object",
+                            name, i
+                        ))
+                    })?;
+                    if !obj.contains_key("text") || !obj.get("text").is_some_and(|v| v.is_string())
+                    {
+                        return Err(LedgerError::Validation(format!(
+                            "Field {} item {} must have a string 'text' field",
+                            name, i
+                        )));
+                    }
+                    if !obj.contains_key("done") || !obj.get("done").is_some_and(|v| v.is_boolean())
+                    {
+                        return Err(LedgerError::Validation(format!(
+                            "Field {} item {} must have a boolean 'done' field",
+                            name, i
+                        )));
+                    }
+                }
+            }
             other => {
                 return Err(LedgerError::Validation(format!(
                     "Unsupported field type: {}",

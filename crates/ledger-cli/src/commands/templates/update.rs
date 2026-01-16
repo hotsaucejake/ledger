@@ -38,12 +38,21 @@ pub fn handle_update(ctx: &AppContext, args: &TemplateUpdateArgs) -> anyhow::Res
                     &ui_ctx,
                     &badge(
                         &ui_ctx,
+                        Badge::Warn,
+                        "Template changes affect future entries; existing entries stay as-is.",
+                    ),
+                );
+                print(
+                    &ui_ctx,
+                    &badge(
+                        &ui_ctx,
                         Badge::Ok,
                         &format!("Updated template '{}' to version {}", name, new_version),
                     ),
                 );
             }
             OutputMode::Plain | OutputMode::Json => {
+                println!("warning=template_changes_affect_future_entries");
                 println!("status=ok");
                 println!("name={}", name);
                 println!("version={}", new_version);

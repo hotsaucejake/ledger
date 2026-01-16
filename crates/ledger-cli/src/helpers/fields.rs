@@ -3,7 +3,8 @@
 use std::collections::HashMap;
 use std::io::{self, IsTerminal};
 
-use dialoguer::{Input, MultiSelect, Select};
+use chrono::{NaiveDate, Utc};
+use dialoguer::{Confirm, Input, MultiSelect, Select};
 use serde_json::Value;
 
 /// Field definition parsed from entry type schema
@@ -90,6 +91,7 @@ pub struct TemplateDefaults {
     pub default_tags: Vec<String>,
     pub default_compositions: Vec<String>,
     pub prompt_overrides: HashMap<String, String>,
+    pub enum_values: HashMap<String, Vec<String>>,
 }
 
 impl TemplateDefaults {
@@ -131,8 +133,32 @@ impl TemplateDefaults {
             }
         }
 
+        if let Some(enum_values) = template_json.get("enum_values").and_then(|v| v.as_object()) {
+            for (k, v) in enum_values {
+                if let Some(arr) = v.as_array() {
+                    let values = arr
+                        .iter()
+                        .filter_map(|val| val.as_str().map(|s| s.to_string()))
+                        .collect::<Vec<_>>();
+                    result.enum_values.insert(k.clone(), values);
+                }
+            }
+        }
+
         result
     }
+}
+
+#[derive(Debug, Clone)]
+pub struct EnumAddition {
+    pub field: String,
+    pub value: String,
+}
+
+#[derive(Debug)]
+pub struct PromptResult {
+    pub data: serde_json::Map<String, Value>,
+    pub enum_additions: Vec<EnumAddition>,
 }
 
 /// Prompt for field values based on schema and template defaults
@@ -142,15 +168,20 @@ pub fn prompt_for_fields(
     cli_values: &HashMap<String, String>,
     no_input: bool,
     editor_override: Option<&str>,
-) -> anyhow::Result<serde_json::Map<String, Value>> {
+) -> anyhow::Result<PromptResult> {
     let mut data = serde_json::Map::new();
+    let mut enum_additions = Vec::new();
     let interactive = io::stdin().is_terminal() && !no_input;
 
     for field in fields {
         // Check if value was provided via CLI
         if let Some(cli_value) = cli_values.get(&field.name) {
+            let allowed = merged_enum_values(field, template_defaults);
+            if field.field_type == "enum" {
+                warn_on_unknown_enum_value(&field.name, cli_value, &allowed, field.multiple);
+            }
             let value =
-                parse_field_value(&field.field_type, cli_value, &field.values, field.multiple)?;
+                parse_field_value(&field.field_type, cli_value, &allowed, field.multiple, true)?;
             data.insert(field.name.clone(), value);
             continue;
         }
@@ -195,31 +226,49 @@ pub fn prompt_for_fields(
                 continue;
             }
 
-            let value = prompt_single_field(
+            let allowed = merged_enum_values(field, template_defaults);
+            let result = prompt_single_field(
                 field,
                 &prompt_text,
                 default_value,
+                &allowed,
                 editor_override,
                 interactive,
             )?;
-            if let Some(v) = value {
+            if let Some(v) = result.value {
                 data.insert(field.name.clone(), v);
+            }
+            if let Some(addition) = result.enum_addition {
+                enum_additions.push(EnumAddition {
+                    field: field.name.clone(),
+                    value: addition,
+                });
             }
         } else if !has_cli_values {
             // No CLI values provided - apply all template defaults
             if let Some(default) = default_value {
-                data.insert(field.name.clone(), default.clone());
+                let value = resolve_default_value(&field.field_type, default)?;
+                data.insert(field.name.clone(), value);
             }
         } else if field.required {
             // CLI values present but this required field not provided - use default if available
             if let Some(default) = default_value {
-                data.insert(field.name.clone(), default.clone());
+                let value = resolve_default_value(&field.field_type, default)?;
+                data.insert(field.name.clone(), value);
             }
         }
         // Optional field not provided via CLI when other flags present - skip (per M5 spec)
     }
 
-    Ok(data)
+    Ok(PromptResult {
+        data,
+        enum_additions,
+    })
+}
+
+struct PromptFieldResult {
+    value: Option<Value>,
+    enum_addition: Option<String>,
 }
 
 /// Prompt for a single field value
@@ -227,15 +276,19 @@ fn prompt_single_field(
     field: &FieldDef,
     prompt_text: &str,
     default_value: Option<&Value>,
+    allowed_enum_values: &Option<Vec<String>>,
     editor_override: Option<&str>,
     interactive: bool,
-) -> anyhow::Result<Option<Value>> {
+) -> anyhow::Result<PromptFieldResult> {
     match field.field_type.as_str() {
         "string" | "date" | "datetime" | "number" | "integer" => {
             if !interactive {
                 // Non-interactive mode - use default or fail
                 if let Some(default) = default_value {
-                    return Ok(Some(default.clone()));
+                    return Ok(PromptFieldResult {
+                        value: Some(default.clone()),
+                        enum_addition: None,
+                    });
                 }
                 return Err(anyhow::anyhow!(
                     "Field '{}' requires interactive input",
@@ -243,11 +296,7 @@ fn prompt_single_field(
                 ));
             }
 
-            let default_str = default_value.and_then(|v| match v {
-                Value::String(s) => Some(s.clone()),
-                Value::Number(n) => Some(n.to_string()),
-                _ => None,
-            });
+            let default_str = default_string_for_field(&field.field_type, default_value);
 
             let mut input = Input::<String>::new().with_prompt(prompt_text);
 
@@ -262,10 +311,23 @@ fn prompt_single_field(
             let result = input.interact_text()?;
 
             if result.is_empty() && !field.required {
-                return Ok(None);
+                return Ok(PromptFieldResult {
+                    value: None,
+                    enum_addition: None,
+                });
             }
 
-            parse_field_value(&field.field_type, &result, &field.values, field.multiple).map(Some)
+            let parsed = parse_field_value(
+                &field.field_type,
+                &result,
+                allowed_enum_values,
+                field.multiple,
+                false,
+            )?;
+            Ok(PromptFieldResult {
+                value: Some(parsed),
+                enum_addition: None,
+            })
         }
 
         "text" => {
@@ -273,7 +335,10 @@ fn prompt_single_field(
             if !interactive && editor_override.is_none() {
                 // Non-interactive mode without editor - use default or fail
                 if let Some(default) = default_value {
-                    return Ok(Some(default.clone()));
+                    return Ok(PromptFieldResult {
+                        value: Some(default.clone()),
+                        enum_addition: None,
+                    });
                 }
                 if field.required {
                     return Err(anyhow::anyhow!(
@@ -281,12 +346,18 @@ fn prompt_single_field(
                         field.name
                     ));
                 }
-                return Ok(None);
+                return Ok(PromptFieldResult {
+                    value: None,
+                    enum_addition: None,
+                });
             }
             // Use editor for multiline text (works even without TTY if editor is set)
             let initial = default_value.and_then(|v| v.as_str());
             let body = super::read_entry_body(false, None, editor_override, initial)?;
-            Ok(Some(Value::String(body)))
+            Ok(PromptFieldResult {
+                value: Some(Value::String(body)),
+                enum_addition: None,
+            })
         }
 
         "boolean" => {
@@ -300,11 +371,14 @@ fn prompt_single_field(
                 .default(default_idx)
                 .interact()?;
 
-            Ok(Some(Value::Bool(selection == 0)))
+            Ok(PromptFieldResult {
+                value: Some(Value::Bool(selection == 0)),
+                enum_addition: None,
+            })
         }
 
         "enum" => {
-            if let Some(ref values) = field.values {
+            if let Some(ref values) = allowed_enum_values {
                 if field.multiple {
                     // Multi-select enum
                     let defaults: Vec<bool> = if let Some(Value::Array(arr)) = default_value {
@@ -327,7 +401,10 @@ fn prompt_single_field(
                         .map(|&i| Value::String(values[i].clone()))
                         .collect();
 
-                    Ok(Some(Value::Array(selected)))
+                    Ok(PromptFieldResult {
+                        value: Some(Value::Array(selected)),
+                        enum_addition: None,
+                    })
                 } else {
                     // Single-select enum
                     let default_idx = default_value
@@ -335,13 +412,33 @@ fn prompt_single_field(
                         .and_then(|s| values.iter().position(|v| v == s))
                         .unwrap_or(0);
 
+                    let mut options = values.clone();
+                    options.push("Other...".to_string());
                     let selection = Select::new()
                         .with_prompt(prompt_text)
-                        .items(values)
+                        .items(&options)
                         .default(default_idx)
                         .interact()?;
 
-                    Ok(Some(Value::String(values[selection].clone())))
+                    if selection == options.len() - 1 {
+                        let input = Input::<String>::new()
+                            .with_prompt("Custom value")
+                            .allow_empty(false);
+                        let custom = input.interact_text()?;
+                        let add = Confirm::new()
+                            .with_prompt("Add this value to the template for future entries?")
+                            .default(true)
+                            .interact()?;
+                        return Ok(PromptFieldResult {
+                            value: Some(Value::String(custom.clone())),
+                            enum_addition: add.then_some(custom),
+                        });
+                    }
+
+                    Ok(PromptFieldResult {
+                        value: Some(Value::String(options[selection].clone())),
+                        enum_addition: None,
+                    })
                 }
             } else {
                 Err(anyhow::anyhow!(
@@ -349,6 +446,50 @@ fn prompt_single_field(
                     field.name
                 ))
             }
+        }
+
+        "task_list" => {
+            if !interactive {
+                if let Some(default) = default_value {
+                    return Ok(PromptFieldResult {
+                        value: Some(default.clone()),
+                        enum_addition: None,
+                    });
+                }
+                return Err(anyhow::anyhow!(
+                    "Field '{}' requires interactive input",
+                    field.name
+                ));
+            }
+
+            let mut tasks = Vec::new();
+            loop {
+                let mut input = Input::<String>::new().with_prompt("Task");
+                if tasks.is_empty() {
+                    input = input.with_prompt(prompt_text);
+                }
+                let text = input.allow_empty(true).interact_text()?;
+                if text.trim().is_empty() {
+                    break;
+                }
+                let done = Confirm::new()
+                    .with_prompt("Mark as done?")
+                    .default(false)
+                    .interact()?;
+                tasks.push(serde_json::json!({
+                    "text": text,
+                    "done": done
+                }));
+            }
+
+            if field.required && tasks.is_empty() {
+                return Err(anyhow::anyhow!("Field '{}' is required", field.name));
+            }
+
+            Ok(PromptFieldResult {
+                value: Some(Value::Array(tasks)),
+                enum_addition: None,
+            })
         }
 
         "tags" => {
@@ -373,14 +514,20 @@ fn prompt_single_field(
             let result = input.interact_text()?;
 
             if result.is_empty() {
-                Ok(None)
+                Ok(PromptFieldResult {
+                    value: None,
+                    enum_addition: None,
+                })
             } else {
                 let tags: Vec<Value> = result
                     .split(',')
                     .map(|s| Value::String(s.trim().to_string()))
                     .filter(|v| !v.as_str().unwrap_or("").is_empty())
                     .collect();
-                Ok(Some(Value::Array(tags)))
+                Ok(PromptFieldResult {
+                    value: Some(Value::Array(tags)),
+                    enum_addition: None,
+                })
             }
         }
 
@@ -403,9 +550,15 @@ fn prompt_single_field(
             let result = input.interact_text()?;
 
             if result.is_empty() && !field.required {
-                Ok(None)
+                Ok(PromptFieldResult {
+                    value: None,
+                    enum_addition: None,
+                })
             } else {
-                Ok(Some(Value::String(result)))
+                Ok(PromptFieldResult {
+                    value: Some(Value::String(result)),
+                    enum_addition: None,
+                })
             }
         }
     }
@@ -417,9 +570,29 @@ fn parse_field_value(
     value: &str,
     enum_values: &Option<Vec<String>>,
     multiple: bool,
+    allow_custom_enum: bool,
 ) -> anyhow::Result<Value> {
     match field_type {
-        "string" | "text" | "date" | "datetime" => Ok(Value::String(value.to_string())),
+        "string" | "text" => Ok(Value::String(value.to_string())),
+
+        "date" => {
+            let date = if value.eq_ignore_ascii_case("today") {
+                Utc::now().date_naive()
+            } else {
+                NaiveDate::parse_from_str(value, "%Y-%m-%d")
+                    .map_err(|_| anyhow::anyhow!("Invalid date (expected YYYY-MM-DD): {}", value))?
+            };
+            Ok(Value::String(date.format("%Y-%m-%d").to_string()))
+        }
+
+        "datetime" => {
+            let dt = if value.eq_ignore_ascii_case("now") {
+                Utc::now()
+            } else {
+                crate::helpers::parse_datetime(value)?
+            };
+            Ok(Value::String(dt.to_rfc3339()))
+        }
 
         "number" => {
             let num: f64 = value
@@ -453,13 +626,15 @@ fn parse_field_value(
                     // Multi-select: accept comma-separated values, store as array
                     let values: Vec<String> =
                         value.split(',').map(|s| s.trim().to_string()).collect();
-                    for v in &values {
-                        if !allowed.contains(v) {
-                            return Err(anyhow::anyhow!(
-                                "Invalid enum value '{}'. Allowed: {:?}",
-                                v,
-                                allowed
-                            ));
+                    if !allow_custom_enum {
+                        for v in &values {
+                            if !allowed.contains(v) {
+                                return Err(anyhow::anyhow!(
+                                    "Invalid enum value '{}'. Allowed: {:?}",
+                                    v,
+                                    allowed
+                                ));
+                            }
                         }
                     }
                     Ok(Value::Array(
@@ -473,7 +648,7 @@ fn parse_field_value(
                             allowed
                         ));
                     }
-                    if !allowed.contains(&value.to_string()) {
+                    if !allowed.contains(&value.to_string()) && !allow_custom_enum {
                         return Err(anyhow::anyhow!(
                             "Invalid enum value '{}'. Allowed: {:?}",
                             value,
@@ -487,6 +662,18 @@ fn parse_field_value(
             }
         }
 
+        "task_list" => {
+            let parsed: Value = serde_json::from_str(value).map_err(|_| {
+                anyhow::anyhow!(
+                    "Invalid task list JSON. Expected array of {{\"text\": \"...\", \"done\": true}}"
+                )
+            })?;
+            if !parsed.is_array() {
+                return Err(anyhow::anyhow!("Invalid task list JSON (expected array)"));
+            }
+            Ok(parsed)
+        }
+
         "tags" => {
             let tags: Vec<Value> = value
                 .split(',')
@@ -497,6 +684,93 @@ fn parse_field_value(
 
         _ => Ok(Value::String(value.to_string())),
     }
+}
+
+fn merged_enum_values(
+    field: &FieldDef,
+    template_defaults: &TemplateDefaults,
+) -> Option<Vec<String>> {
+    let mut values = Vec::new();
+    if let Some(ref base) = field.values {
+        values.extend(base.iter().cloned());
+    }
+    if let Some(extra) = template_defaults.enum_values.get(&field.name) {
+        for v in extra {
+            if !values.contains(v) {
+                values.push(v.clone());
+            }
+        }
+    }
+    if values.is_empty() {
+        None
+    } else {
+        Some(values)
+    }
+}
+
+fn warn_on_unknown_enum_value(
+    field_name: &str,
+    value: &str,
+    allowed: &Option<Vec<String>>,
+    multiple: bool,
+) {
+    let Some(values) = allowed else {
+        return;
+    };
+
+    let unknowns: Vec<String> = if multiple {
+        value
+            .split(',')
+            .map(|s| s.trim())
+            .filter(|v| !v.is_empty() && !values.contains(&v.to_string()))
+            .map(|v| v.to_string())
+            .collect()
+    } else if !values.contains(&value.to_string()) {
+        vec![value.to_string()]
+    } else {
+        Vec::new()
+    };
+
+    if !unknowns.is_empty() {
+        eprintln!(
+            "Warning: enum field '{}' has values not in template: {:?}",
+            field_name, unknowns
+        );
+    }
+}
+
+fn default_string_for_field(field_type: &str, default_value: Option<&Value>) -> Option<String> {
+    let raw = match default_value? {
+        Value::String(s) => Some(s.clone()),
+        Value::Number(n) => Some(n.to_string()),
+        Value::Bool(b) => Some(b.to_string()),
+        _ => None,
+    }?;
+
+    if field_type == "date" && raw.eq_ignore_ascii_case("today") {
+        return Some(Utc::now().date_naive().format("%Y-%m-%d").to_string());
+    }
+    if field_type == "datetime" && raw.eq_ignore_ascii_case("now") {
+        return Some(Utc::now().to_rfc3339());
+    }
+
+    Some(raw)
+}
+
+fn resolve_default_value(field_type: &str, default_value: &Value) -> anyhow::Result<Value> {
+    if let Value::String(s) = default_value {
+        if field_type == "date" && s.eq_ignore_ascii_case("today") {
+            let date = Utc::now().date_naive().format("%Y-%m-%d").to_string();
+            return Ok(Value::String(date));
+        }
+        if field_type == "datetime" && s.eq_ignore_ascii_case("now") {
+            return Ok(Value::String(Utc::now().to_rfc3339()));
+        }
+        if field_type == "date" || field_type == "datetime" {
+            return parse_field_value(field_type, s, &None, false, true);
+        }
+    }
+    Ok(default_value.clone())
 }
 
 /// Capitalize first letter of a string

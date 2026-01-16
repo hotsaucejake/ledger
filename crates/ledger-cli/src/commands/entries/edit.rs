@@ -5,7 +5,7 @@ use ledger_core::storage::{NewEntry, StorageEngine};
 
 use crate::app::{exit_not_found_with_hint, AppContext};
 use crate::cli::EditArgs;
-use crate::helpers::{ensure_journal_type_name, read_entry_body};
+use crate::helpers::read_entry_body;
 use crate::output::entry_type_name_map;
 use crate::ui::theme::{styled, styles};
 use crate::ui::{badge, blank_line, hint, print, short_id, Badge, OutputMode};
@@ -21,11 +21,10 @@ pub fn handle_edit(ctx: &AppContext, args: &EditArgs) -> anyhow::Result<()> {
         )
     });
 
-    let entry_type_name = entry_type_name_map(&storage)?
+    let _entry_type_name = entry_type_name_map(&storage)?
         .get(&entry.entry_type_id)
         .cloned()
         .unwrap_or_else(|| "unknown".to_string());
-    ensure_journal_type_name(&entry_type_name)?;
 
     let existing_body = entry
         .data

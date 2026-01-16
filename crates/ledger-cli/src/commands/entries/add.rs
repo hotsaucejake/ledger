@@ -4,14 +4,14 @@ use std::io::IsTerminal;
 
 use uuid::Uuid;
 
-use ledger_core::storage::{NewEntry, StorageEngine};
+use ledger_core::storage::{EntryFilter, NewEntry, NewEntryType, NewTemplate, StorageEngine};
 
 use crate::app::AppContext;
 use crate::cli::AddArgs;
 use crate::helpers::{
-    parse_cli_fields, parse_datetime, prompt_for_fields, require_entry_type, FieldDef,
-    TemplateDefaults,
+    parse_cli_fields, parse_datetime, prompt_for_fields, FieldDef, PromptResult, TemplateDefaults,
 };
+use crate::ui::prompt::{prompt_confirm, Wizard, WizardStep};
 use crate::ui::theme::{styled, styles};
 use crate::ui::{badge, blank_line, hint, print, short_id, Badge, OutputMode, UiContext};
 
@@ -28,13 +28,15 @@ fn print_step(ctx: &UiContext, step: usize, total: usize, title: &str) {
 
 pub fn handle_add(ctx: &AppContext, args: &AddArgs) -> anyhow::Result<()> {
     let (mut storage, passphrase) = ctx.open_storage(args.no_input)?;
-    let entry_type_record = require_entry_type(&storage, &args.entry_type)?;
     let metadata = storage.metadata()?;
 
     // Create UI context for step indicators
     let ui_ctx = ctx.ui_context(false, None);
     let interactive = std::io::stdin().is_terminal() && !args.no_input;
     let needs_prompting = args.body.is_none() && args.fields.is_empty();
+
+    let entry_type_record =
+        resolve_entry_type(&mut storage, &ui_ctx, args, interactive, metadata.device_id)?;
 
     // Get template (explicit or default)
     let template = if let Some(ref template_name) = args.template {
@@ -89,7 +91,10 @@ pub fn handle_add(ctx: &AppContext, args: &AddArgs) -> anyhow::Result<()> {
     }
 
     // Prompt for fields based on schema and template defaults
-    let data = prompt_for_fields(
+    let PromptResult {
+        data,
+        enum_additions,
+    } = prompt_for_fields(
         &fields,
         &template_defaults,
         &cli_values,
@@ -121,6 +126,18 @@ pub fn handle_add(ctx: &AppContext, args: &AddArgs) -> anyhow::Result<()> {
 
     // Insert entry
     let entry_id = storage.insert_entry(&new_entry)?;
+
+    if let Some(ref tmpl) = template {
+        if !enum_additions.is_empty() {
+            let updated = apply_enum_additions(&tmpl.template_json, &enum_additions);
+            storage.update_template(&tmpl.id, updated).map_err(|e| {
+                anyhow::anyhow!(
+                    "Entry created, but failed to update template enum values: {}",
+                    e
+                )
+            })?;
+        }
+    }
 
     // Handle composition attachments
     if !args.no_compose {
@@ -219,4 +236,623 @@ pub fn handle_add(ctx: &AppContext, args: &AddArgs) -> anyhow::Result<()> {
         }
     }
     Ok(())
+}
+
+fn resolve_entry_type(
+    storage: &mut ledger_core::storage::AgeSqliteStorage,
+    ui_ctx: &UiContext,
+    args: &AddArgs,
+    interactive: bool,
+    device_id: Uuid,
+) -> anyhow::Result<ledger_core::storage::EntryType> {
+    if let Some(entry_type) = storage.get_entry_type(&args.entry_type)? {
+        return ensure_default_template(storage, ui_ctx, &entry_type, interactive, device_id);
+    }
+
+    if !interactive && args.body.is_none() {
+        return Err(anyhow::anyhow!(
+            "Entry type \"{}\" not found.\nHint: Run `ledger add {}` on a TTY to create a form.",
+            args.entry_type,
+            args.entry_type
+        ));
+    }
+
+    if interactive {
+        let choice = prompt_select_create_form(ui_ctx, &args.entry_type)?;
+        if choice == CreateChoice::BodyOnly {
+            let entry_type = create_body_only_entry_type(storage, &args.entry_type, device_id)?;
+            let template =
+                create_body_only_template(storage, &entry_type.name, entry_type.id, device_id)?;
+            storage.set_default_template(&entry_type.id, &template.id)?;
+            Ok(entry_type)
+        } else {
+            let (schema, template_json) = run_form_builder(ui_ctx, &args.entry_type)?;
+            let entry_type = create_entry_type(storage, &args.entry_type, schema, device_id)?;
+            let template = create_default_template(
+                storage,
+                &args.entry_type,
+                entry_type.id,
+                template_json,
+                device_id,
+            )?;
+            storage.set_default_template(&entry_type.id, &template.id)?;
+            Ok(entry_type)
+        }
+    } else {
+        let entry_type = create_body_only_entry_type(storage, &args.entry_type, device_id)?;
+        let template =
+            create_body_only_template(storage, &entry_type.name, entry_type.id, device_id)?;
+        storage.set_default_template(&entry_type.id, &template.id)?;
+        Ok(entry_type)
+    }
+}
+
+fn ensure_default_template(
+    storage: &mut ledger_core::storage::AgeSqliteStorage,
+    ui_ctx: &UiContext,
+    entry_type: &ledger_core::storage::EntryType,
+    interactive: bool,
+    device_id: Uuid,
+) -> anyhow::Result<ledger_core::storage::EntryType> {
+    let template = storage.get_default_template(&entry_type.id)?;
+    if template.is_some() {
+        return Ok(entry_type.clone());
+    }
+
+    let filter = EntryFilter {
+        entry_type_id: Some(entry_type.id),
+        limit: Some(1),
+        ..Default::default()
+    };
+    let entries_exist = !storage.list_entries(&filter)?.is_empty();
+
+    if entries_exist {
+        let body_template =
+            create_body_only_template(storage, &entry_type.name, entry_type.id, device_id)?;
+        storage.set_default_template(&entry_type.id, &body_template.id)?;
+    }
+
+    if interactive {
+        let prompt = if entries_exist {
+            "No template exists for this entry type. Create a form now?"
+        } else {
+            "Create a form for this entry type?"
+        };
+        let create_form = prompt_confirm(ui_ctx, prompt, true)?;
+        if create_form {
+            let (schema, template_json) = run_form_builder(ui_ctx, &entry_type.name)?;
+            let _ =
+                storage.create_entry_type(&NewEntryType::new(&entry_type.name, schema, device_id));
+            let updated_entry_type =
+                storage.get_entry_type(&entry_type.name)?.ok_or_else(|| {
+                    anyhow::anyhow!("Failed to update entry type {}", entry_type.name)
+                })?;
+            let template = create_default_template(
+                storage,
+                &entry_type.name,
+                updated_entry_type.id,
+                template_json,
+                device_id,
+            )?;
+            storage.set_default_template(&updated_entry_type.id, &template.id)?;
+            return Ok(updated_entry_type);
+        } else if !entries_exist {
+            let body_template =
+                create_body_only_template(storage, &entry_type.name, entry_type.id, device_id)?;
+            storage.set_default_template(&entry_type.id, &body_template.id)?;
+        }
+    } else if !entries_exist {
+        let body_template =
+            create_body_only_template(storage, &entry_type.name, entry_type.id, device_id)?;
+        storage.set_default_template(&entry_type.id, &body_template.id)?;
+    }
+
+    Ok(entry_type.clone())
+}
+
+#[derive(Debug, PartialEq, Eq)]
+enum CreateChoice {
+    Form,
+    BodyOnly,
+}
+
+fn prompt_select_create_form(ctx: &UiContext, entry_type: &str) -> anyhow::Result<CreateChoice> {
+    if !ctx.mode.is_pretty() {
+        return Ok(CreateChoice::BodyOnly);
+    }
+
+    let steps = vec![WizardStep::new("Create entry type")
+        .with_description("Choose how to define the fields for this entry type.")];
+    let wizard = Wizard::new(ctx, &format!("add ({})", entry_type), steps);
+    wizard.print_header();
+    wizard.print_step();
+
+    let options = ["Create a form (recommended)", "Use simple body only"];
+    let theme = dialoguer::theme::ColorfulTheme::default();
+    let choice = dialoguer::Select::with_theme(&theme)
+        .with_prompt("Form setup")
+        .items(&options)
+        .default(0)
+        .interact()?;
+    if choice == 0 {
+        Ok(CreateChoice::Form)
+    } else {
+        Ok(CreateChoice::BodyOnly)
+    }
+}
+
+fn create_entry_type(
+    storage: &mut ledger_core::storage::AgeSqliteStorage,
+    name: &str,
+    schema: serde_json::Value,
+    device_id: Uuid,
+) -> anyhow::Result<ledger_core::storage::EntryType> {
+    let entry_type = NewEntryType::new(name, schema, device_id);
+    storage.create_entry_type(&entry_type)?;
+    storage
+        .get_entry_type(name)?
+        .ok_or_else(|| anyhow::anyhow!("Failed to create entry type {}", name))
+}
+
+fn create_body_only_entry_type(
+    storage: &mut ledger_core::storage::AgeSqliteStorage,
+    name: &str,
+    device_id: Uuid,
+) -> anyhow::Result<ledger_core::storage::EntryType> {
+    let schema = serde_json::json!({
+        "fields": [
+            {"name": "body", "type": "text", "required": true}
+        ]
+    });
+    create_entry_type(storage, name, schema, device_id)
+}
+
+fn create_default_template(
+    storage: &mut ledger_core::storage::AgeSqliteStorage,
+    entry_type_name: &str,
+    entry_type_id: Uuid,
+    template_json: serde_json::Value,
+    device_id: Uuid,
+) -> anyhow::Result<ledger_core::storage::Template> {
+    let name = unique_template_name(storage, &format!("{}-default", entry_type_name))?;
+    let new_template = NewTemplate::new(name, entry_type_id, template_json, device_id);
+    let template_id = storage.create_template(&new_template)?;
+    storage
+        .get_template_by_id(&template_id)?
+        .ok_or_else(|| anyhow::anyhow!("Failed to create default template for {}", entry_type_name))
+}
+
+fn unique_template_name(
+    storage: &ledger_core::storage::AgeSqliteStorage,
+    base: &str,
+) -> anyhow::Result<String> {
+    if storage.get_template(base)?.is_none() {
+        return Ok(base.to_string());
+    }
+    for idx in 2..1000 {
+        let candidate = format!("{}-{}", base, idx);
+        if storage.get_template(&candidate)?.is_none() {
+            return Ok(candidate);
+        }
+    }
+    Err(anyhow::anyhow!(
+        "Failed to find an available template name for {}",
+        base
+    ))
+}
+
+fn create_body_only_template(
+    storage: &mut ledger_core::storage::AgeSqliteStorage,
+    entry_type_name: &str,
+    entry_type_id: Uuid,
+    device_id: Uuid,
+) -> anyhow::Result<ledger_core::storage::Template> {
+    let template_json = serde_json::json!({
+        "defaults": {},
+        "prompt_overrides": {
+            "body": "Body"
+        }
+    });
+    create_default_template(
+        storage,
+        entry_type_name,
+        entry_type_id,
+        template_json,
+        device_id,
+    )
+}
+
+fn run_form_builder(
+    ctx: &UiContext,
+    entry_type: &str,
+) -> anyhow::Result<(serde_json::Value, serde_json::Value)> {
+    if !ctx.mode.is_pretty() {
+        return Err(anyhow::anyhow!(
+            "Interactive form builder required. Run on a TTY."
+        ));
+    }
+
+    let steps = vec![
+        WizardStep::new("Form builder").with_description("Define the fields for this entry type."),
+        WizardStep::new("Review")
+            .with_description("Confirm the fields before creating the template."),
+    ];
+    let mut wizard = Wizard::new(ctx, &format!("add ({})", entry_type), steps);
+    wizard.print_header();
+    wizard.print_step();
+
+    let preset = prompt_select_preset(entry_type)?;
+    let mut fields: Vec<FormFieldSpec> = preset.unwrap_or_default();
+
+    loop {
+        let field = prompt_field_definition()?;
+        fields.push(field);
+        let add_more = prompt_confirm(ctx, "Add another field?", true)?;
+        if !add_more {
+            break;
+        }
+    }
+
+    if fields.is_empty() {
+        return Err(anyhow::anyhow!("At least one field is required"));
+    }
+
+    wizard.next_step();
+    wizard.print_step();
+    for field in &fields {
+        let required = if field.required {
+            "required"
+        } else {
+            "optional"
+        };
+        let default_note = field
+            .default_value
+            .as_ref()
+            .and_then(|v| match v {
+                serde_json::Value::String(s) => Some(s.clone()),
+                serde_json::Value::Number(n) => Some(n.to_string()),
+                serde_json::Value::Bool(b) => Some(b.to_string()),
+                _ => None,
+            })
+            .filter(|v| !v.is_empty())
+            .map(|v| format!(", default={}", v))
+            .unwrap_or_default();
+        println!(
+            "  {} ({}, {}{})",
+            field.name, field.field_type, required, default_note
+        );
+    }
+    println!();
+    let proceed = prompt_confirm(ctx, "Create form?", true)?;
+    if !proceed {
+        return Err(anyhow::anyhow!("Form creation cancelled"));
+    }
+
+    let schema = build_schema_json(&fields);
+    let template_json = build_template_json(&fields);
+
+    Ok((schema, template_json))
+}
+
+#[derive(Debug, Clone)]
+struct FormFieldSpec {
+    name: String,
+    field_type: String,
+    required: bool,
+    default_value: Option<serde_json::Value>,
+    enum_values: Option<Vec<String>>,
+}
+
+fn prompt_select_preset(_entry_type: &str) -> anyhow::Result<Option<Vec<FormFieldSpec>>> {
+    let options = ["Custom form", "Todo list preset"];
+    let theme = dialoguer::theme::ColorfulTheme::default();
+    let choice = dialoguer::Select::with_theme(&theme)
+        .with_prompt("Start from a preset?")
+        .items(&options)
+        .default(0)
+        .interact()?;
+
+    if choice == 1 {
+        return Ok(Some(vec![
+            FormFieldSpec {
+                name: "title".to_string(),
+                field_type: "text".to_string(),
+                required: false,
+                default_value: None,
+                enum_values: None,
+            },
+            FormFieldSpec {
+                name: "items".to_string(),
+                field_type: "task_list".to_string(),
+                required: true,
+                default_value: None,
+                enum_values: None,
+            },
+        ]));
+    }
+
+    Ok(None)
+}
+
+fn prompt_field_definition() -> anyhow::Result<FormFieldSpec> {
+    let theme = dialoguer::theme::ColorfulTheme::default();
+    let name: String = dialoguer::Input::with_theme(&theme)
+        .with_prompt("Field name")
+        .interact_text()?;
+    if name.trim().is_empty() {
+        return Err(anyhow::anyhow!("Field name is required"));
+    }
+    let field_types = [
+        "text", "string", "number", "integer", "date", "datetime", "enum", "boolean",
+    ];
+    let field_type_idx = dialoguer::Select::with_theme(&theme)
+        .with_prompt("Field type")
+        .items(&field_types)
+        .default(0)
+        .interact()?;
+    let field_type = field_types[field_type_idx].to_string();
+    let required = dialoguer::Confirm::with_theme(&theme)
+        .with_prompt("Required?")
+        .default(true)
+        .interact()?;
+
+    let enum_values = if field_type == "enum" {
+        let mut values = Vec::new();
+        loop {
+            let value: String = dialoguer::Input::with_theme(&theme)
+                .with_prompt("Enum value")
+                .interact_text()?;
+            if !value.trim().is_empty() {
+                values.push(value.trim().to_string());
+            }
+            let add_more = dialoguer::Confirm::with_theme(&theme)
+                .with_prompt("Add another enum value?")
+                .default(true)
+                .interact()?;
+            if !add_more {
+                break;
+            }
+        }
+        if values.is_empty() {
+            return Err(anyhow::anyhow!("Enum fields require at least one value"));
+        }
+        Some(values)
+    } else {
+        None
+    };
+
+    let default_value = prompt_default_value(&field_type, enum_values.as_deref())?;
+    if let Some(ref value) = default_value {
+        validate_default_value(&field_type, value)?;
+    }
+
+    Ok(FormFieldSpec {
+        name: name.trim().to_string(),
+        field_type,
+        required,
+        default_value,
+        enum_values,
+    })
+}
+
+fn prompt_default_value(
+    field_type: &str,
+    enum_values: Option<&[String]>,
+) -> anyhow::Result<Option<serde_json::Value>> {
+    let theme = dialoguer::theme::ColorfulTheme::default();
+    match field_type {
+        "date" => {
+            let options = ["None", "Today", "Custom"];
+            let choice = dialoguer::Select::with_theme(&theme)
+                .with_prompt("Default value")
+                .items(&options)
+                .default(0)
+                .interact()?;
+            match choice {
+                1 => Ok(Some(serde_json::Value::String("today".to_string()))),
+                2 => {
+                    let value: String = dialoguer::Input::with_theme(&theme)
+                        .with_prompt("Default date (YYYY-MM-DD)")
+                        .interact_text()?;
+                    Ok(if value.trim().is_empty() {
+                        None
+                    } else {
+                        Some(serde_json::Value::String(value))
+                    })
+                }
+                _ => Ok(None),
+            }
+        }
+        "datetime" => {
+            let options = ["None", "Now", "Custom"];
+            let choice = dialoguer::Select::with_theme(&theme)
+                .with_prompt("Default value")
+                .items(&options)
+                .default(0)
+                .interact()?;
+            match choice {
+                1 => Ok(Some(serde_json::Value::String("now".to_string()))),
+                2 => {
+                    let value: String = dialoguer::Input::with_theme(&theme)
+                        .with_prompt("Default datetime (RFC3339 or YYYY-MM-DD)")
+                        .interact_text()?;
+                    Ok(if value.trim().is_empty() {
+                        None
+                    } else {
+                        Some(serde_json::Value::String(value))
+                    })
+                }
+                _ => Ok(None),
+            }
+        }
+        "boolean" => {
+            let options = ["None", "Yes", "No"];
+            let choice = dialoguer::Select::with_theme(&theme)
+                .with_prompt("Default value")
+                .items(&options)
+                .default(0)
+                .interact()?;
+            match choice {
+                1 => Ok(Some(serde_json::Value::Bool(true))),
+                2 => Ok(Some(serde_json::Value::Bool(false))),
+                _ => Ok(None),
+            }
+        }
+        "enum" => {
+            let Some(values) = enum_values else {
+                return Ok(None);
+            };
+            let mut options = vec!["None".to_string()];
+            options.extend(values.iter().cloned());
+            let choice = dialoguer::Select::with_theme(&theme)
+                .with_prompt("Default value")
+                .items(&options)
+                .default(0)
+                .interact()?;
+            if choice == 0 {
+                Ok(None)
+            } else {
+                Ok(Some(serde_json::Value::String(options[choice].clone())))
+            }
+        }
+        "number" | "integer" | "string" | "text" => {
+            let value: String = dialoguer::Input::with_theme(&theme)
+                .with_prompt("Default value (optional)")
+                .allow_empty(true)
+                .interact_text()?;
+            if value.trim().is_empty() {
+                Ok(None)
+            } else if field_type == "number" {
+                let num: f64 = value
+                    .parse()
+                    .map_err(|_| anyhow::anyhow!("Invalid number default"))?;
+                Ok(Some(serde_json::Value::Number(
+                    serde_json::Number::from_f64(num)
+                        .ok_or_else(|| anyhow::anyhow!("Invalid number default"))?,
+                )))
+            } else if field_type == "integer" {
+                let num: i64 = value
+                    .parse()
+                    .map_err(|_| anyhow::anyhow!("Invalid integer default"))?;
+                Ok(Some(serde_json::Value::Number(num.into())))
+            } else {
+                Ok(Some(serde_json::Value::String(value)))
+            }
+        }
+        _ => Ok(None),
+    }
+}
+
+fn validate_default_value(field_type: &str, value: &serde_json::Value) -> anyhow::Result<()> {
+    match field_type {
+        "date" => {
+            if let Some(s) = value.as_str() {
+                if s.eq_ignore_ascii_case("today") {
+                    return Ok(());
+                }
+                chrono::NaiveDate::parse_from_str(s, "%Y-%m-%d").map_err(|_| {
+                    anyhow::anyhow!("Invalid date default (expected YYYY-MM-DD): {}", s)
+                })?;
+            }
+        }
+        "datetime" => {
+            if let Some(s) = value.as_str() {
+                if s.eq_ignore_ascii_case("now") {
+                    return Ok(());
+                }
+                crate::helpers::parse_datetime(s).map_err(|_| {
+                    anyhow::anyhow!(
+                        "Invalid datetime default (expected RFC3339 or YYYY-MM-DD): {}",
+                        s
+                    )
+                })?;
+            }
+        }
+        _ => {}
+    }
+    Ok(())
+}
+
+fn build_schema_json(fields: &[FormFieldSpec]) -> serde_json::Value {
+    let field_defs: Vec<serde_json::Value> = fields
+        .iter()
+        .map(|field| {
+            let mut obj = serde_json::Map::new();
+            obj.insert(
+                "name".to_string(),
+                serde_json::Value::String(field.name.clone()),
+            );
+            obj.insert(
+                "type".to_string(),
+                serde_json::Value::String(field.field_type.clone()),
+            );
+            obj.insert(
+                "required".to_string(),
+                serde_json::Value::Bool(field.required),
+            );
+            if let Some(ref values) = field.enum_values {
+                obj.insert(
+                    "values".to_string(),
+                    serde_json::Value::Array(
+                        values
+                            .iter()
+                            .cloned()
+                            .map(serde_json::Value::String)
+                            .collect(),
+                    ),
+                );
+            }
+            serde_json::Value::Object(obj)
+        })
+        .collect();
+
+    serde_json::json!({ "fields": field_defs })
+}
+
+fn build_template_json(fields: &[FormFieldSpec]) -> serde_json::Value {
+    let mut defaults = serde_json::Map::new();
+    for field in fields {
+        if let Some(ref value) = field.default_value {
+            defaults.insert(field.name.clone(), value.clone());
+        }
+    }
+    serde_json::json!({ "defaults": defaults })
+}
+
+fn apply_enum_additions(
+    template_json: &serde_json::Value,
+    additions: &[crate::helpers::EnumAddition],
+) -> serde_json::Value {
+    let mut updated = template_json.clone();
+
+    // Ensure enum_values exists
+    if updated
+        .as_object()
+        .map(|obj| !obj.contains_key("enum_values"))
+        .unwrap_or(false)
+    {
+        updated.as_object_mut().unwrap().insert(
+            "enum_values".to_string(),
+            serde_json::Value::Object(serde_json::Map::new()),
+        );
+    }
+
+    let enum_values_obj = updated
+        .as_object_mut()
+        .unwrap()
+        .get_mut("enum_values")
+        .and_then(|v| v.as_object_mut())
+        .unwrap();
+
+    for addition in additions {
+        let entry = enum_values_obj
+            .entry(addition.field.clone())
+            .or_insert_with(|| serde_json::Value::Array(Vec::new()));
+        let arr = entry.as_array_mut().unwrap();
+        if !arr.iter().any(|v| v.as_str() == Some(&addition.value)) {
+            arr.push(serde_json::Value::String(addition.value.clone()));
+        }
+    }
+
+    updated
 }

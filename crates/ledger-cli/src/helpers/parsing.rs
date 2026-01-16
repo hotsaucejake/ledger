@@ -51,30 +51,16 @@ pub fn parse_duration(value: &str) -> anyhow::Result<Duration> {
     }
 }
 
-/// Ensure entry type is "journal" (only supported type in Phase 0.1).
-pub fn ensure_journal_type_name(entry_type: &str) -> anyhow::Result<()> {
-    if entry_type != "journal" {
-        return Err(anyhow::anyhow!(
-            "Entry type \"{}\" is not supported in the CLI yet. Only \"journal\" is available.\nHint: Use `ledger add journal` or `ledger list journal` for Phase 0.1.",
-            entry_type
-        ));
-    }
-    Ok(())
-}
-
 /// Look up an entry type by name, returning an error if not found.
 ///
-/// This combines `ensure_journal_type_name` with the storage lookup,
-/// providing a single function for the common pattern of validating
-/// and fetching an entry type.
 pub fn require_entry_type(
     storage: &ledger_core::storage::AgeSqliteStorage,
     entry_type_name: &str,
 ) -> anyhow::Result<ledger_core::storage::EntryType> {
-    ensure_journal_type_name(entry_type_name)?;
     storage.get_entry_type(entry_type_name)?.ok_or_else(|| {
         anyhow::anyhow!(
-            "Entry type \"{}\" not found.\nHint: Only \"journal\" is available in Phase 0.1.",
+            "Entry type \"{}\" not found.\nHint: Run `ledger add {}` to create it.",
+            entry_type_name,
             entry_type_name
         )
     })
