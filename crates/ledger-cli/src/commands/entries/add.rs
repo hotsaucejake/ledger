@@ -622,6 +622,9 @@ fn prompt_field_definition() -> anyhow::Result<FormFieldSpec> {
     };
 
     let default_value = prompt_default_value(&field_type, enum_values.as_deref())?;
+    if let Some(ref value) = default_value {
+        validate_default_value(&field_type, value)?;
+    }
 
     Ok(FormFieldSpec {
         name: name.trim().to_string(),
@@ -738,6 +741,36 @@ fn prompt_default_value(
         }
         _ => Ok(None),
     }
+}
+
+fn validate_default_value(field_type: &str, value: &serde_json::Value) -> anyhow::Result<()> {
+    match field_type {
+        "date" => {
+            if let Some(s) = value.as_str() {
+                if s.eq_ignore_ascii_case("today") {
+                    return Ok(());
+                }
+                chrono::NaiveDate::parse_from_str(s, "%Y-%m-%d").map_err(|_| {
+                    anyhow::anyhow!("Invalid date default (expected YYYY-MM-DD): {}", s)
+                })?;
+            }
+        }
+        "datetime" => {
+            if let Some(s) = value.as_str() {
+                if s.eq_ignore_ascii_case("now") {
+                    return Ok(());
+                }
+                crate::helpers::parse_datetime(s).map_err(|_| {
+                    anyhow::anyhow!(
+                        "Invalid datetime default (expected RFC3339 or YYYY-MM-DD): {}",
+                        s
+                    )
+                })?;
+            }
+        }
+        _ => {}
+    }
+    Ok(())
 }
 
 fn build_schema_json(fields: &[FormFieldSpec]) -> serde_json::Value {

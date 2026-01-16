@@ -177,6 +177,9 @@ pub fn prompt_for_fields(
         // Check if value was provided via CLI
         if let Some(cli_value) = cli_values.get(&field.name) {
             let allowed = merged_enum_values(field, template_defaults);
+            if field.field_type == "enum" {
+                warn_on_unknown_enum_value(&field.name, cli_value, &allowed, field.multiple);
+            }
             let value =
                 parse_field_value(&field.field_type, cli_value, &allowed, field.multiple, true)?;
             data.insert(field.name.clone(), value);
@@ -623,13 +626,15 @@ fn parse_field_value(
                     // Multi-select: accept comma-separated values, store as array
                     let values: Vec<String> =
                         value.split(',').map(|s| s.trim().to_string()).collect();
-                    for v in &values {
-                        if !allowed.contains(v) {
-                            return Err(anyhow::anyhow!(
-                                "Invalid enum value '{}'. Allowed: {:?}",
-                                v,
-                                allowed
-                            ));
+                    if !allow_custom_enum {
+                        for v in &values {
+                            if !allowed.contains(v) {
+                                return Err(anyhow::anyhow!(
+                                    "Invalid enum value '{}'. Allowed: {:?}",
+                                    v,
+                                    allowed
+                                ));
+                            }
                         }
                     }
                     Ok(Value::Array(
@@ -700,6 +705,37 @@ fn merged_enum_values(
         None
     } else {
         Some(values)
+    }
+}
+
+fn warn_on_unknown_enum_value(
+    field_name: &str,
+    value: &str,
+    allowed: &Option<Vec<String>>,
+    multiple: bool,
+) {
+    let Some(values) = allowed else {
+        return;
+    };
+
+    let unknowns: Vec<String> = if multiple {
+        value
+            .split(',')
+            .map(|s| s.trim())
+            .filter(|v| !v.is_empty() && !values.contains(&v.to_string()))
+            .map(|v| v.to_string())
+            .collect()
+    } else if !values.contains(&value.to_string()) {
+        vec![value.to_string()]
+    } else {
+        Vec::new()
+    };
+
+    if !unknowns.is_empty() {
+        eprintln!(
+            "Warning: enum field '{}' has values not in template: {:?}",
+            field_name, unknowns
+        );
     }
 }
 

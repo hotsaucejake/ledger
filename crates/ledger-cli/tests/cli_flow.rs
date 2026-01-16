@@ -2696,6 +2696,82 @@ fn test_cli_detach_when_not_attached() {
 }
 
 #[test]
+fn test_cli_add_allows_custom_enum_multi_values() {
+    let ledger_path = temp_ledger_path("ledger_cli_add_enum_multi");
+    let passphrase = "test-passphrase-secure-123";
+    let (config_home, data_home) = temp_xdg_dirs("ledger_cli_add_enum_multi");
+
+    create_ledger_with_passphrase(&ledger_path, passphrase);
+    write_config_file(&config_home, &ledger_path, "passphrase", "none", None, 0);
+
+    let mut storage = AgeSqliteStorage::open(&ledger_path, passphrase).expect("open ledger");
+    let metadata = storage.metadata().expect("metadata");
+    let schema = serde_json::json!({
+        "fields": [
+            {"name": "colors", "type": "enum", "required": true, "values": ["red"], "multiple": true}
+        ]
+    });
+    let entry_type = NewEntryType::new("palette", schema, metadata.device_id);
+    storage
+        .create_entry_type(&entry_type)
+        .expect("create entry type");
+    storage.close(passphrase).expect("close");
+
+    let mut add = Command::new(bin());
+    add.arg("add")
+        .arg("palette")
+        .arg("--field")
+        .arg("colors=blue,orange")
+        .arg("--ledger")
+        .arg(&ledger_path)
+        .env("LEDGER_PASSPHRASE", passphrase);
+    apply_xdg_env(&mut add, &config_home, &data_home);
+    let add = add.output().expect("run add with enum multi");
+    assert!(
+        add.status.success(),
+        "add failed: {}",
+        String::from_utf8_lossy(&add.stderr)
+    );
+
+    let mut list = Command::new(bin());
+    list.arg("list")
+        .arg("--json")
+        .arg("--ledger")
+        .arg(&ledger_path)
+        .env("LEDGER_PASSPHRASE", passphrase);
+    apply_xdg_env(&mut list, &config_home, &data_home);
+    let list = list.output().expect("run list");
+    assert!(list.status.success());
+    let value: serde_json::Value = serde_json::from_slice(&list.stdout).expect("parse list json");
+    let entries = value.as_array().expect("list output array");
+    let entry_id = entries
+        .first()
+        .and_then(|e| e.get("id"))
+        .and_then(|v| v.as_str())
+        .expect("entry id");
+
+    let mut show = Command::new(bin());
+    show.arg("show")
+        .arg(entry_id)
+        .arg("--json")
+        .arg("--ledger")
+        .arg(&ledger_path)
+        .env("LEDGER_PASSPHRASE", passphrase);
+    apply_xdg_env(&mut show, &config_home, &data_home);
+    let show = show.output().expect("run show");
+    assert!(show.status.success());
+    let show_value: serde_json::Value = serde_json::from_slice(&show.stdout).expect("parse json");
+    let colors = show_value
+        .get("data")
+        .and_then(|d| d.get("colors"))
+        .and_then(|v| v.as_array())
+        .expect("colors array");
+    let values: Vec<_> = colors.iter().filter_map(|v| v.as_str()).collect();
+    assert!(values.contains(&"blue"));
+    assert!(values.contains(&"orange"));
+}
+
+#[test]
 fn test_cli_add_with_invalid_template() {
     let ledger_path = temp_ledger_path("ledger_cli_add_bt");
     let passphrase = "test-passphrase-secure-123";
