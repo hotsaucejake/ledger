@@ -421,7 +421,7 @@ fn prompt_single_field(
                             .allow_empty(false);
                         let custom = input.interact_text()?;
                         let add = Confirm::new()
-                            .with_prompt("Add this value to the template for future use?")
+                            .with_prompt("Add this value to the template for future entries?")
                             .default(true)
                             .interact()?;
                         return Ok(PromptFieldResult {
