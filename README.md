@@ -37,7 +37,7 @@ The encrypted storage and CLI flows are functional with compositions and templat
 ```bash
 # Core commands
 ledger init                  # Initialize encrypted ledger
-ledger init                  # Init wizard (editor, timezone, cache, keyfile)
+ledger init                  # Init wizard (paths, editor, timezone, cache, keyfile)
 ledger add <type>            # Add entry (prompts for fields; creates entry type on first use)
 ledger add journal --body "" # Add inline entry
 ledger add journal --template <name>  # Use specific template
@@ -86,6 +86,8 @@ ledger templates update <name> --defaults '{"body": "new default"}'
 ledger templates delete <name>              # Delete template
 ```
 
+Run `ledger` with no args to see a smart quickstart: init guidance if no ledger is found, otherwise common commands.
+
 Environment variables:
 
 ```bash
@@ -93,6 +95,48 @@ LEDGER_PATH=/path/to/ledger.ledger
 LEDGER_PASSPHRASE="your passphrase"
 LEDGER_CONFIG=/path/to/config.toml
 ```
+
+## First Run
+
+```bash
+ledger init ~/ledger.ledger
+ledger add journal
+ledger list --last 7d
+```
+
+## Init Wizard
+
+The init wizard is the default setup path and guides you through:
+
+- **Ledger location**: path autocomplete for files/folders
+- **Passphrase**: encrypts and unlocks your ledger
+- **Security level**: tradeoffs between convenience and protection
+- **Editor**: auto-detected, with manual fallback
+- **Timezone**: selected from a validated list
+- **Passphrase cache**: optional, reduces re-prompts
+
+Config is stored at `~/.config/ledger/config.toml` by default, and the wizard prints the final location.
+
+## Entry Types and Forms
+
+Ledger uses user-defined entry types. The first time you run `ledger add <type>`, define a form (schema) for that type. After that, entries prompt from the template.
+
+Examples:
+
+```bash
+# Create a new entry type on first use
+ledger add weight
+
+# Add a journal entry (body required, optional title if you add it)
+ledger add journal
+
+# Add an entry with explicit fields (no prompt)
+ledger add weight --field "weight=183.6" --field "date=2024-05-20"
+```
+
+Field types include: `string`, `text`, `number`, `integer`, `date`, `datetime`, `enum`, `boolean`, `task_list`, and `tags`.
+
+If no template exists, Ledger falls back to a simple `body` field (editor-based). You can create a template later.
 
 ## Compositions
 
@@ -145,6 +189,9 @@ ledger add journal  # Uses morning-journal template defaults
   },
   "default_tags": ["tag1", "tag2"],
   "default_compositions": ["composition-id"],
+  "enum_values": {
+    "field_name": ["option-1", "option-2"]
+  },
   "prompt_overrides": {
     "field_name": "Custom prompt text"
   }
@@ -155,6 +202,31 @@ ledger add journal  # Uses morning-journal template defaults
 - No flags: prompts for all fields (template defaults pre-filled)
 - Some flags: prompts only for missing required fields
 - All flags provided: stores only provided values (no extra prompts)
+
+## Todo Workflow (Daily Use)
+
+Create a `todo` entry type with a `task_list` field, then use `ledger todo` to manage completion.
+
+Example daily flow:
+
+```bash
+# Create a todo template (first use will prompt you to define fields)
+ledger add todo
+
+# Add a daily task list
+ledger add todo
+
+# List tasks in the entry
+ledger todo list <entry-id>
+
+# Mark tasks complete
+ledger todo done <entry-id> 1
+
+# Reopen a task
+ledger todo undo <entry-id> 1
+```
+
+Tip: use a template to standardize task names or include metadata like `project` or `priority`.
 
 ## Building
 
