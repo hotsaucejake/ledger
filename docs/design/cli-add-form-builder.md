@@ -67,11 +67,14 @@ If an entry type exists but no template is associated:
 
 Supported types:
 - `text`
+- `string`
 - `number`
+- `integer`
 - `date`
 - `datetime`
 - `enum` (single-select)
 - `bool`
+- `task_list` (preset only)
 
 ### 5.2 Field Definition Prompts
 
@@ -104,7 +107,7 @@ For each field:
 During add:
 - Users may enter a custom enum value.
 - Prompt: **"Add this value to the template for future use?"**
-  - If yes: update the template (new version).
+  - If yes: update the template (new version) under `enum_values`.
   - If no: store the value for this entry only.
 
 ---
@@ -115,7 +118,7 @@ Provide a built-in preset in the form builder:
 
 - **Todo List**
   - `title` (text, optional)
-  - `items` (list of tasks)
+  - `items` (task_list)
     - Each task: `text` (required), `done` (bool, default false)
 
 Todo lists are stored as a single entry containing task state.

@@ -98,6 +98,9 @@ WHERE active = 1;
   ],
   "prompt_overrides": {
     "car": "Which car did you fill?"
+  },
+  "enum_values": {
+    "car": ["civic", "accord"]
   }
 }
 ```
@@ -108,6 +111,7 @@ WHERE active = 1;
 - `default_tags`: tags applied unless the user overrides tags explicitly.
 - `default_compositions`: composition IDs to auto-attach.
 - `prompt_overrides`: custom prompt text per field.
+- `enum_values`: extra enum options available during prompting (merged with schema values).
 
 ---
 
@@ -149,7 +153,7 @@ For enums:
 
 - **Single-select** values are stored as strings.
 - **Multi-select** values are stored as JSON arrays of strings.
-- Unknown enum values are rejected; users edit templates or schemas to add new options.
+- Unknown enum values can be accepted interactively and optionally added to the template for future use.
 
 Enum change best practices:
 

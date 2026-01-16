@@ -94,10 +94,7 @@ fn extract_error_hint(error: &str) -> Option<String> {
 
     // Entry type not found
     if error_lower.contains("entry type") && error_lower.contains("not found") {
-        return Some(
-            "Hint: Valid entry types are 'journal' (built-in). Custom types require manual setup."
-                .to_string(),
-        );
+        return Some("Hint: Run `ledger add <type>` to create a new entry type.".to_string());
     }
 
     // Backup destination issues
